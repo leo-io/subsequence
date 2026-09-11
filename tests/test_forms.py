@@ -196,6 +196,52 @@ def test_section_ending_property () -> None:
 	assert info.ending is False		# the form ends after this — no incoming section
 
 
+def test_a_mid_bar_jump_gives_its_interrupted_bar_to_the_new_section () -> None:
+
+	"""What a jump costs the section it lands on, pinned rather than endorsed.
+
+	``jump_to`` sets the bar to 0 while a bar is already part-played, and the
+	next bar line's ``advance()`` makes it 1.  So the section's first *full*
+	bar reports 1, it plays one fewer full bar than its length, and a one-bar
+	pattern rebuilding on bar lines never sees ``first_bar`` (#2484, where it
+	was inferred from reading; this is the measurement).
+
+	Recorded as behaviour rather than as a defect: counting the interrupted
+	bar as a whole one would give the section its full length and push every
+	later section a part-bar off the global bar grid.  Changing it is a
+	musical decision, and this test is what would catch the change.
+	"""
+
+	def full_bars (state: subsequence.form_state.FormState) -> typing.List[int]:
+
+		"""The bar each of the chorus's full bars reports, one bar line at a time."""
+
+		seen = []
+
+		for _ in range(8):
+			info = state.get_section_info()
+			if info is None or info.name != "chorus":
+				break
+			seen.append(info.bar)
+			state.advance()
+
+		return seen
+
+	arrived = subsequence.form_state.FormState([("verse", 4), ("chorus", 4), ("outro", 4)])
+	for _ in range(4):
+		arrived.advance()			# the verse runs out, so the chorus starts ON a bar line
+
+	assert full_bars(arrived) == [0, 1, 2, 3]
+
+	jumped = subsequence.form_state.FormState([("verse", 4), ("chorus", 4), ("outro", 4)])
+	jumped.jump_to("chorus")		# mid-bar: the rest of this bar is not a full one
+
+	assert jumped.get_section_info().bar == 0, "the interrupted bar is the new section's bar 0"
+	jumped.advance()				# the next bar line
+
+	assert full_bars(jumped) == [1, 2, 3], "three full bars, and none of them reports first_bar"
+
+
 def test_sequence_jump_to_lands_on_next_occurrence () -> None:
 
 	"""jump_to in sequence mode searches forward and wraps."""

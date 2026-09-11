@@ -617,7 +617,15 @@ class FormState:
 
 		The section restarts from bar 0.  The musical effect is not heard
 		until the *next pattern rebuild cycle*, because already-queued MIDI
-		notes are unaffected.  This is the same natural quantization that
+		notes are unaffected.
+
+		**A jump part-way through a bar gives the remainder of that bar to the
+		new section as its bar 0**, so the section's first *full* bar reports
+		``bar == 1``, and a one-bar pattern rebuilding on bar lines never sees
+		``first_bar``.  The section then plays one fewer full bar than its
+		length.  That is deliberate rather than an oversight: the form stays on
+		the global bar grid, where counting the interrupted bar as a whole one
+		would push every later section a part-bar late (#2484).  This is the same natural quantization that
 		applies to all ``composition.data`` writes and
 		``composition.tweak()`` calls.
 

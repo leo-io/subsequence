@@ -2873,20 +2873,25 @@ class PatternBuilder(
 		"""
 		Apply a transformation every Nth cycle.
 
+		A *cycle* is one pass of this pattern, which is the same thing as a bar
+		only when the pattern is one bar long: a two-bar pattern calling
+		``every(4, ...)`` fires every eight bars.  To count bars, use
+		:meth:`bar_cycle`.
+
 		Parameters:
-			n: The cycle frequency (e.g., 4 = every 4th bar).
+			n: How many cycles between applications (e.g. 4 = every 4th cycle).
 			fn: A function (often a lambda) that receives the builder and
 				calls further methods.
 
 		Example:
 			```python
-			# Reverse every 4th bar
+			# Reverse every 4th cycle
 			p.every(4, lambda p: p.reverse())
 			```
 		"""
 
 		if n < 1:
-			raise ValueError(f"every() cycle length must be at least 1 bar — got {n} (every(1, ...) applies the change every bar)")
+			raise ValueError(f"every() cycle length must be at least 1 cycle — got {n} (every(1, ...) applies the change every cycle)")
 
 		if self.cycle % n == 0:
 			fn(self)

@@ -2571,19 +2571,25 @@ class Composition:
 
 		"""Jump the form to a named section immediately.
 
-		Delegates to :meth:`subsequence.form_state.FormState.jump_to`.  Only works when the
-		composition uses graph-mode form (a dict passed to :meth:`form`).
+		Delegates to :meth:`subsequence.form_state.FormState.jump_to`.  Works with a graph form (a dict
+		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` —
+		in list and ``Form`` modes the jump lands on the next occurrence of
+		the name, searching forward and wrapping.  Only a generator form cannot
+		be navigated.
 
 		The musical effect is heard at the *next pattern rebuild cycle* — already-
 		queued MIDI notes are unaffected.  This natural delay means ``form_jump``
-		is effective without needing explicit quantization.
+		is effective without needing explicit quantization.  A jump part-way
+		through a bar gives the rest of that bar to the new section as its bar 0,
+		so its first full bar is bar 1 — see
+		:meth:`subsequence.form_state.FormState.jump_to` (#2484).
 
 		Args:
 		    section_name: The section to jump to.
 
 		Raises:
-		    ValueError: If no form is configured, or the form is not in graph
-		        mode, or *section_name* is unknown.
+		    ValueError: If no form is configured, or the form is a generator,
+		        or *section_name* is unknown.
 
 		Example::
 
@@ -2608,15 +2614,18 @@ class Composition:
 		and takes effect at the natural section boundary.  The performer can
 		change their mind by calling ``form_next`` again before the boundary.
 
-		Delegates to :meth:`subsequence.form_state.FormState.queue_next`.  Only works when the
-		composition uses graph-mode form (a dict passed to :meth:`form`).
+		Delegates to :meth:`subsequence.form_state.FormState.queue_next`.  Works with a graph form (a dict
+		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` —
+		in list and ``Form`` modes the queued section lands on the next occurrence of
+		the name, searching forward and wrapping.  Only a generator form cannot
+		be navigated.
 
 		Args:
 		    section_name: The section to queue.
 
 		Raises:
-		    ValueError: If no form is configured, or the form is not in graph
-		        mode, or *section_name* is unknown.
+		    ValueError: If no form is configured, or the form is a generator,
+		        or *section_name* is unknown.
 
 		Example::
 
