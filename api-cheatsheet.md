@@ -213,7 +213,7 @@ The musician's 'palette' for creating musical content.
 | `sysex(data, beat) -> subsequence.pattern_builder.PatternBuilder` | Send a System Exclusive (SysEx) message at a beat position. |
 | `thin(pitch, strategy, amount, grid, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Remove notes from the pattern based on their rhythmic position. |
 | `thue_morse(pitch, velocity, duration, pitch_b, velocity_b, no_overlap, probability, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes using the Thue-Morse aperiodic binary sequence. |
-| `transpose(semitones) -> PatternBuilder` | Shift all note pitches up or down. |
+| `transpose(semitones, within) -> PatternBuilder` | Shift all note pitches up or down. |
 | `velocity_shape(low, high) -> PatternBuilder` | Apply organic velocity variation to all notes in the pattern. |
 
 

@@ -226,6 +226,17 @@ BeatPosition = typing.Annotated[float, PositionParameter("beats")]
 # so catalogue._is_range still recognises the shape.
 VelocityValue = typing.Annotated[typing.Union[int, typing.Tuple[int, int], typing.List[int]], Unit("MIDI velocity")]
 
+# A low/high pair of pitches — the reach a transposition may land inside.
+#
+# Spelled as a tuple **or a list** for the reason above: the catalogue publishes
+# this as a "range" control, a person moves two handles, and their choice
+# arrives as a JSON array (#2349).  The ``Span`` is what keeps it from
+# inheriting velocity's floor of 1 — note 0 is a real pitch (#2464).
+PitchRange = typing.Annotated[
+	typing.Union[typing.Tuple[int, int], typing.List[int]],
+	Span(0, 127),
+]
+
 # Probability-curve names.  ghost_fill(bias=) and thin(strategy=) share this
 # vocabulary because they share build_ghost_bias(); thin's docstring already
 # promises they match, and one alias turns that promise into something mypy

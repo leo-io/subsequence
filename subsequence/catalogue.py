@@ -630,8 +630,17 @@ def _describe_parameter (
 
 	if _is_range(shape):
 		entry["kind"] = "range"
-		entry["min"] = 1
-		entry["max"] = 127
+		span = _span_of(bare)
+		# 1-127 is MIDI velocity's range, and every range control measured
+		# velocity until #2464 added one measured in pitches — where 0 is a
+		# real note.  A parameter measuring something else declares its own
+		# Span; none of the thirty-one that already published a range does,
+		# so this says the same thing about all of them as it did before.
+		if span is not None:
+			_bounds(entry, span)
+		else:
+			entry["min"] = 1
+			entry["max"] = 127
 		return _finished(entry, parameter)
 
 	if shape is bool:

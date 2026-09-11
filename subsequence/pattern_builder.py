@@ -2841,19 +2841,62 @@ class PatternBuilder(
 		self._pattern.steps = new_steps
 		return self
 
-	def transpose (self, semitones: typing.Annotated[int, subsequence.declarations.Unit("semitones")]) -> "PatternBuilder":
+	def transpose (self, semitones: typing.Annotated[int, subsequence.declarations.Unit("semitones")], within: typing.Optional[subsequence.declarations.PitchRange] = None) -> "PatternBuilder":
 
 		"""
 		Shift all note pitches up or down.
 
 		Parameters:
 			semitones: Positive for up, negative for down.
+			within: ``(low, high)`` — notes moved outside this range are
+				**removed** rather than pinned to its edge.  Omit it and
+				pitches clamp to 0-127 as they always have.
+
+		An instrument's reach is usually narrower than MIDI's.  A Minitaur
+		sounds notes 0-72, and a note transposed past that is silent on the
+		instrument — so clamping it to 72 sounds a note nobody asked for,
+		piling voices onto the top note (#2464).  Dropping is the honest
+		answer, and a position left with no notes goes with them.
+
+		Example:
+			```python
+			# Move the part up an octave, losing whatever the synth cannot reach
+			p.transpose(12, within=(0, 72))
+			```
 		"""
 
-		for step in self._pattern.steps.values():
+		if within is not None:
+
+			low, high = within
+
+			if low > high:
+				raise ValueError(f"transpose(within=) needs (low, high) — got ({low}, {high}), which is empty")
+
+		emptied: typing.List[int] = []
+
+		for pulse, step in list(self._pattern.steps.items()):
+
+			kept = []
 
 			for note in step.notes:
-				note.pitch = max(0, min(127, note.pitch + semitones))
+
+				moved = note.pitch + semitones
+
+				if within is None:
+					note.pitch = max(0, min(127, moved))
+					kept.append(note)
+				elif low <= moved <= high:
+					note.pitch = moved
+					kept.append(note)
+				# else: dropped, along with the position if it empties.
+
+			if kept:
+				step.notes = kept
+			else:
+				emptied.append(pulse)
+
+		for pulse in emptied:
+			del self._pattern.steps[pulse]
 		return self
 
 	def invert (self, pivot: int = 60) -> "PatternBuilder":

@@ -124,6 +124,11 @@ KNOWINGLY_DROPPED: typing.FrozenSet[typing.Tuple[str, str]] = frozenset({
 	# which is too thin a thread to hang thirty controls on, so this waits to
 	# be asked for deliberately rather than invented here (#2411).
 	("sequence", "durations"),
+	# A scale name, deliberately a bare str: register_scale() exists "for use
+	# with p.snap_to_scale()", so a Literal would make mypy refuse a scale the
+	# user legitimately registered — the one case where annotating would do
+	# harm rather than nothing.
+	("snap_to_scale", "mode"),
 })
 
 
@@ -143,7 +148,11 @@ def test_nothing_is_dropped_silently_from_a_generator_reported_complete () -> No
 
 	unexplained: typing.List[typing.Tuple[str, str, str]] = []
 
-	for entry in subsequence.generators():
+	# Transforms too.  This swept generators alone until #2464, when a new
+	# optional parameter on transpose() described as nothing and the entry
+	# still said partial: false — the exact pairing this test exists to catch,
+	# on the half it was not looking at.
+	for entry in subsequence.generators() + subsequence.transforms():
 
 		# A generator already marked partial has told the consumer it cannot be
 		# fully driven, so anything missing from it is disclosed rather than
@@ -607,6 +616,27 @@ def test_the_position_units_are_drawn_from_the_same_vocabulary () -> None:
 	assert set(typing.get_args(subsequence.declarations.PositionUnit)) <= set(
 		typing.get_args(subsequence.declarations.UnitName)
 	)
+
+
+def test_a_range_states_its_own_bounds_where_it_has_them () -> None:
+
+	"""1-127 is velocity's range, and every range control measured velocity until now.
+
+	``transpose(within=)`` is a range of *pitches*, where 0 is a real note, so
+	inheriting velocity's floor would have published a reach a musician cannot
+	ask for (#2464).  A range with no Span of its own still says 1-127, which
+	is what all thirty-one of the existing ones do.
+	"""
+
+	within = _parameter_of("transpose", "within", subsequence.describe_transform)
+
+	assert within["kind"] == "range"
+	assert (within["min"], within["max"]) == (0, 127)
+	assert within["required"] is False and within["default"] is None
+
+	velocity = _parameter("euclidean", "velocity")
+
+	assert (velocity["min"], velocity["max"]) == (1, 127), "velocity's range is unchanged"
 
 
 def test_a_declared_unit_reaches_the_entry () -> None:

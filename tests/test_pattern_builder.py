@@ -1232,6 +1232,78 @@ def test_arpeggio_chord_form_count_voices () -> None:
 	assert pitches == expected + expected
 
 
+def test_transpose_still_clamps_when_no_range_is_given () -> None:
+
+	"""The behaviour everything that already calls it depends on (#2464)."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.hit(120, [0.0])
+	builder.transpose(12)
+
+	pitches = [n.pitch for step in pattern.steps.values() for n in step.notes]
+
+	assert pitches == [127], "a note past the top should pin to 127, as it always has"
+
+
+def test_transpose_within_drops_what_the_instrument_cannot_reach () -> None:
+
+	"""A Minitaur sounds 0-72, so clamping to 72 sounds a note nobody asked for.
+
+	Pinning every out-of-reach note to the top would pile voices onto one
+	pitch; dropping is the honest answer (#2464).
+	"""
+
+	pattern, builder = _make_builder(length=4)
+	builder.hit(48, [0.0])
+	builder.hit(65, [1.0])			# 65 + 12 = 77, past the reach
+	builder.transpose(12, within=(0, 72))
+
+	pitches = sorted(n.pitch for step in pattern.steps.values() for n in step.notes)
+
+	assert pitches == [60], "the reachable note moves, the unreachable one goes"
+
+
+def test_transpose_within_takes_the_position_with_the_last_note_on_it () -> None:
+
+	"""A step left holding nothing is removed, the way thin() removes one."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.hit(48, [0.0])			# 60 after the move — still in reach
+	builder.hit(65, [1.0])			# 77 after the move — not
+
+	before = len(pattern.steps)
+	builder.transpose(12, within=(0, 72))
+
+	assert len(pattern.steps) == before - 1, "the emptied position should go with its note"
+	assert all(step.notes for step in pattern.steps.values()), "no position is left holding nothing"
+
+
+def test_transpose_within_keeps_the_other_voices_of_a_chord () -> None:
+
+	"""Only the notes that land outside go — not the position they shared."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.chord("C", root=48, beat=0.0)
+	placed = sorted(n.pitch for step in pattern.steps.values() for n in step.notes)
+
+	builder.transpose(12, within=(0, placed[0] + 12))		# only the lowest voice still fits
+
+	survivors = sorted(n.pitch for step in pattern.steps.values() for n in step.notes)
+
+	assert survivors == [placed[0] + 12]
+	assert all(step.notes for step in pattern.steps.values())
+
+
+def test_transpose_refuses_a_range_that_holds_nothing () -> None:
+
+	"""(low, high) the wrong way round is a mistake, not an empty result."""
+
+	_, builder = _make_builder(length=4)
+
+	with pytest.raises(ValueError, match="empty"):
+		builder.transpose(12, within=(80, 40))
+
+
 def test_arpeggio_chord_form_inversion () -> None:
 
 	"""inversion= is applied to the chord form, matching chord.tones(inversion=...)."""
