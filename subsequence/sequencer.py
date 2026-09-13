@@ -997,11 +997,15 @@ class Sequencer:
 		if lookahead_beats < 0:
 			raise ValueError("Reschedule lookahead cannot be negative")
 
-		if lookahead_beats > length_beats:
-			raise ValueError("Reschedule lookahead cannot exceed schedule length")
-
 		length_pulses = subsequence.constants.pulses.beats_to_pulses(length_beats, self.pulses_per_beat)
 		lookahead_pulses = subsequence.constants.pulses.beats_to_pulses(lookahead_beats, self.pulses_per_beat)
+
+		# Compared in pulses, not beats: five triplet eighths come to
+		# 1.6666666666666665 beats, a hair under the 1.6666666666666667 a
+		# lookahead of 5/3 is written as, and a float comparison would refuse a
+		# length the clock can schedule exactly.
+		if lookahead_pulses > length_pulses:
+			raise ValueError("Reschedule lookahead cannot exceed schedule length")
 
 		if length_pulses <= 0:
 			raise ValueError("Schedule length must be at least one pulse")

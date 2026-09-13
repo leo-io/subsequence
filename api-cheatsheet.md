@@ -129,7 +129,7 @@ The musician's 'palette' for creating musical content.
 
 | Method | Description |
 |---|---|
-| `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed) -> None` | Initialize the builder with pattern context, cycle count, and optional section info. |
+| `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed, repeating) -> None` | Initialize the builder with pattern context, cycle count, and optional section info. |
 | `apply_tuning(tuning, bend_range, channels, reference_note) -> PatternBuilder` | Apply a microtonal tuning to this pattern via pitch bend injection. |
 | `arpeggio(notes, root, velocity, count, inversion, beat, span, spacing, duration, direction, seed, rng) -> PatternBuilder` | Arpeggiate a chord (or a list of pitches) — cycle the notes one at a time at regular beat intervals. |
 | `bar_cycle(length) -> subsequence.pattern_builder.BarCycle` | Return the current bar's position within a repeating cycle of bars. |
@@ -202,7 +202,7 @@ The musician's 'palette' for creating musical content.
 | `self_avoiding_walk(pitches, spacing, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melody using a self-avoiding random walk. |
 | `seq(notation, pitch, velocity, seed, rng) -> PatternBuilder` | Build a pattern using an expressive string-based 'mini-notation'. |
 | `sequence(steps, pitches, velocities, durations, grid, probability, seed, rng) -> PatternBuilder` | A multi-parameter step sequencer. |
-| `set_length(length) -> PatternBuilder` | Dynamically change the length of the pattern. |
+| `set_length(length, steps) -> PatternBuilder` | Change how long the pattern is, in beats or in its own steps. |
 | `signal(name) -> float` | Read a conductor signal at the current bar. |
 | `silence(beat) -> PatternBuilder` | Sends an 'All Notes Off' (CC 123) and 'All Sound Off' (CC 120) message on the pattern's channel to immediately silence any ringing notes or drones. |
 | `slide(notes, steps, time, shape, resolution, bend_range, wrap, extend) -> subsequence.pattern_builder.PatternBuilder` | TB-303-style selective slide into specific notes. |

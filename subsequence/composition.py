@@ -6024,6 +6024,12 @@ class Composition:
 				self._cc_name_map = pending.cc_name_map
 				self._nrpn_name_map = pending.nrpn_name_map
 				self._default_grid: int = pending.default_grid
+				# One step's size in beats, as declared.  set_length(steps=)
+				# counts in it; kept apart from length / grid because a plain
+				# set_length(beats) keeps the grid and so changes that ratio.
+				self._step_beats: typing.Optional[float] = (
+					pending.length / pending.default_grid if pending.default_grid > 0 else None
+				)
 				self._wants_chord = _fn_has_parameter(pending.builder_fn, "chord")
 				self._cycle_count = 0
 				self._rng = pattern_rng
@@ -6122,6 +6128,9 @@ class Composition:
 					# So p.scratch() can take a child stream keyed off this
 					# pattern's, rather than drawing from the pattern's own.
 					stream_seed = composition_ref._stream_seed(self._builder_fn.__name__),
+					# It rebuilds and reschedules every cycle, so set_length() must
+					# keep it at least as long as its reschedule lookahead.
+					repeating = True,
 				)
 
 				try:

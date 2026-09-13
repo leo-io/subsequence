@@ -129,7 +129,7 @@ class PatternBuilder(
 	quarter note) or **steps** (subdivisions of a pattern).
 	"""
 
-	def __init__ (self, pattern: subsequence.pattern.Pattern, cycle: int, conductor: typing.Optional[subsequence.conductor.Conductor] = None, drum_note_map: typing.Optional[typing.Dict[str, int]] = None, cc_name_map: typing.Optional[typing.Dict[str, int]] = None, nrpn_name_map: typing.Optional[typing.Dict[str, int]] = None, section: typing.Any = None, bar: int = 0, rng: typing.Optional[random.Random] = None, tweaks: typing.Optional[typing.Dict[str, typing.Any]] = None, default_grid: int = 16, data: typing.Optional[typing.Dict[str, typing.Any]] = None, key: typing.Optional[str] = None, scale: typing.Optional[str] = None, time_signature: typing.Tuple[int, int] = (4, 4), held_notes: typing.Optional[subsequence.held_notes.HeldNotes] = None, harmony: typing.Optional[typing.Any] = None, section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = None, energy: float = 0.5, stream_seed: typing.Optional[int] = None) -> None:
+	def __init__ (self, pattern: subsequence.pattern.Pattern, cycle: int, conductor: typing.Optional[subsequence.conductor.Conductor] = None, drum_note_map: typing.Optional[typing.Dict[str, int]] = None, cc_name_map: typing.Optional[typing.Dict[str, int]] = None, nrpn_name_map: typing.Optional[typing.Dict[str, int]] = None, section: typing.Any = None, bar: int = 0, rng: typing.Optional[random.Random] = None, tweaks: typing.Optional[typing.Dict[str, typing.Any]] = None, default_grid: int = 16, data: typing.Optional[typing.Dict[str, typing.Any]] = None, key: typing.Optional[str] = None, scale: typing.Optional[str] = None, time_signature: typing.Tuple[int, int] = (4, 4), held_notes: typing.Optional[subsequence.held_notes.HeldNotes] = None, harmony: typing.Optional[typing.Any] = None, section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = None, energy: float = 0.5, stream_seed: typing.Optional[int] = None, repeating: bool = False) -> None:
 
 		"""Initialize the builder with pattern context, cycle count, and optional section info.
 
@@ -180,6 +180,14 @@ class PatternBuilder(
 			energy: The current section's energy level (0.0–1.0), read via
 				``p.energy`` — the arranging dial.  0.5 when no energy source
 				is configured.
+			stream_seed: This pattern's derived stream seed, which
+				``p.scratch()`` takes a child stream of.  ``None`` when the
+				composition is unseeded.
+			repeating: True when the pattern is rebuilt and rescheduled every
+				cycle, so ``set_length()`` refuses a length its
+				``reschedule_lookahead`` would run past.  One-shots —
+				``trigger()`` and transition fills — leave it False: they never
+				reschedule, so their lookahead means nothing.
 		"""
 
 		self._pattern = pattern
@@ -193,6 +201,15 @@ class PatternBuilder(
 		self.rng: random.Random = rng or random.Random()
 		self._tweaks: typing.Dict[str, typing.Any] = tweaks or {}
 		self._default_grid: int = default_grid
+		# One step's size in beats, which set_length(steps=) counts in.  A
+		# composition pattern carries it from its declaration; anything else
+		# takes it from the length and grid it arrives with.
+		declared_step: typing.Optional[float] = getattr(pattern, "_step_beats", None)
+		self._step_beats: typing.Optional[float] = (
+			declared_step if declared_step is not None
+			else pattern.length / default_grid if default_grid > 0
+			else None
+		)
 		self.data: typing.Dict[str, typing.Any] = data if data is not None else {}
 		self.key: typing.Optional[str] = key  # composition key, for p.progression() chord generation
 		self.scale: typing.Optional[str] = scale  # composition scale/mode, for degree resolution
@@ -206,10 +223,14 @@ class PatternBuilder(
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
 		self._stream_seed: typing.Optional[int] = stream_seed
+		self._repeating: bool = repeating
 
 	@property
 	def grid (self) -> int:
-		"""Number of grid slots in this pattern (e.g. 16 for a 4-beat sixteenth-note pattern)."""
+		"""Number of grid slots in this pattern (e.g. 16 for a 4-beat sixteenth-note pattern).
+
+		Follows ``set_length(steps=…)``, which changes how many steps there are.
+		"""
 		return self._default_grid
 
 	def _has_pitch_at_beat (self, pitch: subsequence.declarations.Pitch, beat: subsequence.declarations.GridBeats) -> bool:
@@ -295,25 +316,93 @@ class PatternBuilder(
 
 		return self._tweaks.get(name, default)
 
-	def set_length (self, length: float) -> "PatternBuilder":
+	def set_length (self, length: typing.Optional[subsequence.declarations.Beats] = None, *, steps: typing.Optional[subsequence.declarations.StepCount] = None) -> "PatternBuilder":
 
 		"""
-		Dynamically change the length of the pattern.
+		Change how long the pattern is, in beats or in its own steps.
 
-		The new length takes effect immediately for any subsequent notes
-		placed in the current builder call, and will be used by the
-		sequencer for next cycle's scheduling.
+		**In beats**, the pattern keeps its number of steps and they stretch or
+		squeeze to fit: ``set_length(3)`` on a sixteen-step bar is still sixteen
+		steps, each now three sixteenths of a beat.
+
+		**In steps**, every step keeps its size and the pattern gains or loses
+		steps: ``set_length(steps=12)`` on a sixteen-step bar is twelve
+		sixteenths — three beats — and ``p.grid`` becomes 12, so ``euclidean()``
+		and every other method that counts steps spreads over those twelve.  A
+		step is the size the pattern was declared with, whatever lengths it has
+		been given since.
+
+		Notes already placed in this build keep their positions; anything placed
+		after the call sees the new length.  The sequencer plays it from the next
+		cycle, which starts where the current one ends, and it stays in force for
+		later cycles until it is set again — so a pattern left shorter than its
+		neighbours drifts against them, which is the polyrhythm.
+
+		```python
+		p.set_length(steps=12)   # twelve sixteenths against a sixteen-step kick
+		p.euclidean(42, pulses=5)
+		```
 
 		Parameters:
-			length: New pattern length in beats (e.g., 4.0 for a bar).
+			length: The new length in beats (e.g. ``4.0`` for a bar of 4/4).
+			steps: The new length as a count of the pattern's steps.
+
+		Raises:
+			ValueError: If both or neither are given, if ``steps`` is not a whole
+				number of at least 1, or if the length would be shorter than the
+				``reschedule_lookahead`` of a pattern that repeats — which would
+				leave it silent.
 
 		Returns ``self`` for fluent chaining.
 		"""
 
+		if length is not None and steps is not None:
+			raise ValueError("Give set_length() a length in beats or steps=, not both")
+
+		if steps is not None:
+
+			if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
+				raise ValueError(f"steps= must be a whole number of steps, 1 or more — got {steps!r}")
+
+			if self._step_beats is None:
+				raise ValueError("This pattern has no step size to count in — give set_length() a length in beats")
+
+			length = steps * self._step_beats
+
+		if length is None:
+			raise ValueError("set_length() needs a length in beats, or steps=")
+
 		if length <= 0:
 			raise ValueError("Pattern length must be positive")
 
+		length_pulses = subsequence.constants.pulses.beats_to_pulses(length)
+
+		if length_pulses < 1:
+			raise ValueError(f"A length of {length:g} beats is shorter than one pulse (1/24 of a beat)")
+
+		# Refused here rather than stored: the sequencer cannot reschedule a
+		# pattern whose lookahead runs past its end, so the length would silence
+		# it on every cycle after until something set a longer one.  A one-shot
+		# never reschedules, so its lookahead is no limit.
+		lookahead = self._pattern.reschedule_lookahead
+
+		if self._repeating and length_pulses < subsequence.constants.pulses.beats_to_pulses(lookahead):
+			raise ValueError(
+				f"A length of {length:g} beats is shorter than this pattern's "
+				f"reschedule_lookahead of {lookahead:g} beats, which would silence it — "
+				f"keep it at least that long, or declare a shorter lookahead"
+			)
+
 		self._pattern.length = length
+
+		if steps is not None:
+			self._default_grid = steps
+
+			# A composition pattern hands its grid to every rebuild; move it
+			# there too, or the next cycle would count the declared steps again.
+			if hasattr(self._pattern, "_default_grid"):
+				setattr(self._pattern, "_default_grid", steps)
+
 		return self
 
 	def _resolve_pitch (self, pitch: subsequence.declarations.Pitch) -> int:
