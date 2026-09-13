@@ -103,7 +103,7 @@ Subsequence aims for *learn one verb, predict the rest*. A handful of convention
 
 ## Performance
 
-The internal master clock uses a hybrid sleep+spin strategy: it sleeps to within ~1 ms of each pulse, then busy-waits on `time.perf_counter()` for the remaining sub-millisecond interval. Pulse times are absolute offsets from the session start, so timing error never accumulates.
+The internal master clock uses a hybrid sleep+spin strategy: it sleeps to within ~1 ms of each pulse, then busy-waits on `time.perf_counter()` for the remaining sub-millisecond interval. Pulse times are absolute offsets from the session start, so timing error never accumulates. On Linux the clock runs on a `select()`-based event loop rather than asyncio's default: the default loop rounds each wait up to whole milliseconds, and at some tempos that overran the 1 ms margin and made pulses up to 1.5 ms late. Driving a `Sequencer` yourself? Start it with `subsequence.sequencer.run(main())` in place of `asyncio.run` to get the same loop.
 
 Measured jitter on Linux at 120 BPM (64 bars, 6144 pulses):
 

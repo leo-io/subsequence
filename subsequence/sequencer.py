@@ -12,6 +12,8 @@ import heapq
 import itertools
 import datetime
 import logging
+import selectors
+import sys
 import threading
 import time
 import typing
@@ -229,6 +231,91 @@ def _destination_pitch (note: typing.Any, target: _MirrorTarget, primary: bool) 
 		return None   # a named voice this device lacks → silent (not a wrong note)
 
 	return typing.cast(int, note.pitch)
+
+
+_RunResult = typing.TypeVar("_RunResult")
+
+
+def new_event_loop () -> asyncio.AbstractEventLoop:
+
+	"""Create an event loop that wakes the clock when it asked to be woken.
+
+	The clock sleeps to within 1 ms of each pulse and spins the rest, so a
+	sleep that overruns by more than that makes the pulse late.  On Linux the
+	default loop waits in epoll, and CPython's epoll selector rounds a timeout
+	up to whole milliseconds twice — once in Python, then again in C after a
+	float conversion — so a wait that rounds to 13 or 18 ms asks the kernel for
+	a millisecond more.  Tempos whose pulse lands the sleep there (130 and 180
+	BPM among them) then run up to 1.5 ms late.  ``select()`` takes a
+	microsecond timeout and overruns by kernel wake-up latency alone, so that
+	is the selector used wherever epoll is the default.
+
+	``select()`` cannot watch a descriptor numbered 1024 or above, which would
+	matter only to a process holding about a thousand files open before the
+	loop opens its sockets.  Other platforms keep their default loop: macOS's
+	kqueue takes a nanosecond timeout, and Windows uses its proactor.
+	"""
+
+	epoll = getattr(selectors, "EpollSelector", None)
+
+	if epoll is not None and selectors.DefaultSelector is epoll:
+		return asyncio.SelectorEventLoop(selectors.SelectSelector())
+
+	return asyncio.new_event_loop()
+
+
+def run (main: typing.Coroutine[typing.Any, typing.Any, _RunResult]) -> _RunResult:
+
+	"""Run *main* as ``asyncio.run`` would, on a loop from :func:`new_event_loop`.
+
+	``Composition.play()`` and ``render()`` start this way.  Use it in place of
+	``asyncio.run`` when driving a ``Sequencer`` directly, or its clock keeps
+	the default loop's late wake-ups.
+	"""
+
+	if sys.version_info >= (3, 11):
+		with asyncio.Runner(loop_factory = new_event_loop) as runner:
+			return runner.run(main)
+
+	# Python 3.10 has no Runner: these are the steps its asyncio.run takes.
+	loop = new_event_loop()
+
+	try:
+		asyncio.set_event_loop(loop)
+		return loop.run_until_complete(main)
+
+	finally:
+		try:
+			_cancel_remaining_tasks(loop)
+			loop.run_until_complete(loop.shutdown_asyncgens())
+			loop.run_until_complete(loop.shutdown_default_executor())
+
+		finally:
+			asyncio.set_event_loop(None)
+			loop.close()
+
+
+def _cancel_remaining_tasks (loop: asyncio.AbstractEventLoop) -> None:
+
+	"""Cancel and reap the tasks *loop* still holds, as ``asyncio.run`` does on 3.10."""
+
+	remaining = asyncio.all_tasks(loop)
+
+	if not remaining:
+		return
+
+	for task in remaining:
+		task.cancel()
+
+	loop.run_until_complete(asyncio.gather(*remaining, return_exceptions = True))
+
+	for task in remaining:
+		if not task.cancelled() and task.exception() is not None:
+			loop.call_exception_handler({
+				"message": "unhandled exception during shutdown",
+				"exception": task.exception(),
+				"task": task,
+			})
 
 
 @dataclasses.dataclass

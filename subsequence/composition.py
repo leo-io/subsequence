@@ -5473,7 +5473,7 @@ class Composition:
 		"""
 
 		try:
-			asyncio.run(self._run())
+			subsequence.sequencer.run(self._run())
 
 		except KeyboardInterrupt:
 			pass
@@ -5532,7 +5532,7 @@ class Composition:
 		self._sequencer.render_mode = True
 		self._sequencer.render_bars = bars if bars is not None else 0
 		self._sequencer.render_max_seconds = max_minutes * 60.0 if max_minutes is not None else None
-		asyncio.run(self._run())
+		subsequence.sequencer.run(self._run())
 
 	def _broadcast_osc_status (self, bar: int) -> None:
 

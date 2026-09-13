@@ -6,6 +6,7 @@ the deviation of each pulse from its ideal scheduled time.
 Usage:
     python benchmarks/clock_jitter.py [--bpm BPM] [--bars N] [--no-spin-wait]
                                       [--device DEVICE_NAME] [--compare]
+                                      [--sweep START:STOP:STEP] [--default-loop]
 
 Options:
     --bpm BPM           Tempo in BPM (default: 120)
@@ -13,6 +14,12 @@ Options:
     --no-spin-wait      Disable hybrid sleep+spin (use pure asyncio.sleep)
     --device NAME       MIDI output device name (default: auto-select)
     --compare           Run both modes and print a side-by-side comparison
+    --sweep START:STOP:STEP
+                        Measure every tempo in the range (inclusive), one line
+                        each.  How late a pulse runs depends on the tempo, so a
+                        single tempo can look clean while its neighbours do not.
+    --default-loop      Run on asyncio's default event loop instead of the one
+                        Composition.play() uses, to compare the two.
 """
 
 import argparse
@@ -38,6 +45,7 @@ def _run_benchmark (
 	bars: int,
 	spin_wait: bool,
 	device_name: typing.Optional[str],
+	default_loop: bool = False,
 ) -> typing.List[float]:
 
 	"""Run the sequencer for *bars* bars and return per-pulse jitter (seconds)."""
@@ -76,7 +84,10 @@ def _run_benchmark (
 			seq.midi_out.close()
 			seq.midi_out = None
 
-	asyncio.run(_run())
+	if default_loop:
+		asyncio.run(_run())
+	else:
+		subsequence.sequencer.run(_run())
 
 	# Trim to the expected pulse count in case of minor over/under-run.
 	return jitter_log[:pulses]
@@ -144,6 +155,48 @@ def _print_report (
 	print()
 
 
+def _run_sweep (
+	sweep: str,
+	bars: int,
+	spin_wait: bool,
+	device_name: typing.Optional[str],
+	default_loop: bool,
+) -> None:
+
+	"""Measure each tempo in START:STOP:STEP and print one line per tempo."""
+
+	try:
+		start, stop, step = (float(part) for part in sweep.split(":"))
+	except ValueError:
+		sys.exit(f"--sweep wants START:STOP:STEP, e.g. 60:200:5 (got {sweep!r})")
+
+	if step <= 0 or stop < start:
+		sys.exit("--sweep needs a positive STEP and STOP at or above START")
+
+	loop_name = "asyncio default loop" if default_loop else "Composition loop"
+	mode = "spin-wait ON" if spin_wait else "spin-wait OFF"
+
+	print(f"\nClock jitter sweep — {bars} bars per tempo ({mode}, {loop_name})")
+	print(f"{'─' * 62}")
+	print(f"  {'BPM':>5}  {'median':>9}  {'p99':>9}  {'max':>9}  {'over 1 ms':>9}")
+
+	bpm = start
+
+	while bpm <= stop + 1e-9:
+
+		ms = sorted(j * 1000 for j in _run_benchmark(bpm, bars, spin_wait, device_name, default_loop))
+
+		if not ms:
+			print(f"  {bpm:>5.0f}  no jitter data collected")
+		else:
+			over = sum(1 for value in ms if value > 1.0)
+			print(f"  {bpm:>5.0f}  {statistics.median(ms):>6.3f} ms  {ms[int(len(ms) * 0.99)]:>6.3f} ms  {ms[-1]:>6.3f} ms  {over:>9}")
+
+		bpm += step
+
+	print()
+
+
 def main () -> None:
 
 	parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -152,20 +205,25 @@ def main () -> None:
 	parser.add_argument("--no-spin-wait", action="store_true",       help="Disable spin-wait (use pure asyncio.sleep)")
 	parser.add_argument("--device",       type=str,   default=None,  help="MIDI output device name")
 	parser.add_argument("--compare",      action="store_true",       help="Run both modes and compare")
+	parser.add_argument("--sweep",        type=str,   default=None,  help="Measure every tempo in START:STOP:STEP")
+	parser.add_argument("--default-loop", action="store_true",       help="Use asyncio's default event loop")
 	args = parser.parse_args()
 
-	if args.compare:
+	if args.sweep:
+		_run_sweep(args.sweep, args.bars, not args.no_spin_wait, args.device, args.default_loop)
+
+	elif args.compare:
 		print("\nRunning with spin-wait ON ...")
-		spin_jitter = _run_benchmark(args.bpm, args.bars, spin_wait=True, device_name=args.device)
+		spin_jitter = _run_benchmark(args.bpm, args.bars, spin_wait=True, device_name=args.device, default_loop=args.default_loop)
 		_print_report(spin_jitter, args.bpm, args.bars, spin_wait=True, label="[spin-wait ON]")
 
 		print("Running with spin-wait OFF ...")
-		pure_jitter = _run_benchmark(args.bpm, args.bars, spin_wait=False, device_name=args.device)
+		pure_jitter = _run_benchmark(args.bpm, args.bars, spin_wait=False, device_name=args.device, default_loop=args.default_loop)
 		_print_report(pure_jitter, args.bpm, args.bars, spin_wait=False, label="[spin-wait OFF]")
 
 	else:
 		spin = not args.no_spin_wait
-		jitter = _run_benchmark(args.bpm, args.bars, spin_wait=spin, device_name=args.device)
+		jitter = _run_benchmark(args.bpm, args.bars, spin_wait=spin, device_name=args.device, default_loop=args.default_loop)
 		_print_report(jitter, args.bpm, args.bars, spin_wait=spin)
 
 

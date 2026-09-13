@@ -8,8 +8,6 @@ Use this approach when you need persistent state across cycles, incremental
 pattern updates, or multiple independent sequencers.
 """
 
-import asyncio
-
 import subsequence.composition
 import subsequence.constants.instruments.gm_drums as gm_drums
 import subsequence.harmonic_state
@@ -98,4 +96,5 @@ async def main () -> None:
 
 
 if __name__ == "__main__":
-	asyncio.run(main())
+	# Not asyncio.run: this loop wakes the clock on time (see subsequence.sequencer.run).
+	subsequence.sequencer.run(main())
