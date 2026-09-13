@@ -32,6 +32,7 @@ import threading
 import typing
 
 import subsequence.constants
+import subsequence.constants.pulses
 
 if typing.TYPE_CHECKING:
 	from subsequence.composition import Composition
@@ -274,7 +275,7 @@ class GridDisplay:
 		the highest velocity from any note at that position is stored.
 		"""
 
-		total_pulses = int(pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(pattern.length)
 
 		if total_pulses <= 0 or grid_size <= 0:
 			return {}

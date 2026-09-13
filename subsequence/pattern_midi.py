@@ -10,6 +10,7 @@ import pymididefs.cc
 import pymididefs.rpn
 
 import subsequence.constants
+import subsequence.constants.pulses
 import subsequence.declarations
 import subsequence.easing
 import subsequence.pattern
@@ -99,8 +100,8 @@ class PatternMidiMixin:
 		and ``osc_ramp()``.
 		"""
 
-		pulse_start = int(beat_start * subsequence.constants.MIDI_QUARTER_NOTE)
-		pulse_end = int(beat_end * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse_start = subsequence.constants.pulses.beats_to_pulses(beat_start)
+		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
 		self._ramp_pulse_span(pulse_start, pulse_end, start, end, shape, resolution, event_fn)
 
@@ -119,7 +120,7 @@ class PatternMidiMixin:
 		"""
 
 		cc_num: int = self._resolve_cc(control)
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		# Clamp to the 7-bit CC range like every sibling (cc_ramp / program_change
 		# / pitch_bend) so a computed out-of-range value is corrected here rather
@@ -197,7 +198,7 @@ class PatternMidiMixin:
 
 		# The asymmetric clamp is correct: MIDI's 14-bit bend range is -8192..+8191.
 		midi_value = max(-8192, min(8191, int(round(value * 8192))))
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		self._pattern.cc_events.append(
 			subsequence.pattern.CcEvent(
@@ -409,7 +410,7 @@ class PatternMidiMixin:
 		"""
 
 		param = self._resolve_nrpn(parameter)
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
 		self._append_data_entry(pulse, value, fine)
@@ -465,7 +466,7 @@ class PatternMidiMixin:
 		"""
 
 		param = self._resolve_rpn(parameter)
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
 		self._append_data_entry(pulse, value, fine)
@@ -532,9 +533,9 @@ class PatternMidiMixin:
 		if beat_end is None:
 			beat_end = self._pattern.length
 
-		pulse_end = int(beat_end * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
-		self._append_param_select(int(beat_start * subsequence.constants.MIDI_QUARTER_NOTE), param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
+		self._append_param_select(subsequence.constants.pulses.beats_to_pulses(beat_start), param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
 			# Clamp guards against custom easing callables that overshoot [0, 1].
@@ -578,9 +579,9 @@ class PatternMidiMixin:
 		if beat_end is None:
 			beat_end = self._pattern.length
 
-		pulse_end = int(beat_end * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
-		self._append_param_select(int(beat_start * subsequence.constants.MIDI_QUARTER_NOTE), param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
+		self._append_param_select(subsequence.constants.pulses.beats_to_pulses(beat_start), param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
 			# Clamp guards against custom easing callables that overshoot [0, 1].
@@ -640,7 +641,7 @@ class PatternMidiMixin:
 			```
 		"""
 
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		if bank_msb is not None:
 			self._pattern.cc_events.append(
@@ -704,7 +705,7 @@ class PatternMidiMixin:
 				"Mask computed values (checksums, packed parameters) with & 0x7F first."
 			)
 
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		self._pattern.cc_events.append(
 			subsequence.pattern.CcEvent(
@@ -740,7 +741,7 @@ class PatternMidiMixin:
 			```
 		"""
 
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 
 		self._pattern.osc_events.append(
 			subsequence.pattern.OscEvent(
@@ -925,7 +926,7 @@ class PatternMidiMixin:
 		if note_idx < len(sorted_positions) - 1:
 			reset_pulse = sorted_positions[note_idx + 1]
 		else:
-			total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+			total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 			reset_pulse = total_pulses + sorted_positions[0]
 
 		reset_midi = max(-8192, min(8191, int(round(0.0 * 8192))))
@@ -1032,7 +1033,7 @@ class PatternMidiMixin:
 			# - a glide spilling past the cycle end was cancelled mid-flight by
 			# the pulse-0 reset, leaving the first note fully bent.
 			if is_last:
-				total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+				total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 				reset_pulse = total_pulses + sorted_positions[0]
 			else:
 				reset_pulse = b_pos
@@ -1122,7 +1123,7 @@ class PatternMidiMixin:
 			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 		sorted_positions = sorted(self._pattern.steps.keys())
-		total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 		n = len(sorted_positions)
 
 		# Resolve flagged pulse positions
@@ -1135,14 +1136,14 @@ class PatternMidiMixin:
 				flagged.add(sorted_positions[idx])
 		else:
 			# steps is not None.  Resolve each grid step to the SAME pulse the
-			# placement methods use — int(step * (length / grid) * PPQ) — so the
+			# placement methods use — beats_to_pulses(step * (length / grid)) — so the
 			# flag lands on the note even when the grid doesn't divide the bar
 			# evenly.  Floored uniform spacing (total_pulses // grid) drifts out of
 			# alignment on non-divisor grids, silently flagging nothing.
 			step_beats = self._pattern.length / self._default_grid
 			flagged = set()
 			for s in (steps or []):
-				flagged.add(int(s * step_beats * subsequence.constants.MIDI_QUARTER_NOTE))
+				flagged.add(subsequence.constants.pulses.beats_to_pulses(s * step_beats))
 
 		def _lowest_pitch (pos: int) -> int:
 			return min(note.pitch for note in self._pattern.steps[pos].notes)

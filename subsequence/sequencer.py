@@ -21,6 +21,7 @@ import typing
 import mido
 
 import subsequence.constants
+import subsequence.constants.pulses
 import subsequence.easing
 import subsequence.event_emitter
 import subsequence.held_notes
@@ -999,8 +1000,8 @@ class Sequencer:
 		if lookahead_beats > length_beats:
 			raise ValueError("Reschedule lookahead cannot exceed schedule length")
 
-		length_pulses = int(length_beats * self.pulses_per_beat)
-		lookahead_pulses = int(lookahead_beats * self.pulses_per_beat)
+		length_pulses = subsequence.constants.pulses.beats_to_pulses(length_beats, self.pulses_per_beat)
+		lookahead_pulses = subsequence.constants.pulses.beats_to_pulses(lookahead_beats, self.pulses_per_beat)
 
 		if length_pulses <= 0:
 			raise ValueError("Schedule length must be at least one pulse")
@@ -1320,7 +1321,7 @@ class Sequencer:
 				callback fires.
 		"""
 
-		lookahead_pulses = int(reschedule_lookahead * self.pulses_per_beat)
+		lookahead_pulses = subsequence.constants.pulses.beats_to_pulses(reschedule_lookahead, self.pulses_per_beat)
 
 		if lookahead_pulses < 0:
 			raise ValueError("Reschedule lookahead cannot be negative")
@@ -1997,7 +1998,7 @@ class Sequencer:
 			if result is None:
 				continue	# the sequence chose to stop
 
-			interval_pulses = max(1, int(float(result) * self.pulses_per_beat))
+			interval_pulses = max(1, subsequence.constants.pulses.beats_to_pulses(float(result), self.pulses_per_beat))
 			scheduled_sequence.boundary_pulse += interval_pulses
 			scheduled_sequence.next_fire_pulse = max(
 				pulse + 1,

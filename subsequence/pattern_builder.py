@@ -17,6 +17,7 @@ import pymididefs.rpn
 import subsequence.chords
 import subsequence.declarations
 import subsequence.constants
+import subsequence.constants.pulses
 import subsequence.constants.velocity
 import subsequence.easing
 import subsequence.groove
@@ -223,7 +224,7 @@ class PatternBuilder(
 			midi_pitch = self._drum_note_map[pitch]
 		else:
 			midi_pitch = pitch
-		pulse = int(beat * subsequence.constants.MIDI_QUARTER_NOTE)
+		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
 		if pulse in self._pattern.steps:
 			return any(n.pitch == midi_pitch for n in self._pattern.steps[pulse].notes)
 		return False
@@ -1351,7 +1352,7 @@ class PatternBuilder(
 		"""
 
 		ppq = subsequence.constants.MIDI_QUARTER_NOTE
-		lo, hi = int(beat * ppq), int((beat + span) * ppq)
+		lo, hi = subsequence.constants.pulses.beats_to_pulses(beat), subsequence.constants.pulses.beats_to_pulses(beat + span)
 		events = []
 
 		for pulse in sorted(self._pattern.steps):
@@ -2520,7 +2521,7 @@ class PatternBuilder(
 			return self
 
 		sorted_positions = sorted(self._pattern.steps.keys())
-		total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 
 		for i, position in enumerate(sorted_positions):
 
@@ -2560,7 +2561,7 @@ class PatternBuilder(
 		if beats <= 0:
 			raise ValueError("Note duration (beats) must be positive")
 
-		duration_pulses = int(beats * subsequence.constants.MIDI_QUARTER_NOTE)
+		duration_pulses = subsequence.constants.pulses.beats_to_pulses(beats)
 		duration_pulses = max(1, duration_pulses)
 
 		for step in self._pattern.steps.values():
@@ -2601,8 +2602,8 @@ class PatternBuilder(
 			return self
 
 		sorted_positions = sorted(self._pattern.steps.keys())
-		total_pulses    = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
-		detached_pulses = int(beats * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses    = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
+		detached_pulses = subsequence.constants.pulses.beats_to_pulses(beats)
 
 		for i, position in enumerate(sorted_positions):
 
@@ -2730,7 +2731,7 @@ class PatternBuilder(
 		Flip the pattern backwards in time (retrograde).
 		"""
 
-		total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 		old_steps = self._pattern.steps
 		new_steps: typing.Dict[int, subsequence.pattern.Step] = {}
 
@@ -2777,7 +2778,7 @@ class PatternBuilder(
 		if factor <= 0:
 			raise ValueError("Stretch factor must be positive")
 
-		total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 		old_steps = self._pattern.steps
 		new_steps: typing.Dict[int, subsequence.pattern.Step] = {}
 
@@ -2823,7 +2824,7 @@ class PatternBuilder(
 		if grid <= 0:
 			return self
 
-		total_pulses = int(self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE)
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 		pulses_per_step = total_pulses / grid
 		shift_pulses = int(steps * pulses_per_step)
 

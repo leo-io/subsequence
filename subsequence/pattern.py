@@ -11,6 +11,7 @@ import dataclasses
 import typing
 
 import subsequence.constants
+import subsequence.constants.pulses
 import subsequence.constants.velocity
 
 
@@ -272,12 +273,12 @@ class Pattern:
 		if pulses_per_beat <= 0:
 			raise ValueError("Pulses per beat must be positive")
 
-		position = int(beat_position * pulses_per_beat)
+		position = subsequence.constants.pulses.beats_to_pulses(beat_position, pulses_per_beat)
 
 		# A positive duration shorter than one pulse clamps to one pulse —
 		# the shortest sound the clock can represent — matching the duration
 		# transforms (legato/detached/stretch), which clamp the same way.
-		duration = max(1, int(duration_beats * pulses_per_beat))
+		duration = max(1, subsequence.constants.pulses.beats_to_pulses(duration_beats, pulses_per_beat))
 
 		self.add_note(
 			position = position,
@@ -304,8 +305,8 @@ class Pattern:
 		if pulses_per_beat <= 0:
 			raise ValueError("Pulses per beat must be positive")
 
-		spacing_pulses = int(spacing_beats * pulses_per_beat)
-		note_duration = int(note_duration_beats * pulses_per_beat)
+		spacing_pulses = subsequence.constants.pulses.beats_to_pulses(spacing_beats, pulses_per_beat)
+		note_duration = subsequence.constants.pulses.beats_to_pulses(note_duration_beats, pulses_per_beat)
 
 		if spacing_pulses <= 0:
 			raise ValueError("Spacing must be at least one pulse")
@@ -376,7 +377,7 @@ class Pattern:
 		if pulses_per_beat <= 0:
 			raise ValueError("Pulses per beat must be positive")
 
-		position = int(beat_position * pulses_per_beat)
+		position = subsequence.constants.pulses.beats_to_pulses(beat_position, pulses_per_beat)
 
 		self.raw_note_events.append(
 			RawNoteEvent(

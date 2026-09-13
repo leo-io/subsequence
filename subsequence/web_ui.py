@@ -21,6 +21,7 @@ import websockets
 import websockets.asyncio.server
 import websockets.exceptions
 
+import subsequence.constants.pulses
 import subsequence.helpers.network
 
 logger = logging.getLogger(__name__)
@@ -249,7 +250,7 @@ class WebUI:
 				pattern_data: typing.Dict[str, typing.Any] = {
 					"name": name,
 					"muted": getattr(pattern, "_muted", False),
-					"length_pulses": int(pattern.length * state["pulses_per_beat"]),
+					"length_pulses": subsequence.constants.pulses.beats_to_pulses(pattern.length, state["pulses_per_beat"]),
 					"drum_map": getattr(pattern, "_drum_note_map", None),
 					"notes": []
 				}

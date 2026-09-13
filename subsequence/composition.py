@@ -25,6 +25,7 @@ import subsequence.chord_graphs
 import subsequence.chords
 import subsequence.constants
 import subsequence.constants.durations
+import subsequence.constants.pulses
 import subsequence.constants.velocity
 import subsequence.display
 import subsequence.harmonic_state
@@ -932,7 +933,7 @@ async def schedule_harmonic_clock (
 
 	await sequencer.schedule_callback_sequence(
 		callback = advance_pulse,
-		start_pulse = int(first_interval * pulses_per_beat),
+		start_pulse = subsequence.constants.pulses.beats_to_pulses(first_interval, pulses_per_beat),
 		reschedule_lookahead = reschedule_lookahead,
 	)
 
@@ -1003,7 +1004,7 @@ async def schedule_task (
 
 	accepts_ctx = _fn_has_parameter(fn, "p")
 	wrapped = _make_safe_callback(fn, accepts_context=accepts_ctx)
-	start_pulse = int(cycle_beats * sequencer.pulses_per_beat) if defer else 0
+	start_pulse = subsequence.constants.pulses.beats_to_pulses(cycle_beats, sequencer.pulses_per_beat) if defer else 0
 
 	await sequencer.schedule_callback_repeating(
 		callback = wrapped,
@@ -1036,7 +1037,7 @@ async def schedule_form (
 	fixed fallback for direct use.
 	"""
 
-	lookahead_pulses = int(reschedule_lookahead * sequencer.pulses_per_beat)
+	lookahead_pulses = subsequence.constants.pulses.beats_to_pulses(reschedule_lookahead, sequencer.pulses_per_beat)
 
 	def _current_form_state () -> typing.Optional[subsequence.form_state.FormState]:
 		return get_form_state() if get_form_state is not None else form_state
@@ -1079,7 +1080,7 @@ async def schedule_form (
 
 	# Form advances once per bar based on the global time signature.
 	_BEATS_PER_BAR: int = sequencer.time_signature[0]
-	first_bar_pulse = int(_BEATS_PER_BAR * sequencer.pulses_per_beat)
+	first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(_BEATS_PER_BAR, sequencer.pulses_per_beat)
 
 	await sequencer.schedule_callback_repeating(
 		callback = advance_form,
@@ -5430,7 +5431,7 @@ class Composition:
 
 		else:
 			# Quantize to the next multiple of (quantize * pulses_per_beat)
-			quantize_pulses = int(quantize * pulses_per_beat)
+			quantize_pulses = subsequence.constants.pulses.beats_to_pulses(quantize, pulses_per_beat)
 			start_pulse = ((current_pulse // quantize_pulses) + 1) * quantize_pulses
 
 		self._schedule_one_shot(pattern, start_pulse)
@@ -5818,7 +5819,7 @@ class Composition:
 		def _advance_builder_bar (pulse: int) -> None:
 			self._builder_bar += 1
 
-		first_bar_pulse = int(self.time_signature[0] * self._sequencer.pulses_per_beat)
+		first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(self.time_signature[0], self._sequencer.pulses_per_beat)
 
 		await self._sequencer.schedule_callback_repeating(
 			callback = _advance_builder_bar,
@@ -5874,7 +5875,7 @@ class Composition:
 			# backshift fire so the first repeating call happens one full cycle
 			# later.
 			if pending_task.wait_for_initial or pending_task.defer:
-				start_pulse = int(pending_task.cycle_beats * self._sequencer.pulses_per_beat)
+				start_pulse = subsequence.constants.pulses.beats_to_pulses(pending_task.cycle_beats, self._sequencer.pulses_per_beat)
 			else:
 				start_pulse = 0
 
