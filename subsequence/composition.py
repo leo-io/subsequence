@@ -4816,6 +4816,9 @@ class Composition:
 				device-specific dictionary (e.g. Sequential Take 5's
 				``Osc1FreqFine`` → 9).
 			reschedule_lookahead: Beats in advance to compute the next cycle.
+				At ``0`` each cycle is built on its own first beat, so it hears
+				the very latest state (a held chord, a just-moved control) and
+				its downbeat sounds late by however long that build takes.
 			voice_leading: If True, chords in this pattern will automatically
 				use inversions that minimize voice movement.
 			mirrors: Optional list of additional ``(device, channel)`` destinations
@@ -4956,6 +4959,9 @@ class Composition:
 			nrpn_name_map: Optional mapping of NRPN parameter names to 14-bit
 				parameter numbers.
 			reschedule_lookahead: Beats in advance to compute the next cycle.
+				At ``0`` each cycle is built on its own first beat, so it hears
+				the very latest state (a held chord, a just-moved control) and
+				its downbeat sounds late by however long that build takes.
 			voice_leading: If True, chords use smooth voice leading.
 			mirrors: Optional list of additional ``(device, channel)`` destinations
 				to duplicate every event onto.  See ``pattern()`` for details.

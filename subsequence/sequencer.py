@@ -1557,7 +1557,7 @@ class Sequencer:
 
 	async def _advance_pulse (self) -> None:
 
-		"""Reschedule patterns, process events, and increment the pulse counter."""
+		"""Send this pulse's events, reschedule patterns, and increment the pulse counter."""
 
 		if self._bpm_transition is not None:
 			self._bpm_transition.elapsed_pulses += 1
@@ -1609,6 +1609,15 @@ class Sequencer:
 				else:
 					self._held_notes.note_off(pitch, when)
 
+		# Send this pulse's events BEFORE rebuilding anything due on it.  They
+		# were placed by an earlier rebuild, so nothing the coming one does can
+		# change them — sending them after it made every note on a rebuild pulse
+		# late by the whole rebuild, and the default one-beat lookahead puts a
+		# one-bar pattern's rebuild on beat 4.  The second pass sends whatever
+		# the rebuild step placed on this same pulse (a zero lookahead's downbeat,
+		# a callback's pattern) now rather than a pulse late; it finds nothing to
+		# do on almost every pulse.
+		await self._process_pulse(self.pulse_count)
 		await self._maybe_reschedule_patterns(self.pulse_count)
 		await self._process_pulse(self.pulse_count)
 		self.pulse_count += 1
@@ -1650,7 +1659,9 @@ class Sequencer:
 				#      event tasks (asyncio.create_task; not run yet).
 				#   2. Send MIDI clock tick (if clock_output) so hardware receives it at
 				#      the same time as note events for tight sync.
-				#   3. _advance_pulse() — fire callbacks, then send MIDI via _process_pulse().
+				#   3. _advance_pulse() — send this pulse's MIDI via _process_pulse(), then
+				#      fire callbacks and rebuild patterns, then send anything they placed
+				#      on this same pulse.
 				#   4. After the await returns, the event loop runs the queued event tasks,
 				#      which update the terminal display.
 				#
