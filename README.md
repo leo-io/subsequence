@@ -16,7 +16,7 @@ Use your own gear. Subsequence provides the logic; your Eurorack, Elektron boxes
 - **Built-in harmonic intelligence.** An optional chord graph defines weighted chord and key transitions with adjustable gravity and automatic voice leading. Layer on cognitive harmony for Narmour-based melodic inertia — big leaps tend to reverse, small steps tend to continue.
 - **Implicit compositional structure.** Predefined sections bring overarching musical form to a piece without getting stuck in infinite loops — music that grows and develops across defined movements.
 - **Patterns that talk to each other.** Shared state (`composition.data`) lets autonomous generators cooperate without coupling. A drum pattern broadcasts its density; a bass pattern reads it to place complementary gaps. No callbacks, no wiring.
-- **Precision and efficiency.** A hybrid timing strategy achieves typical pulse jitter of **< 5 μs** on Linux, with zero long-term drift — built for live performance and serious studio use.
+- **Precision and efficiency.** A hybrid timing strategy holds pulse jitter at a typical **1 μs** on Linux, with no pulse more than 0.1 ms out at any tempo and zero long-term drift — built for live performance and serious studio use.
 - **Accessible Python, no CS degree required.** If you can configure a synth, you can write generative music here. Start with tiny scripts and learn as you go — it's the perfect project to tempt a musician into Python.
 - **Explore, capture, produce.** Seed a session for deterministic output: explore freely, and when something clicks, the same seed recreates it exactly. Record to a standard multi-channel `.mid` file and bring it straight into your DAW.
 - **Turn anything into music.** Patterns are plain Python functions, so any data source — live APIs, sensors, files, network streams — can drive musical decisions at rebuild time. If Python can read it, Subsequence can play it.
@@ -105,14 +105,16 @@ Subsequence aims for *learn one verb, predict the rest*. A handful of convention
 
 The internal master clock uses a hybrid sleep+spin strategy: it sleeps to within ~1 ms of each pulse, then busy-waits on `time.perf_counter()` for the remaining sub-millisecond interval. Pulse times are absolute offsets from the session start, so timing error never accumulates. On Linux the clock runs on a `select()`-based event loop rather than asyncio's default: the default loop rounds each wait up to whole milliseconds, and at some tempos that overran the 1 ms margin and made pulses up to 1.5 ms late. Driving a `Sequencer` yourself? Start it with `subsequence.sequencer.run(main())` in place of `asyncio.run` to get the same loop.
 
-Measured jitter on Linux at 120 BPM (64 bars, 6144 pulses):
+Measured at 120 BPM on a Core Ultra 7 155H under Linux 7.0:
 
-| Mode | Mean | P99 | Max | Long-term drift |
+| Mode | Median | P99 | Max | Long-term drift |
 |---|---|---|---|---|
-| Spin-wait on (default) | **3 μs** | 4 μs | ~100 μs\* | 0 |
-| `asyncio.sleep` only | 853 μs | 1.37 ms | 1.72 ms | negligible |
+| Spin-wait on (default) | **1 μs** | 2 μs | 39 μs\* | 0 |
+| `asyncio.sleep` only | 406 μs | 555 μs | 799 μs | negligible |
 
-<sub>\* Occasional spikes are Python GC pauses, not clock instability. Disable spin-wait (`composition.sequencer.disable_spin_wait()`) for ~1 ms jitter and lower CPU. Reproduce with `python benchmarks/clock_jitter.py --compare`.</sub>
+**One tempo is not enough to judge a clock by**, because how each sleep rounds depends on how long it is. Swept from 60 to 200 BPM in steps of 5, eight bars each — 22,272 pulses — the median stays at 1 μs, the worst tempo's P99 is 17 μs, the worst single pulse is 91 μs, and nothing runs more than 1 ms late at any tempo.
+
+<sub>\* Occasional spikes are Python GC pauses, not clock instability. Disable spin-wait (`composition.sequencer.disable_spin_wait()`) for ~0.4 ms jitter and lower CPU. Reproduce with `python benchmarks/clock_jitter.py --sweep 60:200:5`, or `--compare` for one tempo with spin-wait on and off.</sub>
 
 ## Examples
 
