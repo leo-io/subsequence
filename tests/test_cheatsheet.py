@@ -13,10 +13,14 @@ to hand.
 
 import importlib.util
 import pathlib
+import re
 import types
 import typing
 
 import pytest
+
+import subsequence
+import subsequence.sequence_utils
 
 
 def _generator () -> types.ModuleType:
@@ -85,14 +89,21 @@ def test_a_union_never_leaks_how_the_interpreter_spells_it (annotation: typing.A
 
 def test_the_generated_sheet_carries_no_pipe_unions () -> None:
 
-	"""End to end: nothing in the sheet is spelled the interpreter's way.
+	"""End to end: no signature in the sheet is spelled the interpreter's way.
 
 	A pipe reaches the file escaped, as ``\\|``, because the sheet is a Markdown
-	table — so its absence is the whole check, and it is what CI was really
-	complaining about.
+	table.  Only the signature column is checked: a description may name
+	``&``, ``|`` and ``~`` in prose, as ``Sieve``'s does, and that is not a
+	union.
 	"""
 
-	assert "\\|" not in GENERATOR.generate_markdown()
+	rows = [line for line in GENERATOR.generate_markdown().splitlines() if line.startswith("| `")]
+
+	assert rows, "the sheet has no signature rows to check"
+
+	for line in rows:
+		signature = re.split(r"(?<!\\)\|", line)[1]
+		assert "\\|" not in signature, line
 
 
 def test_the_sheet_on_disk_is_what_the_generator_produces () -> None:
@@ -108,3 +119,79 @@ def test_the_sheet_on_disk_is_what_the_generator_produces () -> None:
 	assert path.read_text() == GENERATOR.generate_markdown(), (
 		"api-cheatsheet.md is out of date — run: python scripts/generate_cheatsheet.py"
 	)
+
+
+def _documented (markdown: str) -> typing.Tuple[typing.Set[str], typing.Set[str], typing.Set[str]]:
+
+	"""The names the sheet gives a section of their own, a Global Functions row, and a Sequence Utilities row."""
+
+	sections: typing.Set[str] = set()
+	functions: typing.Set[str] = set()
+	utilities: typing.Set[str] = set()
+	heading = ""
+
+	for line in markdown.splitlines():
+
+		if line.startswith("## "):
+			heading = line
+			named = re.fullmatch(r"## `(\w+)`", line)
+			if named:
+				sections.add(named.group(1))
+			continue
+
+		row = re.match(r"\| `(\w+)\(", line)
+
+		if row and heading == "## Global Functions":
+			functions.add(row.group(1))
+		elif row and heading.startswith("## Sequence Utilities"):
+			utilities.add(row.group(1))
+
+	return sections, functions, utilities
+
+
+def test_every_export_has_its_own_section_or_row () -> None:
+
+	"""A class or module in ``__all__`` gets a section, and a function a row — the exports table alone is not enough.
+
+	Ten exports appeared only in that table while the generator kept its own
+	lists, and ``PatternBuilder`` had a section without being exported at all
+	(#2593).
+	"""
+
+	sections, functions, _ = _documented(GENERATOR.generate_markdown())
+
+	for name in subsequence.__all__:
+
+		member = getattr(subsequence, name)
+
+		if isinstance(member, (type, types.ModuleType)):
+			assert name in sections, f"exported {name} has no section of its own"
+		else:
+			assert name in functions, f"exported {name} has no row under Global Functions"
+
+
+def test_the_sheet_documents_nothing_outside_the_declared_surface () -> None:
+
+	"""Sections and function rows name only exports; the kernel rows are exactly ``sequence_utils.__all__``."""
+
+	sections, functions, utilities = _documented(GENERATOR.generate_markdown())
+
+	assert sections - set(subsequence.__all__) == set(), "a section documents something that is not exported"
+	assert functions - set(subsequence.__all__) == set(), "a Global Functions row names something that is not exported"
+	assert utilities == set(subsequence.sequence_utils.__all__)
+
+
+def test_the_documented_surface_parser_sees_what_it_counts () -> None:
+
+	"""The two tests above are only as good as this reading of the sheet, so check it on a known fragment."""
+
+	fragment = "\n".join([
+		"## Package-level exports", "| `Composition` | class | x |",
+		"## `Composition`", "| `play() -> None` | x |",
+		"## `roles`", "| `BASS` | dict |",
+		"## Global Functions", "| `sieve(classes) -> List[int]` | x |",
+		"## Sequence Utilities (`subsequence.sequence_utils`)", "| `fold(values) -> List[int]` | x |",
+	])
+
+	assert _documented(fragment) == ({"Composition", "roles"}, {"sieve"}, {"fold"})
+

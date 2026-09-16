@@ -179,7 +179,7 @@ Community and Feedback:
 - **Discussions:** Chat and ask questions at https://github.com/simonholliday/subsequence/discussions
 - **Issues:** Report bugs and request features at https://github.com/simonholliday/subsequence/issues
 
-Package-level exports: ``Composition``, ``Chord``, ``Groove``, ``MelodicState``, ``Tuning``, ``Motif``, ``Phrase``, ``motif``, ``sentence``, ``period``, ``Degree``, ``ChordTone``, ``Approach``, ``MotifEvent``, ``ControlEvent``, ``Progression``, ``ChordSpan``, ``PitchSet``, ``progression``, ``Cadence``, ``Section``, ``Form``, ``roles``, ``sieve``, ``residual_class``, ``between``, ``parse_chord``, ``register_chord_quality``, ``register_scale``, ``scale_notes``, ``bank_select``, ``Definitions``, ``load_definitions``, ``PlacedNote``, ``generators``, ``describe_generator``, ``transforms``, ``describe_transform``.
+Package-level exports: ``Composition``, ``PatternBuilder``, ``Chord``, ``Groove``, ``MelodicState``, ``Tuning``, ``Motif``, ``Phrase``, ``motif``, ``sentence``, ``period``, ``Degree``, ``ChordTone``, ``Approach``, ``MotifEvent``, ``ControlEvent``, ``Progression``, ``ChordSpan``, ``PitchSet``, ``progression``, ``Cadence``, ``Section``, ``Form``, ``roles``, ``sieve``, ``residual_class``, ``between``, ``parse_chord``, ``register_chord_quality``, ``register_scale``, ``scale_notes``, ``bank_select``, ``Definitions``, ``load_definitions``, ``PlacedNote``, ``generators``, ``describe_generator``, ``transforms``, ``describe_transform``.
 """
 
 import subsequence.cadences
@@ -197,12 +197,19 @@ import subsequence.melodic_state
 import subsequence.midi_utils
 import subsequence.motifs
 import subsequence.pattern
+import subsequence.pattern_builder
 import subsequence.progressions
 import subsequence.sequence_utils
 import subsequence.tuning
 
 
 Composition = subsequence.composition.Composition
+
+# The ``p`` every pattern function receives.  Exported so a reference documents
+# the class a reader meets first, and so a pattern can be typed against it:
+# ``def drums (p: subsequence.PatternBuilder)`` (#2593).
+PatternBuilder = subsequence.pattern_builder.PatternBuilder
+
 Motif = subsequence.motifs.Motif
 Phrase = subsequence.motifs.Phrase
 motif = subsequence.motifs.motif
@@ -259,6 +266,7 @@ describe_transform = subsequence.catalogue.describe_transform
 # from the machinery (#2324).
 __all__ = [
 	"Composition",
+	"PatternBuilder",
 	"Motif",
 	"Phrase",
 	"motif",

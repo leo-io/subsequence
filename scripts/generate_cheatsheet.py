@@ -4,6 +4,13 @@ Generate ``api-cheatsheet.md`` from the public API's signatures and docstrings.
 Run after changing the public API surface so the cheat sheet stays in sync:
 ``python scripts/generate_cheatsheet.py``.
 
+**What it documents is ``subsequence.__all__``, and nothing else decides it.**
+Each exported class gets a section, each exported module (``roles``) a table
+of its own ``__all__``, and each exported function a row; the sequence kernels
+come from ``subsequence.sequence_utils.__all__``, the one submodule that
+declares its own public list.  The generator used to keep two lists of its own,
+and they drifted from ``__all__`` in both directions (#2593).
+
 ``--check`` writes nothing and exits non-zero if the file on disk is not what
 this would generate, naming what moved.  CI runs that, so the cheat sheet
 cannot go stale while somebody is in a hurry — it was accurate by discipline
@@ -23,68 +30,52 @@ import typing
 _UNION_ORIGINS = (typing.Union, types.UnionType)
 
 # Add the path so we can import subsequence
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-import subsequence
-import subsequence.catalogue
-import subsequence.chords
-import subsequence.composition
-import subsequence.cadences
-import subsequence.definitions
-import subsequence.forms
-import subsequence.groove
-import subsequence.harmonic_rhythm
-import subsequence.intervals
-import subsequence.melodic_state
-import subsequence.midi_utils
-import subsequence.motifs
-import subsequence.pattern_builder
-import subsequence.progressions
 import subsequence.sequence_utils
-import subsequence.tuning
 
-classes_to_document: typing.List[typing.Type] = [
-	subsequence.composition.Composition,
-	subsequence.pattern_builder.PatternBuilder,
-	subsequence.groove.Groove,
-	subsequence.melodic_state.MelodicState,
-	subsequence.tuning.Tuning,
-	subsequence.chords.Chord,
-	subsequence.progressions.Progression,
-	subsequence.progressions.ChordSpan,
-	subsequence.progressions.PitchSet,
-	subsequence.motifs.Motif,
-	subsequence.motifs.Phrase,
-	subsequence.forms.Section,
-	subsequence.forms.Form,
-	subsequence.definitions.Definitions,
-]
 
-functions_to_document: typing.List[typing.Callable] = [
-	subsequence.intervals.register_scale,
-	subsequence.intervals.scale_notes,
-	subsequence.midi_utils.bank_select,
-	subsequence.catalogue.generators,
-	subsequence.catalogue.describe_generator,
-	subsequence.midi_utils.match_device_names,
-	subsequence.definitions.load_definitions,
-	subsequence.harmonic_rhythm.between,
-	subsequence.chords.parse_chord,
-	subsequence.chords.register_chord_quality,
-	subsequence.progressions.progression,
-	subsequence.motifs.motif,
-	subsequence.motifs.sentence,
-	subsequence.motifs.period,
-	subsequence.cadences.cadence_formula,
-	subsequence.sequence_utils.vl_distance,
-	subsequence.sequence_utils.branch_sequence,
-	subsequence.sequence_utils.build_metric_weights,
-	subsequence.sequence_utils.sieve,
-	subsequence.sequence_utils.residual_class,
-	subsequence.sequence_utils.rhythmic_evenness,
-	subsequence.sequence_utils.offbeatness,
-	subsequence.sequence_utils.syncopation,
-]
+def exports () -> typing.List[typing.Tuple[str, typing.Any]]:
+
+	"""Each name in ``subsequence.__all__`` with the object it names, in the list's own order.
+
+	``__all__`` is the public surface — ``tests/test_api_consistency.py`` pins it
+	against the package — so it is the only list read here.
+	"""
+
+	return [(name, getattr(subsequence, name)) for name in subsequence.__all__]
+
+
+def exported_classes () -> typing.List[typing.Tuple[str, typing.Any]]:
+
+	"""The exported classes, each documented with a section of its methods."""
+
+	return [(name, member) for name, member in exports() if inspect.isclass(member)]
+
+
+def exported_modules () -> typing.List[typing.Tuple[str, types.ModuleType]]:
+
+	"""The exported modules, each documented with a table of its own ``__all__``."""
+
+	return [(name, member) for name, member in exports() if inspect.ismodule(member)]
+
+
+def exported_functions () -> typing.List[typing.Tuple[str, typing.Any]]:
+
+	"""The exported functions, each documented with a row under Global Functions."""
+
+	return [
+		(name, member) for name, member in exports()
+		if callable(member) and not inspect.isclass(member) and not inspect.ismodule(member)
+	]
+
+
+def sequence_utilities () -> typing.List[typing.Tuple[str, typing.Any]]:
+
+	"""The kernels ``subsequence.sequence_utils`` declares public, alphabetically."""
+
+	return sorted(
+		((name, getattr(subsequence.sequence_utils, name)) for name in subsequence.sequence_utils.__all__),
+		key = lambda pair: pair[0],
+	)
 
 
 def get_first_line (doc: typing.Optional[str]) -> str:
@@ -190,6 +181,16 @@ def escape_md (text: str) -> str:
 	return text.replace('|', '\\|').replace('\n', ' ')
 
 
+def describe_value (value: typing.Any) -> str:
+
+	"""Describe an exported module's value in one cell: a dict by its keys, anything else by its repr."""
+
+	if isinstance(value, dict):
+		return "dict of " + ", ".join(f"`{key}`" for key in value)
+
+	return f"`{value!r}`"
+
+
 def is_public_method (name: str, member: typing.Any) -> bool:
 
 	"""Determine if a class member should be included in the public API documentation."""
@@ -209,26 +210,20 @@ def generate_markdown () -> str:
 	output = ["# Subsequence API Cheat Sheet\n"]
 	output.append("This document provides a quick overview of the public classes, methods, and functions available in the Subsequence API.\n")
 
-	# The package-level inventory first — everything importable directly from
-	# `subsequence`, read from the live package so this table cannot go stale.
-	# (The per-class sections below cover the big classes in detail; several
-	# smaller exports appear ONLY here.)
+	# The inventory first: every name ``subsequence.__all__`` exports, each of
+	# which also has its own section or row below.
 	output.append("## Package-level exports\n")
-	output.append("Everything importable as `subsequence.X`:\n")
+	output.append("Everything exported as `subsequence.X`:\n")
 	output.append("| Export | Kind | Description |")
 	output.append("|---|---|---|")
 
-	for name in sorted(dir(subsequence)):
-
-		if name.startswith('_'):
-			continue
+	for name in sorted(subsequence.__all__):
 
 		member = getattr(subsequence, name)
 
 		if inspect.ismodule(member):
-			continue
-
-		if inspect.isclass(member):
+			kind = "module"
+		elif inspect.isclass(member):
 			kind = "class"
 		elif callable(member):
 			kind = "function"
@@ -240,9 +235,9 @@ def generate_markdown () -> str:
 
 	output.append("\n")
 
-	for cls in classes_to_document:
+	for export_name, cls in exported_classes():
 
-		output.append(f"## `{cls.__name__}`\n")
+		output.append(f"## `{export_name}`\n")
 		doc = get_first_line(cls.__doc__)
 
 		if doc:
@@ -293,13 +288,27 @@ def generate_markdown () -> str:
 
 		output.append("\n")
 
+	for export_name, module in exported_modules():
+
+		output.append(f"## `{export_name}`\n")
+		doc = get_first_line(module.__doc__)
+
+		if doc:
+			output.append(f"{doc}\n")
+
+		output.append("| Name | Value |")
+		output.append("|---|---|")
+
+		for name in module.__all__:
+			output.append(f"| `{name}` | {escape_md(describe_value(getattr(module, name)))} |")
+
+		output.append("\n")
+
 	output.append("## Global Functions\n\n")
 	output.append("| Function | Description |")
 	output.append("|---|---|")
 
-	for func in functions_to_document:
-
-		name = func.__name__
+	for name, func in exported_functions():
 
 		try:
 			sig = inspect.signature(func)
@@ -318,20 +327,7 @@ def generate_markdown () -> str:
 	output.append("| Function | Description |")
 	output.append("|---|---|")
 
-	seq_funcs = []
-
-	for name, member in inspect.getmembers(subsequence.sequence_utils):
-
-		if is_public_method(name, member):
-			seq_funcs.append((name, member))
-
-	seq_funcs.sort(key=lambda x: x[0])
-
-	for name, func in seq_funcs:
-		# Ignore imported modules like typing, math, random, etc.
-
-		if func.__module__ != 'subsequence.sequence_utils':
-			continue
+	for name, func in sequence_utilities():
 
 		try:
 			sig = inspect.signature(func)

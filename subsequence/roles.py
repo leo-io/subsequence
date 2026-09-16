@@ -26,6 +26,11 @@ any value freely; the bundle is a dict.
 import typing
 
 
+# The bundles, and the table of them by name — so ``import *``, a reference and
+# the cheat sheet all see the surface rather than ``typing``.
+__all__ = ["BASS", "PAD", "LEAD", "ARP", "ROLES"]
+
+
 # A bass: low register, strong, locked hard to the chord tones.
 BASS: typing.Dict[str, typing.Any] = {
 	"root": 36,			# C2

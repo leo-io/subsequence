@@ -16,12 +16,14 @@ import typing
 
 import pytest
 
+import subsequence
 import subsequence.chords
 import subsequence.constants
 import subsequence.constants.durations
 import subsequence.constants.velocity
 import subsequence.pattern
 import subsequence.pattern_builder
+import subsequence.roles
 import subsequence.sequence_utils
 
 
@@ -265,6 +267,29 @@ def test_package_star_import_brings_no_incidental_modules () -> None:
 	modules = {name for name, value in namespace.items() if isinstance(value, types.ModuleType)}
 
 	assert modules == {"roles"}, "import * is handing over submodules again"
+
+
+def test_pattern_builder_is_exported () -> None:
+
+	"""The ``p`` a pattern receives is public, so a reference documents it and a pattern can be typed against it (#2593)."""
+
+	assert subsequence.PatternBuilder is subsequence.pattern_builder.PatternBuilder
+	assert "PatternBuilder" in subsequence.__all__
+
+
+def test_roles_all_lists_exactly_its_bundles () -> None:
+
+	"""``roles`` is exported, so its own surface is declared rather than read off whatever it imports."""
+
+	module = subsequence.roles
+	public = {
+		name for name in dir(module)
+		if not name.startswith("_")
+		and not isinstance(getattr(module, name), types.ModuleType)
+	}
+
+	assert set(module.__all__) == public
+	assert len(module.__all__) == len(set(module.__all__)), "duplicate entry in __all__"
 
 
 def test_sequence_utils_all_matches_its_public_names () -> None:

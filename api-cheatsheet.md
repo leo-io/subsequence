@@ -4,7 +4,7 @@ This document provides a quick overview of the public classes, methods, and func
 
 ## Package-level exports
 
-Everything importable as `subsequence.X`:
+Everything exported as `subsequence.X`:
 
 | Export | Kind | Description |
 |---|---|---|
@@ -22,6 +22,7 @@ Everything importable as `subsequence.X`:
 | `MelodicState` | class | Persistent melodic context that applies NIR scoring to single-note lines. |
 | `Motif` | class | An immutable musical figure: timed note events + control gestures + a length in beats. |
 | `MotifEvent` | class | One timed note event inside a Motif. |
+| `PatternBuilder` | class | The musician's 'palette' for creating musical content. |
 | `Phrase` | class | A sequence of Motifs with segmentation preserved. |
 | `PitchSet` | class | A nameless sonority — a frozen set of absolute MIDI pitches. |
 | `PlacedNote` | class | One note read back off a pattern being built — see ``PatternBuilder.placed()``. |
@@ -41,6 +42,7 @@ Everything importable as `subsequence.X`:
 | `register_chord_quality` | function | Register a custom chord quality for use everywhere chords are used. |
 | `register_scale` | function | Register a custom scale for use with ``p.snap_to_scale()`` and ``scale_pitch_classes()``. |
 | `residual_class` | function | A single residual class ``{x : x % modulus == residue}`` as a :class:`Sieve`. |
+| `roles` | module | Role parameter bundles — starting points you splat, not a role API. |
 | `scale_notes` | function | Return MIDI note numbers for a scale within a pitch range. |
 | `sentence` | function | The classical sentence, as a thin combinator — idea, idea, drive, close. |
 | `sieve` | function | Xenakis sieve: the sorted integers in ``[lo, hi)`` in any of the classes. |
@@ -217,116 +219,6 @@ The musician's 'palette' for creating musical content.
 | `velocity_shape(low, high) -> PatternBuilder` | Apply organic velocity variation to all notes in the pattern. |
 
 
-## `Groove`
-
-A timing/velocity template applied to quantized grid positions.
-
-| Method | Description |
-|---|---|
-| `__init__(offsets, grid, velocities) -> None` |  |
-| `from_agr(path, grid) -> Groove` | Import timing and velocity data from an Ableton .agr groove file. |
-| `swing(percent, grid) -> Groove` | Create a swing groove from a percentage. |
-
-
-## `MelodicState`
-
-Persistent melodic context that applies NIR scoring to single-note lines.
-
-| Method | Description |
-|---|---|
-| `__init__(key, mode, low, high, nir_strength, chord_weight, rest_probability, pitch_diversity, tessitura_strength) -> None` | Initialise a melodic state for a given key, mode, and MIDI register. |
-| `choose_next(chord_tones, rng, beat, position, contour_target) -> Optional[int]` | Score all pitch-pool candidates and return the chosen pitch, or None for a rest. |
-| `clone() -> MelodicState` | An independent copy — settings, factors, pool, and history. |
-| `configure_defaults(key, mode) -> None` | Adopt the surrounding key/scale where this state left them unset. |
-| `record(pitch) -> None` | Append a pitch to the melodic history (capped at 4 entries). |
-| `set_pool(pitches) -> None` | Replace the pitch pool with explicit MIDI pitches — the experimental seam. |
-
-
-## `Tuning`
-
-A microtonal tuning system expressed as cent offsets from the unison.
-
-| Method | Description |
-|---|---|
-| `__init__(cents, description) -> None` |  |
-| `equal(divisions, period) -> Tuning` | Construct an equal-tempered tuning with ``divisions`` equal steps per period. |
-| `from_cents(cents, description) -> Tuning` | Construct a tuning from a list of cent values for degrees 1..N. |
-| `from_ratios(ratios, description) -> Tuning` | Construct a tuning from frequency ratios relative to 1/1. |
-| `from_scl(source) -> Tuning` | Parse a Scala .scl file. |
-| `from_scl_string(text) -> Tuning` | Parse a Scala .scl file from a string (useful for testing). |
-| `period_cents *(property)*` | Cent span of one period (typically 1200.0 for octave-repeating scales). |
-| `pitch_bend_for_note(midi_note, reference_note, bend_range) -> Tuple[int, float]` | Return ``(nearest_12tet_note, bend_normalized)`` for a MIDI note number. |
-| `size *(property)*` | Number of scale degrees per period (the .scl ``count`` line). |
-
-
-## `Chord`
-
-Represents a chord as a root pitch class and quality.
-
-| Method | Description |
-|---|---|
-| `__init__(root_pc, quality) -> None` |  |
-| `bass_note(root_midi, octave_offset) -> int` | Return the chord root shifted by a number of octaves. |
-| `intervals() -> List[int]` | Return the chord intervals for this chord quality. |
-| `name() -> str` | Return a human-friendly chord name. |
-| `root_note(root_midi) -> int` | Return the MIDI note number for the chord root nearest to *root_midi*. |
-| `tones(root, inversion, count) -> List[int]` | Return MIDI note numbers for chord tones starting from a root. |
-
-
-## `Progression`
-
-A frozen sequence of :class:`ChordSpan` — the governing harmony value.
-
-| Method | Description |
-|---|---|
-| `__init__(spans, trailing_history) -> None` |  |
-| `borrow(slot) -> Progression` | Borrow the chord(s) at the given 1-based slot(s) from the parallel scale. |
-| `cadence(name) -> Progression` | Substitute a cadence formula into the tail — the close, named. |
-| `chords *(property)*` | The bare chords, one per span (concrete progressions only). |
-| `describe(key, scale) -> str` | A readable, one-chord-per-line summary. |
-| `elaborate(depth, seed) -> Progression` | Steedman-inspired chord elaboration — approach each chord by fifths. |
-| `events() -> Tuple[subsequence.progressions.ChordEvent, ...]` | The realised timeline as a tuple (iteration, materialised). |
-| `extend(*extensions, only) -> Progression` | Add chord extensions (``7``/``9``/``11``/``13``/``"sus4"``/...) to every span. |
-| `generate(style, bars, beats, key, scale, seed, rng, pins, end, avoid, cadence, dominant_7th, gravity, nir_strength, minor_turnaround_weight, root_diversity) -> Progression` | Generate a progression from a chord-graph walk — the hybrid generator. |
-| `inversions(spec) -> Progression` | Set chord inversions — a single int for all spans, or a list cycled per span. |
-| `is_concrete *(property)*` | True when every span is key-independent (no romans/degrees). |
-| `length *(property)*` | Total length in beats (the sum of span lengths). |
-| `loops_on_exhaustion *(property)*` | True when the clock must loop rather than fall through to live stepping. |
-| `over(bass, only) -> Progression` | Put the progression over a slash/pedal bass — *the* trance/techno move. |
-| `replace(slot, chord) -> Progression` | Replace the chord at a 1-based slot (the span keeps its beats). |
-| `resolve(key, scale) -> Progression` | Resolve every key-relative span against a key (name or pitch class). |
-| `span_at(beat) -> Tuple[subsequence.progressions.ChordSpan, float, float]` | Return ``(span, start, end)`` for the span sounding at *beat*. |
-| `spread(style) -> Progression` | Set the voicing spread: ``"close"``, ``"open"`` (drop-2), or ``"wide"``. |
-| `with_rhythm(beats) -> Progression` | Reshape the harmonic rhythm — a scalar for all spans, or a list cycled per span. |
-
-
-## `ChordSpan`
-
-One chord with a duration and its decoration — the unit of harmonic time.
-
-| Method | Description |
-|---|---|
-| `__init__(chord, beats, extensions, bass, inversion, spread, extension_intervals) -> None` |  |
-| `decorated_intervals() -> List[int]` | Semitone offsets of the decorated voicing (before inversion/spread/bass). |
-| `is_concrete *(property)*` | True when the chord (and any pedal bass) needs no key context to sound. |
-| `is_decorated *(property)*` | True when the span carries any decoration beyond the bare chord. |
-| `label(key_pc, scale) -> str` | A printable chord label: roman text when relative, decorated name when concrete. |
-| `resolve(key_pc, scale) -> ChordSpan` | Return a concrete span: romans resolved, bass resolved to a pitch class. |
-| `tones(root, count) -> List[int]` | MIDI notes of the decorated voicing nearest *root* (concrete spans only). |
-
-
-## `PitchSet`
-
-A nameless sonority — a frozen set of absolute MIDI pitches.
-
-| Method | Description |
-|---|---|
-| `__init__(pitches) -> None` | Normalise any iterable of MIDI pitches into a sorted frozen tuple. |
-| `intervals() -> List[int]` | Semitone offsets from the lowest pitch (the ``Chord`` protocol). |
-| `name() -> str` | A readable label for describe() output. |
-| `tones(root, inversion, count) -> List[int]` | Return the pitches (absolute — *root* is ignored by design). |
-
-
 ## `Motif`
 
 An immutable musical figure: timed note events + control gestures + a length in beats.
@@ -399,6 +291,15 @@ A sequence of Motifs with segmentation preserved.
 | `with_velocity(velocity) -> Phrase` | Replace every note's velocity, segment-wise. |
 
 
+## `Cadence`
+
+One cadence formula — a named tail plus its melodic close.
+
+| Method | Description |
+|---|---|
+| `__init__(name, theory_name, formula, close_degree) -> None` |  |
+
+
 ## `Section`
 
 One section of a form — the payload home.
@@ -422,6 +323,161 @@ A frozen sequence of Sections — the editable, bindable form value.
 | `with_energy(energies) -> Form` | Set the energy payload on named sections — ``{"chorus": 0.9}``. |
 
 
+## `Degree`
+
+A scale degree — 1-based, resolved against key + scale at placement.
+
+| Method | Description |
+|---|---|
+| `__init__(step, octave, chroma) -> None` |  |
+
+
+## `ChordTone`
+
+An index into the current chord's tones — 1-based, resolved at placement.
+
+| Method | Description |
+|---|---|
+| `__init__(index_or_name, octave) -> None` | Normalize a tone name to its 1-based index. |
+
+
+## `Approach`
+
+A half-step approach into a target pitch at the next chord boundary.
+
+| Method | Description |
+|---|---|
+| `__init__(target) -> None` |  |
+
+
+## `MotifEvent`
+
+One timed note event inside a Motif.
+
+| Method | Description |
+|---|---|
+| `__init__(beat, pitch, velocity, duration, probability, origin) -> None` |  |
+
+
+## `ControlEvent`
+
+One timed control gesture inside a Motif: a discrete write or a shaped ramp.
+
+| Method | Description |
+|---|---|
+| `__init__(beat, signal, start, end, span, shape, probability) -> None` |  |
+
+
+## `Progression`
+
+A frozen sequence of :class:`ChordSpan` — the governing harmony value.
+
+| Method | Description |
+|---|---|
+| `__init__(spans, trailing_history) -> None` |  |
+| `borrow(slot) -> Progression` | Borrow the chord(s) at the given 1-based slot(s) from the parallel scale. |
+| `cadence(name) -> Progression` | Substitute a cadence formula into the tail — the close, named. |
+| `chords *(property)*` | The bare chords, one per span (concrete progressions only). |
+| `describe(key, scale) -> str` | A readable, one-chord-per-line summary. |
+| `elaborate(depth, seed) -> Progression` | Steedman-inspired chord elaboration — approach each chord by fifths. |
+| `events() -> Tuple[subsequence.progressions.ChordEvent, ...]` | The realised timeline as a tuple (iteration, materialised). |
+| `extend(*extensions, only) -> Progression` | Add chord extensions (``7``/``9``/``11``/``13``/``"sus4"``/...) to every span. |
+| `generate(style, bars, beats, key, scale, seed, rng, pins, end, avoid, cadence, dominant_7th, gravity, nir_strength, minor_turnaround_weight, root_diversity) -> Progression` | Generate a progression from a chord-graph walk — the hybrid generator. |
+| `inversions(spec) -> Progression` | Set chord inversions — a single int for all spans, or a list cycled per span. |
+| `is_concrete *(property)*` | True when every span is key-independent (no romans/degrees). |
+| `length *(property)*` | Total length in beats (the sum of span lengths). |
+| `loops_on_exhaustion *(property)*` | True when the clock must loop rather than fall through to live stepping. |
+| `over(bass, only) -> Progression` | Put the progression over a slash/pedal bass — *the* trance/techno move. |
+| `replace(slot, chord) -> Progression` | Replace the chord at a 1-based slot (the span keeps its beats). |
+| `resolve(key, scale) -> Progression` | Resolve every key-relative span against a key (name or pitch class). |
+| `span_at(beat) -> Tuple[subsequence.progressions.ChordSpan, float, float]` | Return ``(span, start, end)`` for the span sounding at *beat*. |
+| `spread(style) -> Progression` | Set the voicing spread: ``"close"``, ``"open"`` (drop-2), or ``"wide"``. |
+| `with_rhythm(beats) -> Progression` | Reshape the harmonic rhythm — a scalar for all spans, or a list cycled per span. |
+
+
+## `ChordSpan`
+
+One chord with a duration and its decoration — the unit of harmonic time.
+
+| Method | Description |
+|---|---|
+| `__init__(chord, beats, extensions, bass, inversion, spread, extension_intervals) -> None` |  |
+| `decorated_intervals() -> List[int]` | Semitone offsets of the decorated voicing (before inversion/spread/bass). |
+| `is_concrete *(property)*` | True when the chord (and any pedal bass) needs no key context to sound. |
+| `is_decorated *(property)*` | True when the span carries any decoration beyond the bare chord. |
+| `label(key_pc, scale) -> str` | A printable chord label: roman text when relative, decorated name when concrete. |
+| `resolve(key_pc, scale) -> ChordSpan` | Return a concrete span: romans resolved, bass resolved to a pitch class. |
+| `tones(root, count) -> List[int]` | MIDI notes of the decorated voicing nearest *root* (concrete spans only). |
+
+
+## `PitchSet`
+
+A nameless sonority — a frozen set of absolute MIDI pitches.
+
+| Method | Description |
+|---|---|
+| `__init__(pitches) -> None` | Normalise any iterable of MIDI pitches into a sorted frozen tuple. |
+| `intervals() -> List[int]` | Semitone offsets from the lowest pitch (the ``Chord`` protocol). |
+| `name() -> str` | A readable label for describe() output. |
+| `tones(root, inversion, count) -> List[int]` | Return the pitches (absolute — *root* is ignored by design). |
+
+
+## `Chord`
+
+Represents a chord as a root pitch class and quality.
+
+| Method | Description |
+|---|---|
+| `__init__(root_pc, quality) -> None` |  |
+| `bass_note(root_midi, octave_offset) -> int` | Return the chord root shifted by a number of octaves. |
+| `intervals() -> List[int]` | Return the chord intervals for this chord quality. |
+| `name() -> str` | Return a human-friendly chord name. |
+| `root_note(root_midi) -> int` | Return the MIDI note number for the chord root nearest to *root_midi*. |
+| `tones(root, inversion, count) -> List[int]` | Return MIDI note numbers for chord tones starting from a root. |
+
+
+## `Groove`
+
+A timing/velocity template applied to quantized grid positions.
+
+| Method | Description |
+|---|---|
+| `__init__(offsets, grid, velocities) -> None` |  |
+| `from_agr(path, grid) -> Groove` | Import timing and velocity data from an Ableton .agr groove file. |
+| `swing(percent, grid) -> Groove` | Create a swing groove from a percentage. |
+
+
+## `MelodicState`
+
+Persistent melodic context that applies NIR scoring to single-note lines.
+
+| Method | Description |
+|---|---|
+| `__init__(key, mode, low, high, nir_strength, chord_weight, rest_probability, pitch_diversity, tessitura_strength) -> None` | Initialise a melodic state for a given key, mode, and MIDI register. |
+| `choose_next(chord_tones, rng, beat, position, contour_target) -> Optional[int]` | Score all pitch-pool candidates and return the chosen pitch, or None for a rest. |
+| `clone() -> MelodicState` | An independent copy — settings, factors, pool, and history. |
+| `configure_defaults(key, mode) -> None` | Adopt the surrounding key/scale where this state left them unset. |
+| `record(pitch) -> None` | Append a pitch to the melodic history (capped at 4 entries). |
+| `set_pool(pitches) -> None` | Replace the pitch pool with explicit MIDI pitches — the experimental seam. |
+
+
+## `Tuning`
+
+A microtonal tuning system expressed as cent offsets from the unison.
+
+| Method | Description |
+|---|---|
+| `__init__(cents, description) -> None` |  |
+| `equal(divisions, period) -> Tuning` | Construct an equal-tempered tuning with ``divisions`` equal steps per period. |
+| `from_cents(cents, description) -> Tuning` | Construct a tuning from a list of cent values for degrees 1..N. |
+| `from_ratios(ratios, description) -> Tuning` | Construct a tuning from frequency ratios relative to 1/1. |
+| `from_scl(source) -> Tuning` | Parse a Scala .scl file. |
+| `from_scl_string(text) -> Tuning` | Parse a Scala .scl file from a string (useful for testing). |
+| `period_cents *(property)*` | Cent span of one period (typically 1200.0 for octave-repeating scales). |
+| `pitch_bend_for_note(midi_note, reference_note, bend_range) -> Tuple[int, float]` | Return ``(nearest_12tet_note, bend_normalized)`` for a MIDI note number. |
+| `size *(property)*` | Number of scale degrees per period (the .scl ``count`` line). |
+
+
 ## `Definitions`
 
 The name-to-number tables read from a project definitions file.
@@ -431,34 +487,50 @@ The name-to-number tables read from a project definitions file.
 | `__init__(notes, cc, channels, programs, nrpn) -> None` |  |
 
 
+## `PlacedNote`
+
+One note read back off a pattern being built — see ``PatternBuilder.placed()``.
+
+| Method | Description |
+|---|---|
+| `__init__(position, pitch, origin, index, velocity, duration, primary_unmapped) -> None` |  |
+
+
+## `roles`
+
+Role parameter bundles — starting points you splat, not a role API.
+
+| Name | Value |
+|---|---|
+| `BASS` | dict of `root`, `velocity`, `fit` |
+| `PAD` | dict of `root`, `velocity`, `fit` |
+| `LEAD` | dict of `root`, `velocity`, `fit` |
+| `ARP` | dict of `root`, `velocity`, `fit` |
+| `ROLES` | dict of `bass`, `pad`, `lead`, `arp` |
+
+
 ## Global Functions
 
 
 | Function | Description |
 |---|---|
-| `register_scale(name, intervals, qualities) -> None` | Register a custom scale for use with ``p.snap_to_scale()`` and ``scale_pitch_classes()``. |
-| `scale_notes(key, mode, low, high, count) -> List[int]` | Return MIDI note numbers for a scale within a pitch range. |
-| `bank_select(bank) -> Tuple[int, int]` | Convert a 14-bit MIDI bank number to (MSB, LSB) for use with ``p.program_change()``. |
-| `generators() -> List[Dict[str, Any]]` | Describe every generator Subsequence offers, as plain data. |
-| `describe_generator(name) -> Dict[str, Any]` | Describe one generator's parameters as plain data. |
-| `match_device_names(pattern, names) -> List[int]` | Find every device whose name matches *pattern*, as indices into *names*. |
-| `load_definitions(path) -> subsequence.definitions.Definitions` | Load and validate a project definitions file. |
-| `between(low, high, step) -> subsequence.harmonic_rhythm.HarmonicRhythm` | A harmonic rhythm that varies *between* two lengths (in beats). |
-| `parse_chord(name) -> subsequence.chords.Chord` | Parse a chord name like ``"Cm7"`` or ``"Dbmaj7"`` into a :class:`Chord`. |
-| `register_chord_quality(name, intervals, suffix) -> None` | Register a custom chord quality for use everywhere chords are used. |
-| `progression(source, beats, style, bars, key, scale, seed, rng, pins, end, avoid, cadence, dominant_7th, gravity, nir_strength, minor_turnaround_weight, root_diversity) -> subsequence.progressions.Progression` | Build a :class:`Progression` — the lowercase factory. |
 | `motif(degrees, beats, velocities, durations, probabilities, length) -> subsequence.motifs.Motif` | The lowercase shortcut: a melody as 1-based scale degrees. |
 | `sentence(motif, bars, cadence, seed, beats_per_bar) -> subsequence.motifs.Phrase` | The classical sentence, as a thin combinator — idea, idea, drive, close. |
 | `period(antecedent, cadence, beats_per_bar) -> subsequence.motifs.Phrase` | The classical period, as a thin combinator — question, then answer. |
-| `cadence_formula(name) -> subsequence.cadences.Cadence` | Look up a cadence by producer name or theory alias, loudly. |
-| `vl_distance(source, target, pitch_classes) -> int` | Voice-leading distance between two chords (Tymoczko's taxicab metric). |
-| `branch_sequence(pitches, depth, path, mutation, rng) -> List[int]` | Navigate a fractal tree of pitch-sequence transforms and return one variation. |
-| `build_metric_weights(time_signature, grid) -> List[float]` | Per-step metric weights for one bar — how "strong" each grid position is. |
+| `progression(source, beats, style, bars, key, scale, seed, rng, pins, end, avoid, cadence, dominant_7th, gravity, nir_strength, minor_turnaround_weight, root_diversity) -> subsequence.progressions.Progression` | Build a :class:`Progression` — the lowercase factory. |
+| `between(low, high, step) -> subsequence.harmonic_rhythm.HarmonicRhythm` | A harmonic rhythm that varies *between* two lengths (in beats). |
+| `parse_chord(name) -> subsequence.chords.Chord` | Parse a chord name like ``"Cm7"`` or ``"Dbmaj7"`` into a :class:`Chord`. |
+| `register_chord_quality(name, intervals, suffix) -> None` | Register a custom chord quality for use everywhere chords are used. |
+| `register_scale(name, intervals, qualities) -> None` | Register a custom scale for use with ``p.snap_to_scale()`` and ``scale_pitch_classes()``. |
+| `scale_notes(key, mode, low, high, count) -> List[int]` | Return MIDI note numbers for a scale within a pitch range. |
+| `bank_select(bank) -> Tuple[int, int]` | Convert a 14-bit MIDI bank number to (MSB, LSB) for use with ``p.program_change()``. |
+| `load_definitions(path) -> subsequence.definitions.Definitions` | Load and validate a project definitions file. |
 | `sieve(classes, hi, lo) -> List[int]` | Xenakis sieve: the sorted integers in ``[lo, hi)`` in any of the classes. |
 | `residual_class(modulus, residue) -> subsequence.sequence_utils.Sieve` | A single residual class ``{x : x % modulus == residue}`` as a :class:`Sieve`. |
-| `rhythmic_evenness(onsets, grid, normalize) -> float` | How evenly onsets are spread around the cycle (Toussaint's evenness). |
-| `offbeatness(onsets, grid) -> int` | How many onsets fall on intrinsically off-beat pulses (Toussaint). |
-| `syncopation(onsets, grid, time_signature, weights) -> float` | How much a rhythm pulls away from its metric strong points. |
+| `generators() -> List[Dict[str, Any]]` | Describe every generator Subsequence offers, as plain data. |
+| `describe_generator(name) -> Dict[str, Any]` | Describe one generator's parameters as plain data. |
+| `transforms() -> List[Dict[str, Any]]` | Describe every transform Subsequence offers, as plain data. |
+| `describe_transform(name) -> Dict[str, Any]` | Describe one transform's parameters as plain data. |
 
 ## Sequence Utilities (`subsequence.sequence_utils`)
 
@@ -468,6 +540,7 @@ Functions for generating and transforming sequences.
 
 | Function | Description |
 |---|---|
+| `Sieve(predicate) -> None` | A composable Xenakis sieve — residual classes under ``&`` ``\|`` ``~``. |
 | `branch_sequence(pitches, depth, path, mutation, rng) -> List[int]` | Navigate a fractal tree of pitch-sequence transforms and return one variation. |
 | `build_metric_weights(time_signature, grid) -> List[float]` | Per-step metric weights for one bar — how "strong" each grid position is. |
 | `choke(sequence, against, steps, floor) -> List[~T]` | Suppress the steps where a selector is active, keeping the rest. |
