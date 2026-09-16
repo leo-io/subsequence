@@ -652,6 +652,36 @@ class Sequencer:
 
 		self.recorded_events.append((float(pulse), message))
 
+	def _record_opening (self) -> None:
+
+		"""Open a recording with its metre and the tempo playback starts at, at pulse 0.
+
+		A DAW takes both from the file, and without them imports at its own
+		tempo and in 4/4, so every bar line after the first lands in the wrong
+		place (#2719).  A tempo set before playback — the constructor's own
+		``set_bpm`` among them — was recorded at pulse 0 already; the opening
+		replaces it with the tempo playback actually starts at, so the file
+		states it once.
+
+		The metre is written over 4 because a beat here is a quarter note and
+		only the beat count sets the bar: a declared ``(7, 8)`` plays bars of
+		seven quarter notes, and a DAW must draw them that long (#2736).
+		"""
+
+		if not self.recording:
+			return
+
+		self.recorded_events = [
+			(pulse, message) for pulse, message in self.recorded_events
+			if not (pulse == 0 and message.is_meta and message.type == 'set_tempo')
+		]
+
+		self.recorded_events[:0] = [
+			(0.0, mido.MetaMessage('time_signature', numerator=self.time_signature[0], denominator=4)),
+			(0.0, mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(self.current_bpm))),
+		]
+
+
 	def save_recording (self) -> None:
 
 		"""Save the recorded session to a MIDI file."""
@@ -1609,6 +1639,8 @@ class Sequencer:
 		self.start_time = time.perf_counter()
 		self.pulse_count = 0
 		self.current_bar = -1
+
+		self._record_opening()
 
 		pulses_per_bar = self.time_signature[0] * self.pulses_per_beat
 

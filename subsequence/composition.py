@@ -1332,7 +1332,10 @@ class Composition:
 			time_signature: The metre as ``(beats, unit)``, default ``(4, 4)``.
 				Sets the bar length everywhere bars matter: ``bars=`` pattern
 				lengths, ``p.bar``/``p.signal()``, form advancement and
-				transitions, and pinned-chord bar numbers.
+				transitions, and pinned-chord bar numbers.  A beat is a quarter
+				note and only ``beats`` sets the bar, so ``(6, 8)`` plays bars
+				of six quarter notes; a recorded or rendered file states the
+				metre as ``beats/4`` to match the notes.
 			key: The root key of the piece (e.g., "C", "F#", "Bb").
 				Required if you plan to use ``harmony()``.
 			scale: The scale/mode of the piece (e.g. "minor", "dorian",
@@ -1341,7 +1344,8 @@ class Composition:
 			seed: An optional integer for deterministic randomness. When set,
 				every random decision (chord choices, drum probability, etc.)
 				will be identical on every run.
-			record: When True, record all MIDI events to a file.
+			record: When True, record all MIDI events to a file, which opens
+				with the time signature and starting tempo as ``render()``'s does.
 			record_filename: Optional filename for the recording (defaults to timestamp).
 			zero_indexed_channels: When False (default), MIDI channels use
 				1-based numbering (1-16) matching instrument labelling.
@@ -5486,7 +5490,9 @@ class Composition:
 
 		Runs the sequencer as fast as possible (no timing delays) and stops
 		when the first active limit is reached.  The result is saved as a
-		standard MIDI file that can be imported into any DAW.
+		standard MIDI file that can be imported into any DAW: it opens with the
+		composition's time signature and starting tempo, and a tempo change is
+		written where it happens, so the DAW's bar lines fall where the music's do.
 
 		All patterns, scheduled callbacks, and harmony logic run exactly as
 		they would during live playback — BPM transitions, generative fills,

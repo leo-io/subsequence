@@ -186,3 +186,132 @@ def test_composition_record_defaults_to_off (patch_midi: None) -> None:
 
 	composition = subsequence.Composition()
 	assert composition._sequencer.recording is False
+
+
+# ---------------------------------------------------------------------------
+# The opening a DAW reads: metre and tempo at tick 0 (#2719)
+# ---------------------------------------------------------------------------
+
+def _timeline (path: str) -> typing.List[typing.Tuple[int, mido.Message]]:
+
+	"""Every message in a saved file's track with its absolute tick."""
+
+	now = 0
+	timeline = []
+
+	for message in mido.MidiFile(path).tracks[0]:
+		now += message.time
+		timeline.append((now, message))
+
+	return timeline
+
+
+def _render (tmp_path: pathlib.Path, bars: int, **composition_arguments: typing.Any) -> typing.List[typing.Tuple[int, mido.Message]]:
+
+	"""Render a one-note-a-bar composition and return its file's timeline."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", **composition_arguments)
+
+	@composition.pattern(channel=1, bars=1)
+	def downbeats (p: typing.Any) -> None:
+		p.note(60, beat=0)
+
+	path = str(tmp_path / "opening.mid")
+	composition.render(bars=bars, filename=path)
+
+	return _timeline(path)
+
+
+def _opening (timeline: typing.List[typing.Tuple[int, mido.Message]]) -> typing.List[typing.Tuple[str, typing.Any]]:
+
+	"""The meta messages at tick 0, in file order, as (type, what it says)."""
+
+	said = []
+
+	for tick, message in timeline:
+
+		if tick != 0 or not message.is_meta:
+			continue
+
+		if message.type == "time_signature":
+			said.append(("time_signature", (message.numerator, message.denominator)))
+		elif message.type == "set_tempo":
+			said.append(("set_tempo", round(mido.tempo2bpm(message.tempo), 6)))
+
+	return said
+
+
+def test_a_render_opens_with_its_metre_and_tempo (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""A DAW importing the file meets 3/4 at 96 bpm before the first note, and the notes do not move."""
+
+	timeline = _render(tmp_path, 2, bpm=96, time_signature=(3, 4))
+	onsets = [tick for tick, message in timeline if message.type == "note_on" and message.velocity > 0]
+	first_note_index = next(i for i, (_, message) in enumerate(timeline) if message.type == "note_on")
+	opening_indices = [i for i, (tick, message) in enumerate(timeline) if tick == 0 and message.is_meta]
+
+	assert _opening(timeline) == [("time_signature", (3, 4)), ("set_tempo", 96.0)]
+	assert opening_indices and max(opening_indices) < first_note_index
+	assert onsets == [0, 1440]
+
+
+def test_record_true_opens_with_one_tempo_not_two (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""With recording on from construction, the constructor's tempo and the opening's are not both written."""
+
+	timeline = _render(tmp_path, 1, bpm=96, time_signature=(5, 4), record=True)
+
+	assert _opening(timeline) == [("time_signature", (5, 4)), ("set_tempo", 96.0)]
+
+
+def test_the_opening_states_the_tempo_playback_starts_at (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""A tempo set after construction and before playback is the one the file opens with, once."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=96, record=True)
+
+	@composition.pattern(channel=1, bars=1)
+	def downbeats (p: typing.Any) -> None:
+		p.note(60, beat=0)
+
+	composition.set_bpm(120)
+	path = str(tmp_path / "retempo.mid")
+	composition.render(bars=1, filename=path)
+
+	assert _opening(_timeline(path)) == [("time_signature", (4, 4)), ("set_tempo", 120.0)]
+
+
+def test_a_tempo_change_during_the_render_is_written_where_it_happens (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""The opening does not swallow later changes: a set_bpm on the second cycle lands after tick 0."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=96)
+
+	@composition.pattern(channel=1, bars=1)
+	def speeds_up (p: typing.Any) -> None:
+		p.note(60, beat=0)
+		if p.cycle == 1:
+			composition.set_bpm(120)
+
+	path = str(tmp_path / "change.mid")
+	composition.render(bars=3, filename=path)
+	timeline = _timeline(path)
+	later = [(tick, round(mido.tempo2bpm(message.tempo), 6)) for tick, message in timeline if message.type == "set_tempo" and tick > 0]
+
+	assert _opening(timeline) == [("time_signature", (4, 4)), ("set_tempo", 96.0)]
+	assert [bpm for _, bpm in later] == [120.0]
+
+
+def test_a_metre_is_written_over_four_because_a_beat_is_a_quarter_note (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""Only the beat count sets a bar here, so a declared (7, 8) plays and is written as 7/4 (#2736).
+
+	Writing 7/8 would put a DAW's bar lines every three and a half quarter
+	notes, against notes laid out seven quarter notes to the bar.
+	"""
+
+	timeline = _render(tmp_path, 2, bpm=120, time_signature=(7, 8))
+	onsets = [tick for tick, message in timeline if message.type == "note_on" and message.velocity > 0]
+
+	assert _opening(timeline) == [("time_signature", (7, 4)), ("set_tempo", 120.0)]
+	assert onsets == [0, 7 * 480]
