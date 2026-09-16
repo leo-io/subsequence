@@ -708,8 +708,9 @@ class Sequencer:
 
 		By default the sequencer busy-waits for the final sub-millisecond of each
 		pulse interval to minimise clock jitter.  Call this to revert to pure
-		``asyncio.sleep()`` — lower CPU usage at the cost of higher jitter (typically
-		±0.5–2 ms on Linux vs ~3–4 μs with spin-wait enabled (see the README clock-accuracy benchmark)).
+		``asyncio.sleep()`` — lower CPU usage at the cost of higher jitter: a median of
+		about 0.4 ms on Linux, against 1 μs with spin-wait on (see the README's
+		Performance section).
 
 		Can also be set at construction time: ``Sequencer(spin_wait=False)``.
 		"""
