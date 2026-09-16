@@ -23,6 +23,7 @@ import subsequence.easing
 import subsequence.groove
 import subsequence.held_notes
 import subsequence.intervals
+import subsequence.metre
 import subsequence.pattern
 import subsequence.motifs
 import subsequence.sequence_utils
@@ -167,7 +168,8 @@ class PatternBuilder(
 				read via ``p.scale`` and used to resolve scale degrees in
 				``p.motif()``.  ``None`` means ionian/major.
 			time_signature: The composition's time signature, read via
-				``p.time_signature``; powers the metric-weight table.
+				``p.time_signature``; sets ``p.bar_beats`` and powers the
+				metric-weight table.
 			section_motifs: Optional reference to the composition's
 				section-motif registry, read by ``p.section_motif()``.
 			harmony: Optional read-only harmony window view for this cycle
@@ -213,7 +215,7 @@ class PatternBuilder(
 		self.data: typing.Dict[str, typing.Any] = data if data is not None else {}
 		self.key: typing.Optional[str] = key  # composition key, for p.progression() chord generation
 		self.scale: typing.Optional[str] = scale  # composition scale/mode, for degree resolution
-		self.time_signature: typing.Tuple[int, int] = time_signature
+		self.time_signature: typing.Tuple[int, int] = subsequence.metre.check(time_signature)
 		self.harmony: typing.Optional[typing.Any] = harmony  # HarmonyView for this cycle, or None
 		self.energy: float = energy  # current section's energy (the arranging dial)
 		self._section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = section_motifs
@@ -252,6 +254,17 @@ class PatternBuilder(
 
 
 	@property
+	def bar_beats (self) -> float:
+
+		"""How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.5 in 7/8.
+
+		Pass it wherever a bar size is asked for without a composition to
+		read it from, such as ``sentence(beats_per_bar=p.bar_beats)``.
+		"""
+
+		return subsequence.metre.bar_beats(self.time_signature)
+
+	@property
 	def c (self) -> typing.Optional[subsequence.conductor.Conductor]:
 
 		"""Alias for self.conductor."""
@@ -262,17 +275,16 @@ class PatternBuilder(
 
 		"""Read a conductor signal at the current bar.
 
-		Shorthand for ``p.c.get(name, p.bar * beats_per_bar)``, where
-		``beats_per_bar`` comes from the composition's time signature —
-		so the signal is read at the beat this bar actually starts on,
-		in any metre.  Returns 0.0 if no conductor is attached or the
-		signal is not defined.
+		Shorthand for ``p.c.get(name, p.bar * p.bar_beats)``, so the signal
+		is read at the beat this bar actually starts on, in any metre.
+		Returns 0.0 if no conductor is attached or the signal is not
+		defined.
 		"""
 
 		if self.conductor is None:
 			return 0.0
 
-		return self.conductor.get(name, self.bar * float(self.time_signature[0]))
+		return self.conductor.get(name, self.bar * self.bar_beats)
 
 	def held_notes (self) -> typing.List[int]:
 
@@ -1030,7 +1042,7 @@ class PatternBuilder(
 		if self.harmony is None:
 			return pitch
 
-		bar_beats = float(self.time_signature[0])
+		bar_beats = self.bar_beats
 		grid = len(weights)
 		step = (event_beat % bar_beats) * grid / bar_beats
 		weight = weights[int(round(step)) % grid]
@@ -1223,7 +1235,7 @@ class PatternBuilder(
 		elif align == "section":
 			if self.section is None:
 				raise ValueError('phrase(align="section") needs a form — call composition.form(...)')
-			position = (self.section.bar * float(self.time_signature[0]) + offset) % length
+			position = (self.section.bar * self.bar_beats + offset) % length
 		else:
 			raise ValueError(f'align must be "pattern" or "section" — got {align!r}')
 

@@ -33,6 +33,7 @@ import subsequence.held_notes
 import subsequence.keystroke
 import subsequence.live_reloader
 import subsequence.live_server
+import subsequence.metre
 import subsequence.midi_utils
 import subsequence.osc
 import subsequence.pattern
@@ -541,9 +542,9 @@ async def schedule_harmonic_clock (
 	sequencer: subsequence.sequencer.Sequencer,
 	get_harmonic_state: typing.Callable[[], typing.Optional[subsequence.harmonic_state.HarmonicState]],
 	horizon: typing.Optional[_HarmonyHorizon] = None,
-	bar_beats: float = 4.0,
-	cycle_beats: int = 4,
-	get_cycle_beats: typing.Optional[typing.Callable[[], int]] = None,
+	bar_beats: typing.Optional[float] = None,
+	cycle_beats: typing.Optional[float] = None,
+	get_cycle_beats: typing.Optional[typing.Callable[[], float]] = None,
 	get_bound_progression: typing.Optional[typing.Callable[[], typing.Optional["Progression"]]] = None,
 	get_section_progression: typing.Optional[
 		typing.Callable[[], typing.Optional[typing.Tuple[str, int, int, typing.Optional["Progression"]]]]
@@ -596,11 +597,18 @@ async def schedule_harmonic_clock (
 	the composition's own horizon).  ``get_cycle_beats``, when given, is
 	re-read at every boundary so a mid-playback ``harmony(cycle_beats=…)``
 	re-call takes effect like the other getter-based parameters; the plain
-	``cycle_beats`` value is the fixed fallback.
+	``cycle_beats`` value is the fixed fallback.  ``bar_beats`` defaults to
+	the sequencer's bar, and ``cycle_beats`` to ``bar_beats``: a chord a bar.
 	"""
 
 	if horizon is None:
 		horizon = _HarmonyHorizon()
+
+	if bar_beats is None:
+		bar_beats = subsequence.metre.bar_beats(sequencer.time_signature)
+
+	if cycle_beats is None:
+		cycle_beats = bar_beats
 
 	def _cycle_beats_now () -> float:
 		return float(get_cycle_beats() if get_cycle_beats is not None else cycle_beats)
@@ -1079,12 +1087,12 @@ async def schedule_form (
 			on_bar(pulse + lookahead_pulses, section_changed)
 
 	# Form advances once per bar based on the global time signature.
-	_BEATS_PER_BAR: int = sequencer.time_signature[0]
-	first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(_BEATS_PER_BAR, sequencer.pulses_per_beat)
+	bar_beats = subsequence.metre.bar_beats(sequencer.time_signature)
+	first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(bar_beats, sequencer.pulses_per_beat)
 
 	await sequencer.schedule_callback_repeating(
 		callback = advance_form,
-		interval_beats = _BEATS_PER_BAR,
+		interval_beats = bar_beats,
 		start_pulse = first_bar_pulse,
 		reschedule_lookahead = reschedule_lookahead
 	)
@@ -1330,12 +1338,16 @@ class Composition:
 				available device, or prompts to choose if several exist.
 			bpm: Initial tempo in beats per minute (default 120).
 			time_signature: The metre as ``(beats, unit)``, default ``(4, 4)``.
-				Sets the bar length everywhere bars matter: ``bars=`` pattern
-				lengths, ``p.bar``/``p.signal()``, form advancement and
-				transitions, and pinned-chord bar numbers.  A beat is a quarter
-				note and only ``beats`` sets the bar, so ``(6, 8)`` plays bars
-				of six quarter notes; a recorded or rendered file states the
-				metre as ``beats/4`` to match the notes.
+				A bar lasts ``beats × 4 / unit`` quarter notes, so ``(6, 8)`` is
+				three and ``(7, 8)`` three and a half; read it back as
+				``composition.bar_beats`` or ``p.bar_beats``.  That bar sets
+				``bars=`` lengths, ``p.bar`` and ``p.signal()``, the form and
+				transitions, pinned-chord bar numbers, how often ``harmony()``
+				changes chord, and the ``link()`` quantum.  The beat counter
+				counts the unit (six to a bar of 6/8), accents follow the
+				metre's groups, and a recorded or rendered file states the
+				metre as declared.  Every ``beat=`` and ``beats=`` is still a
+				quarter note.  The unit must be 1, 2, 4, 8, 16 or 32.
 			key: The root key of the piece (e.g., "C", "F#", "Bb").
 				Required if you plan to use ``harmony()``.
 			scale: The scale/mode of the piece (e.g. "minor", "dorian",
@@ -1370,7 +1382,7 @@ class Composition:
 
 		self.output_device = output_device
 		self.bpm = bpm
-		self.time_signature = time_signature
+		self.time_signature = subsequence.metre.check(time_signature)
 		self.key = key
 		self.scale = scale
 		self._seed: typing.Optional[int] = seed
@@ -1396,7 +1408,7 @@ class Composition:
 		)
 
 		self._harmonic_state: typing.Optional[subsequence.harmonic_state.HarmonicState] = None
-		self._harmony_cycle_beats: typing.Optional[int] = None
+		self._harmony_cycle_beats: typing.Optional[float] = None
 		self._harmony_style: typing.Optional[str] = None
 		# The style (name or ChordGraph) from the most recent style-configuring
 		# harmony() call — reused by parameter-only re-calls.
@@ -1812,6 +1824,11 @@ class Composition:
 		"""Current bar index used by pattern builders."""
 		return self._builder_bar
 
+	@property
+	def bar_beats (self) -> float:
+		"""How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.0 in 6/8."""
+		return subsequence.metre.bar_beats(self.time_signature)
+
 	def _require_harmonic_state (self) -> subsequence.harmonic_state.HarmonicState:
 		"""Return the active HarmonicState, raising ValueError if none is configured."""
 		if self._harmonic_state is None:
@@ -1861,7 +1878,7 @@ class Composition:
 	def harmony (
 		self,
 		style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None,
-		cycle_beats: int = 4,
+		cycle_beats: typing.Optional[float] = None,
 		dominant_7th: bool = True,
 		gravity: float = 1.0,
 		nir_strength: float = 0.5,
@@ -1890,7 +1907,8 @@ class Composition:
 				"phrygian_minor", "lydian_major", "dorian_minor",
 				"chromatic_mediant", "suspended", "mixolydian", "whole_tone",
 				"diminished". See README for full descriptions.
-			cycle_beats: How many beats each live chord lasts (default 4).
+			cycle_beats: How many beats each live chord lasts.  Defaults to
+				one bar (``composition.bar_beats``): 4 in 4/4, 3 in 3/4.
 				Bound progressions carry their own harmonic rhythm in their
 				spans, so this applies to live stepping only.  A re-call
 				during playback takes effect from the next chord boundary;
@@ -2004,7 +2022,7 @@ class Composition:
 		self._harmonic_clock_started = True
 
 		if bar_beats is None:
-			bar_beats = float(self.time_signature[0])
+			bar_beats = self.bar_beats
 
 		if clock_lookahead is None:
 			lookaheads = [pattern.reschedule_lookahead for pattern in self._running_patterns.values()]
@@ -2040,8 +2058,8 @@ class Composition:
 			get_harmonic_state = lambda: self._harmonic_state,
 			horizon = self._harmony_horizon,
 			bar_beats = bar_beats,
-			cycle_beats = self._harmony_cycle_beats or 4,
-			get_cycle_beats = lambda: self._harmony_cycle_beats or 4,
+			cycle_beats = self._harmony_cycle_beats or bar_beats,
+			get_cycle_beats = lambda: self._harmony_cycle_beats or self.bar_beats,
 			get_bound_progression = lambda: self._bound_progression,
 			get_section_progression = _get_section_progression,
 			get_pinned = self._resolve_pin,
@@ -2188,7 +2206,7 @@ class Composition:
 		finally:
 			hs.rng = saved_rng
 
-		span_beats = float(self._harmony_cycle_beats or 4)
+		span_beats = float(self._harmony_cycle_beats or self.bar_beats)
 
 		return Progression(
 			spans = tuple(
@@ -2297,7 +2315,7 @@ class Composition:
 		else:
 			# Store the parsed span — relative pins resolve late (per section)
 			# at the clock; concrete pins are absolute.
-			span = subsequence.progressions.parse_element(chord, beats = float(self.time_signature[0]))
+			span = subsequence.progressions.parse_element(chord, beats = self.bar_beats)
 
 			if not span.is_concrete:
 				# Raise early only when no key is resolvable for this bar — the
@@ -2468,6 +2486,11 @@ class Composition:
 
 		"""
 		Register a callback for a sequencer event (e.g., "bar", "start", "stop").
+
+		``"bar"`` passes the bar's index from 0.  ``"beat"`` passes the beat's
+		index within its bar, counted in the time signature's unit: 0–3 in
+		4/4, 0–5 in 6/8, 0–6 in 7/8.  That counter is the one place a beat is
+		not a quarter note.
 		"""
 
 		self._sequencer.on_event(event_name, callback)
@@ -3134,7 +3157,7 @@ class Composition:
 		self._clock_output = enabled
 
 
-	def link (self, quantum: float = 4.0) -> "Composition":
+	def link (self, quantum: typing.Optional[float] = None) -> "Composition":
 
 		"""
 		Enable Ableton Link tempo and phase synchronisation.
@@ -3152,8 +3175,9 @@ class Composition:
 		    pip install subsequence[link]
 
 		Parameters:
-			quantum: Beat cycle length.  ``4.0`` (default) = one bar in 4/4 time.
-			         Change this if your composition uses a different meter.
+			quantum: Beat cycle length in quarter notes.  Defaults to one bar
+			         (``composition.bar_beats``), so peers align on bar lines
+			         in any metre: 4.0 in 4/4, 3.5 in 7/8.
 
 		Example::
 
@@ -3175,7 +3199,7 @@ class Composition:
 		# Eagerly check that aalink is installed — fail early with a clear message.
 		subsequence.link_clock._require_aalink()
 
-		self._link_quantum = quantum
+		self._link_quantum = float(quantum) if quantum is not None else self.bar_beats
 		return self
 
 
@@ -4253,7 +4277,7 @@ class Composition:
 
 		Parameters:
 			fn: The function to call.
-			cycle_beats: How often to call it (e.g., 4 = every bar).
+			cycle_beats: How often to call it, in beats (e.g. 4 = every bar of 4/4).
 			reschedule_lookahead: How far in advance to schedule the next call.
 			wait_for_initial: If True, run the function once during startup
 				and wait for it to complete before playback begins. This
@@ -4579,7 +4603,7 @@ class Composition:
 				raise TypeError(f"fill must be a Motif-like value with .events/.length, got {type(fill).__name__}")
 
 		if mute is not None and beats is None:
-			beats = float(self.time_signature[0])		# one bar by default
+			beats = self.bar_beats		# one bar by default
 
 		rule = _Transition(
 			before = before,
@@ -4689,7 +4713,7 @@ class Composition:
 		if info is None or info.next_section is None:
 			return
 
-		bar_beats = float(self.time_signature[0])
+		bar_beats = self.bar_beats
 		bars_remaining = info.bars - info.bar
 
 		for rule in self._transitions:
@@ -4724,7 +4748,7 @@ class Composition:
 		steps: typing.Optional[float],
 		step_duration: typing.Optional[float],
 		default: float = 4.0,
-		beats_per_bar: int = 4,
+		beats_per_bar: float = 4,
 	) -> typing.Tuple[float, int]:
 
 		"""
@@ -4808,7 +4832,7 @@ class Composition:
 				Set ``zero_indexed_channels=True`` on the ``Composition`` to use
 				0-based numbering (0-15), matching the raw MIDI protocol, instead.
 			beats: Duration in beats (quarter notes). ``beats=4`` = 1 bar.
-			bars: Duration in bars (uses the composition's time signature — 4 beats each in 4/4). ``bars=2`` = 8 beats.
+			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8). ``bars=2`` = 8 beats in 4/4.
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats (e.g. ``dur.SIXTEENTH``).
 				Requires ``steps=``.
@@ -4856,7 +4880,7 @@ class Composition:
 
 		channel = self._resolve_channel(channel)
 
-		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, beats_per_bar=self.time_signature[0])
+		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, beats_per_bar=self.bar_beats)
 
 		# Resolve device string name to index if possible now; otherwise store
 		# the raw DeviceId and resolve it in _run() once all devices are open.
@@ -4956,7 +4980,7 @@ class Composition:
 			builder_fns: One or more pattern builder functions.
 			channel: MIDI channel (1-16, or 0-15 with ``zero_indexed_channels=True``).
 			beats: Duration in beats (quarter notes).
-			bars: Duration in bars (uses the composition's time signature — 4 beats each in 4/4).
+			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8).
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats. Requires ``steps=``.
 			drum_note_map: Optional mapping for drum instruments.
@@ -4972,7 +4996,7 @@ class Composition:
 				to duplicate every event onto.  See ``pattern()`` for details.
 		"""
 
-		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, beats_per_bar=self.time_signature[0])
+		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, beats_per_bar=self.bar_beats)
 
 		# Resolve channel up-front so the mirror-to-self check has the canonical
 		# primary form to compare against.
@@ -5107,7 +5131,7 @@ class Composition:
 			The realised :class:`~subsequence.progressions.Progression`.
 		"""
 
-		beat_length, default_grid = self._resolve_length(beats, bars, None, None, beats_per_bar=self.time_signature[0])
+		beat_length, default_grid = self._resolve_length(beats, bars, None, None, beats_per_bar=self.bar_beats)
 		resolved_channel = self._resolve_channel(channel)
 		resolved_key = key if key is not None else self.key
 
@@ -5220,7 +5244,7 @@ class Composition:
 			composition.phrase_part(channel=4, part="lead", root=72, bars=2)
 		"""
 
-		beat_length, default_grid = self._resolve_length(beats, bars, None, None, beats_per_bar=self.time_signature[0])
+		beat_length, default_grid = self._resolve_length(beats, bars, None, None, beats_per_bar=self.bar_beats)
 		resolved_channel = self._resolve_channel(channel)
 
 		captured_part = part
@@ -5317,7 +5341,7 @@ class Composition:
 			fn: The pattern builder function (same signature as ``@comp.pattern``).
 			channel: MIDI channel (1-16, or 0-15 with ``zero_indexed_channels=True``).
 			beats: Duration in beats (quarter notes, default 1).
-			bars: Duration in bars (uses the composition's time signature — 4 beats each in 4/4).
+			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8).
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats. Requires ``steps=``.
 			quantize: Snap the trigger to a beat boundary: ``0`` = immediate (default),
@@ -5363,7 +5387,7 @@ class Composition:
 		# Resolve channel numbering
 		resolved_channel = self._resolve_channel(channel)
 
-		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, default=1.0, beats_per_bar=self.time_signature[0])
+		beat_length, default_grid = self._resolve_length(beats, bars, steps, step_duration, default=1.0, beats_per_bar=self.bar_beats)
 
 		# Resolve device index — for trigger() this is always concrete by call time,
 		# so the mirror-to-self check has the full primary tuple available.
@@ -5711,22 +5735,26 @@ class Composition:
 		# lookahead is RAISED to the maximum pattern lookahead (never patterns
 		# clamped down): when a pattern rebuilds for its next cycle, the form
 		# state and the harmony window already describe that cycle.
-		bar_beats = float(self.time_signature[0])
+		bar_beats = self.bar_beats
 
 		pattern_lookaheads = [pending.reschedule_lookahead for pending in self._pending_patterns]
 		pattern_lookaheads += [pattern.reschedule_lookahead for pattern in self._running_patterns.values()]
-		max_pattern_lookahead = max(pattern_lookaheads, default = 1)
+		max_pattern_lookahead = max(pattern_lookaheads, default = 0)
 
 		clock_lookahead = max(1.0, float(self._harmony_reschedule_lookahead), float(max_pattern_lookahead))
 
-		if clock_lookahead > bar_beats:
+		# Only a pattern's own lookahead is worth a warning.  The clocks' one-beat
+		# floor and harmony()'s lookahead simply fit a bar shorter than a beat
+		# (3/16, 1/8), where no pattern is at risk.
+		if max_pattern_lookahead > bar_beats:
 			logger.warning(
 				"A pattern's reschedule_lookahead (%.2g beats) exceeds the bar length (%.2g) — "
 				"the harmony/form clocks fire at most one bar ahead, so that pattern may "
 				"rebuild before the window covers its cycle start.",
-				clock_lookahead, bar_beats,
+				max_pattern_lookahead, bar_beats,
 			)
-			clock_lookahead = bar_beats
+
+		clock_lookahead = min(clock_lookahead, bar_beats)
 
 		# Minimum span >= maximum lookahead: the clock cannot prepare a chord
 		# boundary that arrives sooner than it fires.  Harmonic motion faster
@@ -5825,11 +5853,11 @@ class Composition:
 		def _advance_builder_bar (pulse: int) -> None:
 			self._builder_bar += 1
 
-		first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(self.time_signature[0], self._sequencer.pulses_per_beat)
+		first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(bar_beats, self._sequencer.pulses_per_beat)
 
 		await self._sequencer.schedule_callback_repeating(
 			callback = _advance_builder_bar,
-			interval_beats = self.time_signature[0],
+			interval_beats = bar_beats,
 			start_pulse = first_bar_pulse,
 			# Same raised lookahead as the form/harmony clocks: a pattern
 			# rebuilding lookahead-early for its next cycle must read the bar

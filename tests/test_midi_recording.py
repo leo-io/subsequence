@@ -302,16 +302,21 @@ def test_a_tempo_change_during_the_render_is_written_where_it_happens (tmp_path:
 	assert [bpm for _, bpm in later] == [120.0]
 
 
-def test_a_metre_is_written_over_four_because_a_beat_is_a_quarter_note (tmp_path: pathlib.Path, patch_midi: None) -> None:
+@pytest.mark.parametrize("time_signature, bar_ticks", [
+	pytest.param((7, 8), 1680, id="7/8"),
+	pytest.param((6, 8), 1440, id="6/8"),
+	pytest.param((2, 2), 1920, id="2/2"),
+])
+def test_a_metre_is_written_as_declared_with_bar_lines_where_the_notes_are (tmp_path: pathlib.Path, patch_midi: None, time_signature: typing.Tuple[int, int], bar_ticks: int) -> None:
 
-	"""Only the beat count sets a bar here, so a declared (7, 8) plays and is written as 7/4 (#2736).
+	"""A declared (7, 8) is written 7/8 and its bars are seven eighth notes, so a DAW's bar lines land on the downbeats (#2738).
 
-	Writing 7/8 would put a DAW's bar lines every three and a half quarter
-	notes, against notes laid out seven quarter notes to the bar.
+	Until the unit set the bar, a (7, 8) played bars of seven quarter notes and
+	was written 7/4 to match (#2719).
 	"""
 
-	timeline = _render(tmp_path, 2, bpm=120, time_signature=(7, 8))
+	timeline = _render(tmp_path, 2, bpm=120, time_signature=time_signature)
 	onsets = [tick for tick, message in timeline if message.type == "note_on" and message.velocity > 0]
 
-	assert _opening(timeline) == [("time_signature", (7, 4)), ("set_tempo", 120.0)]
-	assert onsets == [0, 7 * 480]
+	assert _opening(timeline) == [("time_signature", time_signature), ("set_tempo", 120.0)]
+	assert onsets == [0, bar_ticks]

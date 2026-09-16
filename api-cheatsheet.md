@@ -56,6 +56,7 @@ The top-level controller for a musical piece.
 | Method | Description |
 |---|---|
 | `__init__(output_device, bpm, time_signature, key, scale, seed, record, record_filename, zero_indexed_channels, latency_ms) -> None` | Initialize a new composition. |
+| `bar_beats *(property)*` | How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.0 in 6/8. |
 | `builder_bar *(property)*` | Current bar index used by pattern builders. |
 | `cc_forward(cc, output, channel, output_channel, mode, input_device, output_device) -> None` | Forward an incoming MIDI CC to the MIDI output in real-time. |
 | `cc_map(cc, data_key, channel, min_val, max_val, input_device) -> None` | Map an incoming MIDI CC to a ``composition.data`` key. |
@@ -134,13 +135,14 @@ The musician's 'palette' for creating musical content.
 | `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed, repeating) -> None` | Initialize the builder with pattern context, cycle count, and optional section info. |
 | `apply_tuning(tuning, bend_range, channels, reference_note) -> PatternBuilder` | Apply a microtonal tuning to this pattern via pitch bend injection. |
 | `arpeggio(notes, root, velocity, count, inversion, beat, span, spacing, duration, direction, seed, rng) -> PatternBuilder` | Arpeggiate a chord (or a list of pitches) — cycle the notes one at a time at regular beat intervals. |
+| `bar_beats *(property)*` | How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.5 in 7/8. |
 | `bar_cycle(length) -> subsequence.pattern_builder.BarCycle` | Return the current bar's position within a repeating cycle of bars. |
 | `bend(note, amount, start, end, shape, resolution) -> subsequence.pattern_builder.PatternBuilder` | Bend a specific note by index. |
 | `branch(pitches, depth, path, mutation, velocity, duration, spacing, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melodic variation by navigating a fractal tree of transforms. |
 | `bresenham(pitch, pulses, velocity, duration, probability, no_overlap, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a rhythm using the Bresenham line algorithm. |
 | `bresenham_poly(parts, velocity, duration, grid, probability, no_overlap, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Distribute multiple drum voices across the pattern using weighted Bresenham. |
 | `broken_chord(chord_obj, root, order, spacing, velocity, duration, inversion, beat, span) -> PatternBuilder` | Play a chord as an arpeggio in a specific or random order. |
-| `build_ghost_bias(grid, bias) -> List[float]` | Build probability weights for ghost notes or other generative functions. |
+| `build_ghost_bias(grid, bias, beats) -> List[float]` | Build probability weights for ghost notes or other generative functions. |
 | `build_velocity_ramp(low, high, shape, grid) -> List[int]` | Build a per-step velocity list that ramps from *low* to *high*. |
 | `c *(property)*` | Alias for self.conductor. |
 | `capture(beat, span) -> subsequence.motifs.Motif` | Read the notes placed so far back out as a :class:`~subsequence.motifs.Motif`. |

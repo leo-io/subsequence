@@ -485,7 +485,19 @@ class PatternAlgorithmicMixin:
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	@staticmethod
-	def build_ghost_bias (grid: int, bias: subsequence.declarations.BiasCurve) -> typing.List[float]:
+	def _steps_per_beat (grid: int, beats: float) -> int:
+
+		"""How many of *grid* steps fall in one beat when they span *beats* beats, at least one.
+
+		From the length the grid really spans, not ``grid // 4``, which took
+		every grid as four beats: a 12-step bar of 3/4 has four steps a beat,
+		not three.
+		"""
+
+		return max(1, round(grid / beats)) if beats > 0 else 1
+
+	@staticmethod
+	def build_ghost_bias (grid: int, bias: subsequence.declarations.BiasCurve, beats: float = 4) -> typing.List[float]:
 
 		"""Build probability weights for ghost notes or other generative functions.
 
@@ -511,6 +523,11 @@ class PatternAlgorithmicMixin:
 				- ``"upbeat"``     - 1.0 on 8th note off-beats only, 0.05 everywhere else.
 				- ``"e_and_a"``    - 1.0 on all non-downbeat 16th positions, 0.05 on downbeats.
 
+			beats: How many beats the grid spans, which sets where each beat
+				falls (default 4).  ``ghost_fill()`` and ``thin()`` pass their
+				pattern's own length, so this matters only when building a
+				curve yourself for a pattern that is not four beats long.
+
 		Returns:
 			A ``List[float]`` of length ``grid`` where each value is a probability
 			multiplier from 0.0 to 1.0.  The list is a plain Python list — modify
@@ -528,7 +545,7 @@ class PatternAlgorithmicMixin:
 			```
 		"""
 
-		steps_per_beat = max(1, grid // 4)
+		steps_per_beat = PatternAlgorithmicMixin._steps_per_beat(grid, beats)
 		weights: typing.List[float] = []
 
 		for i in range(grid):
@@ -682,7 +699,7 @@ class PatternAlgorithmicMixin:
 			elif len(weights) > grid:
 				weights = weights[:grid]
 		else:
-			weights = self.build_ghost_bias(grid, bias)
+			weights = self.build_ghost_bias(grid, bias, beats = self._pattern.length)
 
 		max_weight = max(weights) if weights else 1.0
 
@@ -1975,7 +1992,7 @@ class PatternAlgorithmicMixin:
 		if strategy == "strength":
 			# Per-beat drop priorities: e/a (1.0) > & (0.6) > downbeat (0.05).
 			# As `amount` rises, progressively weaker positions are removed first.
-			steps_per_beat = max(1, grid // 4)
+			steps_per_beat = self._steps_per_beat(grid, self._pattern.length)
 			priorities: typing.List[float] = []
 			for i in range(grid):
 				pos = i % steps_per_beat
@@ -1996,7 +2013,7 @@ class PatternAlgorithmicMixin:
 			# Reuse build_ghost_bias() weights for all shared strategy names.
 			# The positions that ghost_fill prefers to add to are the same
 			# positions that thin() will prefer to remove from.
-			priorities = self.build_ghost_bias(grid, strategy)
+			priorities = self.build_ghost_bias(grid, strategy, beats = self._pattern.length)
 
 		# Zone-based pulse classification.
 		# Zone N owns pulses in [ N * step_pulses, (N+1) * step_pulses ).

@@ -33,6 +33,7 @@ import typing
 
 import subsequence.constants
 import subsequence.constants.pulses
+import subsequence.metre
 
 if typing.TYPE_CHECKING:
 	from subsequence.composition import Composition
@@ -610,9 +611,9 @@ class Display:
 		# to hear (the section line above shows playing-bar time instead).
 		conductor = comp.conductor
 		if conductor.signal_names:
-			beat = comp.builder_bar * comp.sequencer.time_signature[0]
+			bar_start = comp.builder_bar * subsequence.metre.bar_beats(comp.sequencer.time_signature)
 			for name in conductor.signal_names:
-				value = conductor.get(name, beat)
+				value = conductor.get(name, bar_start)
 				parts.append(f"{name.title()}: {value:.2f}")
 
 		return "  ".join(parts)

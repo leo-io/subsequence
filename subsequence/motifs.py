@@ -902,7 +902,8 @@ class Motif:
 			rhythm: Onset beats (``[0, 1, 1.5, 1.75, 2.5]``) or a Motif
 				(its onsets are borrowed).
 			length: Motif length in beats; defaults to the onsets rounded
-				up to a whole 4-beat bar.
+				up to a whole 4-beat bar.  In any other metre pass a length
+				in bars of ``p.bar_beats``.
 			scale: A scale name, an interval list, or an explicit MIDI
 				pitch pool.  ``None`` = the plain seven degrees.
 			contour: Envelope shaping the line's height over its span —
@@ -1903,7 +1904,8 @@ class Phrase:
 			seed: Seed for the generated units.  Without one, develop()
 				warns — module-level nondeterminism breaks live reload.
 			beats_per_bar: Bar size in beats (the value is context-free;
-				4 is the common-time default).
+				4 is the common-time default).  In any other metre pass
+				``p.bar_beats``, which is one bar of the composition's.
 
 		Example:
 			```python
@@ -2314,6 +2316,8 @@ def sentence (
 			``"soft"``/``"fakeout"`` on 1 (theory aliases accepted).
 		seed: Seed for the generated continuation units (seed-or-warn).
 		beats_per_bar: Bar size in beats (context-free; 4 is the default).
+			In any other metre pass ``p.bar_beats``, which is one bar of the
+			composition's.
 
 	Example:
 		```python
@@ -2372,7 +2376,8 @@ def period (
 			is kept (only its last segment's tail re-aims).
 		cadence: The consequent's close — ``"strong"`` lands on 1 (theory
 			aliases accepted).
-		beats_per_bar: Bar size in beats, recorded for ``reroll()`` windows.
+		beats_per_bar: Bar size in beats, recorded for ``reroll()`` windows
+			(4 by default).  In any other metre pass ``p.bar_beats``.
 
 	Example:
 		```python

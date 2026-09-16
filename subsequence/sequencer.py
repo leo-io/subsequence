@@ -25,6 +25,7 @@ import subsequence.constants.pulses
 import subsequence.easing
 import subsequence.event_emitter
 import subsequence.held_notes
+import subsequence.metre
 import subsequence.midi_utils
 
 
@@ -422,6 +423,9 @@ class Sequencer:
 				available devices - uses the only device if one is found, or prompts
 				the user to choose if multiple are available.
 			initial_bpm: Tempo in BPM (ignored when clock_follow is True)
+			time_signature: The metre as ``(beats, unit)``.  A bar lasts
+				``beats × 4 / unit`` quarter notes, and the beat counter counts
+				the unit.  The unit must be 1, 2, 4, 8, 16 or 32.
 			input_device_name: Optional MIDI input device name for clock/transport
 			clock_follow: When True, follow external MIDI clock instead of internal clock
 			clock_output: When True, send MIDI timing clock (0xF8), start (0xFA), and
@@ -444,11 +448,13 @@ class Sequencer:
 
 		self.output_device_name = output_device_name
 		self.input_device_name = input_device_name
-		self.time_signature = time_signature
+		self.time_signature = subsequence.metre.check(time_signature)
 		self.clock_follow = clock_follow
 		self.clock_device_idx: int = 0
 		self.clock_output = clock_output and not clock_follow
 		self.pulses_per_beat = subsequence.constants.MIDI_QUARTER_NOTE
+		# What the beat counter counts: the time signature's written unit.
+		self._pulses_per_unit = subsequence.metre.pulses_per_unit(self.time_signature, self.pulses_per_beat)
 
 		# Recording state
 		self.recording = record
@@ -663,9 +669,8 @@ class Sequencer:
 		replaces it with the tempo playback actually starts at, so the file
 		states it once.
 
-		The metre is written over 4 because a beat here is a quarter note and
-		only the beat count sets the bar: a declared ``(7, 8)`` plays bars of
-		seven quarter notes, and a DAW must draw them that long (#2736).
+		The metre is written as declared: a ``(7, 8)`` bar is seven eighth notes
+		long, so a DAW draws its bar lines where they are played (#2738).
 		"""
 
 		if not self.recording:
@@ -676,8 +681,10 @@ class Sequencer:
 			if not (pulse == 0 and message.is_meta and message.type == 'set_tempo')
 		]
 
+		beats, unit = self.time_signature
+
 		self.recorded_events[:0] = [
-			(0.0, mido.MetaMessage('time_signature', numerator=self.time_signature[0], denominator=4)),
+			(0.0, mido.MetaMessage('time_signature', numerator=beats, denominator=unit)),
 			(0.0, mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(self.current_bpm))),
 		]
 
@@ -819,7 +826,7 @@ class Sequencer:
 		if bars <= 0:
 			raise ValueError("Transition bars must be positive")
 
-		total_pulses = bars * self.pulses_per_beat * self.time_signature[0]
+		total_pulses = bars * subsequence.metre.pulses_per_bar(self.time_signature, self.pulses_per_beat)
 
 		self._bpm_transition = BpmTransition(
 			start_bpm=self.current_bpm,
@@ -1036,7 +1043,10 @@ class Sequencer:
 		# lookahead of 5/3 is written as, and a float comparison would refuse a
 		# length the clock can schedule exactly.
 		if lookahead_pulses > length_pulses:
-			raise ValueError("Reschedule lookahead cannot exceed schedule length")
+			raise ValueError(
+				f"A reschedule_lookahead of {lookahead_beats:g} beats cannot exceed the {length_beats:g} beats it repeats over — "
+				f"set reschedule_lookahead= to {length_beats:g} or less"
+			)
 
 		if length_pulses <= 0:
 			raise ValueError("Schedule length must be at least one pulse")
@@ -1576,6 +1586,14 @@ class Sequencer:
 
 
 	@property
+	def bar_beats (self) -> float:
+
+		"""How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.5 in 7/8."""
+
+		return subsequence.metre.bar_beats(self.time_signature)
+
+
+	@property
 	def paused (self) -> bool:
 
 		"""True while the transport is held by :meth:`pause`."""
@@ -1642,7 +1660,7 @@ class Sequencer:
 
 		self._record_opening()
 
-		pulses_per_bar = self.time_signature[0] * self.pulses_per_beat
+		pulses_per_bar = subsequence.metre.pulses_per_bar(self.time_signature, self.pulses_per_beat)
 
 		if self.clock_follow and self._midi_input_queue is not None:
 			await self._run_loop_external_clock(pulses_per_bar)
@@ -1669,11 +1687,17 @@ class Sequencer:
 			self._spawn(self.events.emit_async("bar", self.current_bar))
 
 
-	def _check_beat_change (self, pulse: int, pulses_per_beat: int) -> None:
+	def _check_beat_change (self, pulse: int, pulses_per_unit: int) -> None:
 
-		"""Detect beat boundaries within the bar and fire beat events."""
+		"""Detect beat boundaries within the bar and fire beat events.
 
-		beat_in_bar = (pulse % (self.time_signature[0] * pulses_per_beat)) // pulses_per_beat
+		A beat here is the time signature's written unit, so 6/8 counts six
+		eighth notes to the bar, while every ``beat=`` argument elsewhere is
+		still a quarter note.
+		"""
+
+		beats, _ = self.time_signature
+		beat_in_bar = (pulse % (beats * pulses_per_unit)) // pulses_per_unit
 
 		if beat_in_bar != self.current_beat:
 			self.current_beat = beat_in_bar
@@ -1802,7 +1826,7 @@ class Sequencer:
 					# bar never leaks into the recording.
 					break  # type: ignore[unreachable]
 
-				self._check_beat_change(self.pulse_count, self.pulses_per_beat)
+				self._check_beat_change(self.pulse_count, self._pulses_per_unit)
 				if self.clock_output:
 					self._send_clock_message("clock")
 				await self._advance_pulse()
@@ -1882,7 +1906,7 @@ class Sequencer:
 
 				self._estimate_bpm(time.perf_counter())
 				self._check_bar_change(self.pulse_count, pulses_per_bar)
-				self._check_beat_change(self.pulse_count, self.pulses_per_beat)
+				self._check_beat_change(self.pulse_count, self._pulses_per_unit)
 				await self._advance_pulse()
 
 			elif message.type == "start":
@@ -1947,7 +1971,7 @@ class Sequencer:
 				logger.debug(f"Link tempo update: {link_bpm:.2f} BPM")
 
 			self._check_bar_change(self.pulse_count, pulses_per_bar)
-			self._check_beat_change(self.pulse_count, self.pulses_per_beat)
+			self._check_beat_change(self.pulse_count, self._pulses_per_unit)
 
 			if self.clock_output:
 				self._send_clock_message("clock")

@@ -11,6 +11,7 @@ import random
 import typing
 
 import subsequence.easing
+import subsequence.metre
 import subsequence.weighted_graph
 
 T = typing.TypeVar("T")
@@ -2752,15 +2753,22 @@ def build_metric_weights (time_signature: typing.Tuple[int, int] = (4, 4), grid:
 	"""
 	Per-step metric weights for one bar — how "strong" each grid position is.
 
-	The hierarchy: the downbeat is 1.0; the half-bar (even meters only) is
-	0.75; other beats are 0.5; off-beat eighths are 0.25; everything finer is
-	0.125.  Derived from the time signature by default; pass a custom weight
-	list instead wherever a metric table is accepted (additive and
-	non-isochronous meters define their own strong beats).
+	In a simple metre, each written unit is a beat.  The downbeat is 1.0, the
+	half-bar (even beat counts only) is 0.75, other beats are 0.5, halfway
+	between beats is 0.25, and everything finer is 0.125.  That is every ``/4``
+	metre, and ``(2, 2)``, which accents its halves.
+
+	With a unit of an eighth or finer, the units group into felt beats.
+	Compound metres (``(6, 8)``, ``(9, 8)``, ``(12, 8)``) group in threes, and
+	irregular ones in twos with a three at the end, so ``(7, 8)`` is 2+2+3.
+	The downbeat is 1.0, each group's start 0.5 (0.75 on the half-bar, as in
+	``(12, 8)``), the other units 0.25, and anything finer 0.125.
+
+	Pass a custom weight list instead, wherever a metric table is accepted, for
+	a grouping these defaults do not guess (``(7, 8)`` felt as 3+2+2).
 
 	Parameters:
-		time_signature: ``(beats_per_bar, beat_unit)`` — only the beat count
-			shapes the table.
+		time_signature: ``(beats, unit)``, such as ``(4, 4)`` or ``(7, 8)``.
 		grid: Number of equal steps across the bar.
 
 	Returns:
@@ -2776,20 +2784,26 @@ def build_metric_weights (time_signature: typing.Tuple[int, int] = (4, 4), grid:
 	if grid < 1:
 		raise ValueError(f"grid must be at least 1 — got {grid}")
 
-	beats_per_bar = time_signature[0]
+	beats, _ = subsequence.metre.check(time_signature)
+	grouped = subsequence.metre.accent_groups(time_signature) is not None
+	starts = subsequence.metre.group_starts(time_signature)
 	weights = []
 
 	for i in range(grid):
 
-		numerator = i * beats_per_bar	# beat position = numerator / grid
+		numerator = i * beats	# unit position = numerator / grid
 
 		if i == 0:
 			weights.append(1.0)
-		elif beats_per_bar % 2 == 0 and 2 * i == grid:
-			weights.append(0.75)
 		elif numerator % grid == 0:
-			weights.append(0.5)
-		elif (2 * numerator) % grid == 0:
+			unit = numerator // grid
+			if unit not in starts:
+				weights.append(0.25)
+			elif 2 * unit == beats:
+				weights.append(0.75)
+			else:
+				weights.append(0.5)
+		elif not grouped and (2 * numerator) % grid == 0:
 			weights.append(0.25)
 		else:
 			weights.append(0.125)
