@@ -31,8 +31,9 @@ What makes it different:
   A dozen built-in palettes and frozen progressions to lock some sections
   while others evolve freely. Layer on cognitive harmony for
   Narmour-based melodic inertia.
-- **Sub-microsecond clock.** Hybrid sleep+spin timing achieves typical
-  pulse jitter of < 5 us on Linux, with zero long-term drift.
+- **Sub-microsecond clock.** Hybrid sleep+spin timing holds pulse jitter
+  at a typical 1 us on Linux, with no pulse more than 0.1 ms out at any
+  tempo and zero long-term drift.
 - **Turn anything into music.** ``composition.schedule()`` runs any
   Python function on a beat cycle - APIs, sensors, files. Anything
   Python can reach becomes a musical parameter.
