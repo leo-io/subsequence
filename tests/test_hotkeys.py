@@ -244,6 +244,8 @@ class TestFormJump:
 		self.comp._keystroke_listener = None
 		self.comp._hotkeys_enabled = False
 		self.comp._harmony_horizon = comp_mod._HarmonyHorizon()
+		# Not playing: a jump announces itself only on a running clock (#2800).
+		self.comp._sequencer = unittest.mock.MagicMock(_event_loop=None, running=False)
 
 	def test_form_jump_no_form_raises (self) -> None:
 		with pytest.raises(ValueError, match="form"):

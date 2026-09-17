@@ -2624,7 +2624,10 @@ class Composition:
 
 		The musical effect is heard at the *next pattern rebuild cycle* — already-
 		queued MIDI notes are unaffected.  This natural delay means ``form_jump``
-		is effective without needing explicit quantization.  A jump part-way
+		is effective without needing explicit quantization.  During playback a
+		jump is a section change like any other: ``on_section`` callbacks hear
+		the section it lands on, and parts muted by ``transition()`` for the
+		boundary it skipped play again.  A jump part-way
 		through a bar gives the rest of that bar to the new section as its bar 0,
 		so its first full bar is bar 1 — see
 		:meth:`subsequence.form_state.FormState.jump_to` (#2484).
@@ -2648,6 +2651,36 @@ class Composition:
 
 		# The harmony horizon planned against the old section — revoke it.
 		self._harmony_horizon.invalidate_future()
+
+		# A jump is a section change like any other (#2800): the approach mutes
+		# for the boundary it skipped are lifted, and on_section hears the
+		# section it landed on.  Both belong on the clock's loop, and a jump
+		# can come from the live-coding server's thread or an OSC handler.
+		# Before play() there is nothing to do: play() announces the section
+		# it starts in.
+		loop = self._sequencer._event_loop
+
+		if loop is None or not loop.is_running() or not self._sequencer.running:
+			return
+
+		try:
+			on_loop = asyncio.get_running_loop() is loop
+		except RuntimeError:
+			on_loop = False
+
+		if on_loop:
+			self._announce_jump()
+		else:
+			loop.call_soon_threadsafe(self._announce_jump)
+
+	def _announce_jump (self) -> None:
+
+		"""Treat a form jump as a section change: lift transition mutes, then tell on_section where it landed."""
+
+		self._lift_transition_mutes()
+
+		if self._form_state is not None:
+			self._sequencer.events.emit_sync("section", self._form_state.get_section_info())
 
 
 	def form_next (self, section_name: str) -> None:
@@ -4567,7 +4600,8 @@ class Composition:
 		The callback receives the new :class:`~subsequence.form_state.SectionInfo`
 		(or ``None`` when the form finishes).  It fires from the form clock,
 		one lookahead-beat **early** — in time to affect the new section's
-		first patterns — and once at play start for the opening section.
+		first patterns — once at play start for the opening section, and when
+		``form_jump()`` moves to a section.
 
 		Example::
 
@@ -4705,6 +4739,17 @@ class Composition:
 
 		self._schedule_one_shot(pattern, start_pulse)
 
+	def _lift_transition_mutes (self) -> None:
+
+		"""A section has changed: unmute what the transitions muted for its approach, and nothing a performer muted."""
+
+		for name in self._transition_muted:
+			running = self._running_patterns.get(name)
+			if running is not None:
+				running._muted = False
+
+		self._transition_muted.clear()
+
 	def _check_transitions (self, boundary_pulse: int, section_changed: bool) -> None:
 
 		"""The form clock's boundary hook: fire fills, manage approach mutes.
@@ -4716,13 +4761,8 @@ class Composition:
 		the boundary.  Performer mutes are never touched.
 		"""
 
-		if section_changed and self._transition_muted:
-			# The boundary arrived — restore only what we muted ourselves.
-			for name in self._transition_muted:
-				running = self._running_patterns.get(name)
-				if running is not None:
-					running._muted = False
-			self._transition_muted.clear()
+		if section_changed:
+			self._lift_transition_mutes()
 
 		if not self._transitions or self._form_state is None:
 			return
