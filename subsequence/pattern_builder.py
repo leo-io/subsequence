@@ -2250,7 +2250,7 @@ class PatternBuilder(
 	def swing (self, percent: typing.Annotated[float, subsequence.declarations.Unit("percent"), subsequence.declarations.Step(1.0)] = 57.0, grid: subsequence.declarations.GridBeats = 0.25, strength: subsequence.declarations.UnitInterval = 1.0) -> "PatternBuilder":
 
 		"""
-		Apply swing feel to all notes in the pattern.
+		Apply swing feel to all notes in the pattern, in steps of a whole pulse (a 24th of a beat).
 
 		A shortcut for ``p.groove(Groove.swing(percent, grid), strength)``. Swing is a
 		groove where every other grid note is delayed - the simplest way to
@@ -2258,6 +2258,14 @@ class PatternBuilder(
 
 		50% is perfectly straight (no swing). 57% is the Ableton default
 		(a gentle shuffle). 67% is classic triplet swing.
+
+		**A swung note moves by whole pulses**, 24 to a beat, so neighbouring
+		percentages often sound the same.  On sixteenths (``grid=0.25``) a
+		swung pair lasts 12 pulses: 50–54 play straight, 55–62 all sound as
+		about 58%, 63–70 as 67% and 71–79 as 75%.  On eighths (``grid=0.5``)
+		each pulse is about 4%: 53–56 sound as 54%, 57–60 as 58%, 61–64 as
+		62.5%, 65–68 as 67% and 69–72 as 71%.  ``strength`` scales the delay
+		before it is rounded, so it moves in the same whole pulses.
 
 		Parameters:
 			percent: Swing amount as a percentage (50-75 is the useful range).

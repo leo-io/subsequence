@@ -213,7 +213,7 @@ The musician's 'palette' for creating musical content.
 | `snap_to_scale(key, mode, strength, seed, rng) -> PatternBuilder` | Snap all notes in the pattern to the nearest pitch in a scale. |
 | `stretch(factor) -> PatternBuilder` | Stretch the pattern in time, scaling note positions and durations. |
 | `strum(chord_obj, root, velocity, sustain, duration, inversion, count, spacing, direction, legato, detached, beat) -> PatternBuilder` | Play a chord with a small time offset between each note (strum effect). |
-| `swing(percent, grid, strength) -> PatternBuilder` | Apply swing feel to all notes in the pattern. |
+| `swing(percent, grid, strength) -> PatternBuilder` | Apply swing feel to all notes in the pattern, in steps of a whole pulse (a 24th of a beat). |
 | `sysex(data, beat) -> subsequence.pattern_builder.PatternBuilder` | Send a System Exclusive (SysEx) message at a beat position. |
 | `thin(pitch, strategy, amount, grid, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Remove notes from the pattern based on their rhythmic position. |
 | `thue_morse(pitch, velocity, duration, pitch_b, velocity_b, no_overlap, probability, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes using the Thue-Morse aperiodic binary sequence. |

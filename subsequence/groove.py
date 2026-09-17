@@ -70,6 +70,11 @@ class Groove:
 		50% is straight (no swing). 67% is approximately triplet swing.
 		57% is a moderate shuffle — the Ableton default.
 
+		Applied, a note moves by whole pulses (24 to a beat), so percentages
+		that round to the same pulse sound the same: on sixteenths 55–62 all
+		sound as about 58%.  ``PatternBuilder.swing`` lists the steps for
+		sixteenths and eighths.
+
 		Parameters:
 			percent: Swing amount (50–75 is the useful range).
 			grid: Grid size in beats (0.25 = 16ths, 0.5 = 8ths).
@@ -242,7 +247,8 @@ def apply_groove (
 	Apply a groove template to a step dictionary keyed by pulse positions.
 
 	Notes close to a grid position are shifted by the groove's offset for
-	that slot. Notes between grid positions are left untouched.
+	that slot, to the nearest whole pulse. Notes between grid positions are
+	left untouched.
 
 	Parameters:
 		steps: Step dictionary (pulse → Step).

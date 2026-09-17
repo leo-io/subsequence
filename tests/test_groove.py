@@ -1,9 +1,11 @@
 import os
+import typing
 
 import pytest
 
 import subsequence.groove
 import subsequence.pattern
+import subsequence.pattern_builder
 
 
 def _make_steps (*pulses: int, velocity: int = 100) -> dict:
@@ -506,3 +508,37 @@ def test_apply_groove_strength_out_of_range_raises () -> None:
 
 	with pytest.raises(ValueError):
 		subsequence.groove.apply_groove({}, g, strength=1.1)
+
+
+# ── Swing moves in whole pulses, and the docs say which percentages share one (#2787) ──
+
+def _percent_groups (grid: float) -> typing.List[str]:
+
+	"""Whole percentages from 50 to 79 grouped by the pulse the swung note lands on, as "first–last"."""
+
+	landed: typing.Dict[int, typing.List[int]] = {}
+	offbeat = int(grid * 24)
+
+	for percent in range(50, 80):
+		step = subsequence.pattern.Step()
+		step.notes.append(subsequence.pattern.Note(pitch=42, velocity=80, duration=1, channel=9))
+		moved = subsequence.groove.apply_groove({offbeat: step}, subsequence.groove.Groove.swing(percent, grid))
+		(pulse,) = moved.keys()
+		landed.setdefault(pulse, []).append(percent)
+
+	return [f"{group[0]}–{group[-1]}" for _, group in sorted(landed.items())]
+
+
+def test_swing_lands_in_whole_pulse_steps_as_its_docs_list_them () -> None:
+
+	"""If the steps ever change, the docstring's ranges are wrong, and this names them."""
+
+	doc = " ".join(subsequence.pattern_builder.PatternBuilder.swing.__doc__.split())
+	sixteenths = _percent_groups(0.25)
+	eighths = _percent_groups(0.5)
+
+	assert sixteenths == ["50–54", "55–62", "63–70", "71–79"]
+	assert eighths[:6] == ["50–52", "53–56", "57–60", "61–64", "65–68", "69–72"]
+
+	for described in sixteenths + eighths[1:6]:
+		assert described in doc, described
