@@ -946,12 +946,23 @@ async def schedule_harmonic_clock (
 	)
 
 
-def _make_safe_callback (fn: typing.Callable, accepts_context: bool = False, start_cycle: int = 0) -> typing.Callable[[int], None]:
+def _make_safe_callback (
+	fn: typing.Callable,
+	accepts_context: bool = False,
+	start_cycle: int = 0,
+	wait: typing.Optional[typing.Callable[[], bool]] = None,
+) -> typing.Callable[[int], typing.Optional[typing.Awaitable[None]]]:
 
 	"""Wrap a user function as a fire-and-forget callback that never blocks the clock.
 
 	If *accepts_context* is True, ``fn`` is called with a :class:`ScheduleContext`
 	whose ``cycle`` field increments on every invocation.
+
+	When *wait* is given and returns True at a call, the wrapper hands the run
+	back for the clock to await instead of spawning it.  A render passes one
+	(#2793): its time is simulated, so nothing is lost by waiting, and a plain
+	function feeding patterns from a thread otherwise raced the render and
+	changed the file from run to run.
 	"""
 
 	is_async = inspect.iscoroutinefunction(fn)
@@ -976,16 +987,21 @@ def _make_safe_callback (fn: typing.Callable, accepts_context: bool = False, sta
 		except Exception as exc:
 			logger.warning(f"Scheduled task {getattr(fn, '__name__', repr(fn))!r} failed: {exc}")
 
-	def wrapper (pulse: int) -> None:
+	def wrapper (pulse: int) -> typing.Optional[typing.Awaitable[None]]:
 
-		"""Spawn the task in the background without blocking the sequencer."""
+		"""Spawn the task in the background, or hand it to the clock to await when *wait* says so."""
 
 		# Capture the cycle number synchronously before any async yield so that
 		# even if multiple pulses fire before the event loop runs, each task
 		# receives the correct cycle value it was triggered at.
 		current_cycle = cycle_count[0]
 		cycle_count[0] += 1
+
+		if wait is not None and wait():
+			return _execute(current_cycle)
+
 		asyncio.create_task(_execute(current_cycle))
+		return None
 
 	return wrapper
 
@@ -1011,7 +1027,7 @@ async def schedule_task (
 	"""
 
 	accepts_ctx = _fn_has_parameter(fn, "p")
-	wrapped = _make_safe_callback(fn, accepts_context=accepts_ctx)
+	wrapped = _make_safe_callback(fn, accepts_context=accepts_ctx, wait=lambda: sequencer.render_mode)
 	start_pulse = subsequence.constants.pulses.beats_to_pulses(cycle_beats, sequencer.pulses_per_beat) if defer else 0
 
 	await sequencer.schedule_callback_repeating(
@@ -4274,7 +4290,9 @@ class Composition:
 
 		Subsequence automatically runs synchronous functions in a thread pool
 		so they don't block the timing-critical MIDI clock. Async functions
-		are run directly on the event loop.
+		are run directly on the event loop.  In ``render()`` each call finishes
+		before the render moves on, plain or async, so a function that feeds
+		the patterns renders the same file on every run with the same seed.
 
 		Parameters:
 			fn: The function to call.
@@ -5523,8 +5541,10 @@ class Composition:
 
 		All patterns, scheduled callbacks, and harmony logic run exactly as
 		they would during live playback — BPM transitions, generative fills,
-		and probabilistic gates all work in render mode.  The only difference
-		is that time is simulated rather than wall-clock driven.
+		and probabilistic gates all work in render mode.  The only differences
+		are that time is simulated rather than wall-clock driven, and that each
+		call of a function given to ``schedule()`` finishes before the render
+		moves on, so a seeded render is the same file every time.
 
 		Parameters:
 			bars: Number of bars to render, or ``None`` for no bar limit
@@ -5905,6 +5925,9 @@ class Composition:
 				pending_task.fn,
 				accepts_context = accepts_ctx,
 				start_cycle = 1 if pending_task.wait_for_initial else 0,
+				# A render waits for each call, so what it feeds the patterns
+				# lands at the same point on every run (#2793).
+				wait = lambda: self._sequencer.render_mode,
 			)
 
 			# wait_for_initial=True implies defer — no point firing at pulse 0

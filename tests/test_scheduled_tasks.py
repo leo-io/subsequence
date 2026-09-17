@@ -2,8 +2,10 @@ import asyncio
 import logging
 import pathlib
 import threading
+import time
 import typing
 
+import mido
 import pytest
 
 import subsequence
@@ -253,3 +255,99 @@ def test_initial_failure_does_not_raise (
 		"bad_fn" in record.getMessage() and "failed" in record.getMessage()
 		for record in caplog.records
 	)
+
+
+# ---------------------------------------------------------------------------
+# A render waits for what it schedules (#2793)
+# ---------------------------------------------------------------------------
+
+def _fed_render (tmp_path: pathlib.Path, run: int, feed_kind: str) -> typing.List[int]:
+
+	"""Render twelve bars where a scheduled function sets each bar's pitch; return the pitches played."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, seed=1)
+	composition.data["step"] = 0
+
+	if feed_kind == "plain":
+		def feed (p: subsequence.composition.ScheduleContext) -> None:
+			time.sleep(0.001)		# a reading that takes a moment, as a real one does
+			composition.data["step"] = p.cycle
+	else:
+		async def feed (p: subsequence.composition.ScheduleContext) -> None:	# type: ignore[misc]
+			composition.data["step"] = p.cycle
+
+	composition.schedule(feed, cycle_beats=4, wait_for_initial=True)
+
+	@composition.pattern(channel=1, beats=4)
+	def lead (p: typing.Any) -> None:
+		p.note(60 + composition.data["step"], beat=0, duration=1)
+
+	path = str(tmp_path / f"fed-{feed_kind}-{run}.mid")
+	composition.render(bars=12, filename=path)
+
+	return [message.note for message in mido.MidiFile(path).tracks[0] if message.type == "note_on" and message.velocity > 0]
+
+
+@pytest.mark.parametrize("feed_kind", ["plain", "async"])
+def test_a_render_fed_by_a_scheduled_function_is_the_same_every_run (patch_midi: None, tmp_path: pathlib.Path, feed_kind: str) -> None:
+
+	"""Each bar hears the reading taken for it, on every run, whether the function is plain or async."""
+
+	expected = [60 + bar for bar in range(12)]
+
+	for run in range(4):
+		assert _fed_render(tmp_path, run, feed_kind) == expected
+
+
+@pytest.mark.asyncio
+async def test_the_wrapper_hands_its_run_to_the_clock_only_when_asked () -> None:
+
+	"""With wait() True the call runs when awaited and not before; with it False the call is spawned."""
+
+	calls: typing.List[str] = []
+	waiting = [True]
+
+	def fn () -> None:
+		calls.append("ran")
+
+	wrapped = subsequence.composition._make_safe_callback(fn, wait=lambda: waiting[0])
+
+	handed = wrapped(0)
+	assert handed is not None and calls == []
+
+	await handed
+	assert calls == ["ran"]
+
+	waiting[0] = False
+	assert wrapped(0) is None
+
+	for _ in range(200):
+		if len(calls) == 2:
+			break
+		await asyncio.sleep(0.01)
+
+	assert calls == ["ran", "ran"]
+
+
+@pytest.mark.asyncio
+async def test_schedule_task_waits_in_a_render_and_spawns_live (patch_midi: None) -> None:
+
+	"""The direct-API schedule_task reads the sequencer's render mode at each call."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", initial_bpm=120)
+	calls: typing.List[int] = []
+
+	def my_task () -> None:
+		calls.append(1)
+
+	await subsequence.composition.schedule_task(sequencer=seq, fn=my_task, cycle_beats=8)
+	callback = seq.callback_queue[0][2].callback
+
+	seq.render_mode = True
+	handed = callback(0)
+	assert handed is not None
+	await handed
+	assert calls == [1]
+
+	seq.render_mode = False
+	assert callback(0) is None
