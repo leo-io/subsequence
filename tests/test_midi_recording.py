@@ -320,3 +320,112 @@ def test_a_metre_is_written_as_declared_with_bar_lines_where_the_notes_are (tmp_
 
 	assert _opening(timeline) == [("time_signature", time_signature), ("set_tempo", 120.0)]
 	assert onsets == [0, bar_ticks]
+
+
+# ---------------------------------------------------------------------------
+# The end of a recording (#2790)
+# ---------------------------------------------------------------------------
+
+def _file (tmp_path: pathlib.Path, bars: int, build: typing.Callable[[typing.Any], None]) -> typing.Tuple[typing.List[typing.Tuple[int, mido.Message]], int]:
+
+	"""Render a one-bar pattern built by *build* for *bars* bars; return the timeline and the file's length in ticks."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=1, beats=4)
+	def part (p: typing.Any) -> None:
+		build(p)
+
+	path = str(tmp_path / "ending.mid")
+	composition.render(bars=bars, filename=path)
+	timeline = _timeline(path)
+
+	return timeline, timeline[-1][0]
+
+
+def _sounding_at_the_end (timeline: typing.List[typing.Tuple[int, mido.Message]]) -> typing.List[int]:
+
+	"""Notes started and never released, in pitch order."""
+
+	sounding: typing.Dict[int, int] = {}
+
+	for _, message in timeline:
+		if message.type == "note_on" and message.velocity > 0:
+			sounding[message.note] = sounding.get(message.note, 0) + 1
+		elif message.type == "note_off" or (message.type == "note_on" and message.velocity == 0):
+			sounding[message.note] = sounding.get(message.note, 0) - 1
+
+	return sorted(note for note, count in sounding.items() if count > 0)
+
+
+def test_a_chord_held_to_the_end_of_a_render_is_released_on_its_last_tick (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""Every bar's chord ends on the next bar line, the last one included, and each note is released once."""
+
+	timeline, length = _file(tmp_path, 2, lambda p: [p.note(pitch, beat=0, duration=4) for pitch in (60, 64, 67)])
+	releases = [(tick, message.note) for tick, message in timeline if message.type == "note_off"]
+
+	assert _sounding_at_the_end(timeline) == []
+	assert sorted(releases) == [(1920, 60), (1920, 64), (1920, 67), (3840, 60), (3840, 64), (3840, 67)]
+	assert length == 3840
+
+
+def test_a_note_running_past_the_end_of_a_render_is_released_where_the_render_ends (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""Six beats in a one-bar render: cut at the bar line, as a DAW's bounce would."""
+
+	timeline, length = _file(tmp_path, 1, lambda p: p.note(60, beat=0, duration=6))
+
+	assert [(tick, message.type) for tick, message in timeline if getattr(message, "note", None) == 60] == [(0, "note_on"), (1920, "note_off")]
+	assert length == 1920
+
+
+def test_a_render_lasts_its_bars_when_its_last_bar_ends_in_silence (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""A beat-long note in each of two bars: the file is still two bars long, not seven beats."""
+
+	timeline, length = _file(tmp_path, 2, lambda p: p.note(60, beat=2, duration=1))
+
+	assert _sounding_at_the_end(timeline) == []
+	assert length == 3840
+
+
+@pytest.mark.asyncio
+async def test_a_release_sent_outside_the_queue_reaches_the_recording (patch_midi: None) -> None:
+
+	"""stop(), pause() and unregister() release notes straight to the port; each release is recorded at the pulse it happened on."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", record=True)
+	seq.recorded_events.clear()
+
+	class Drone:
+		device = 0
+		channel = 2
+		mirrors: typing.List[typing.Any] = []
+
+	seq.active_notes = {(0, 2, 36), (0, 5, 72)}
+	seq.pulse_count = 48
+	await seq._stop_pattern_notes(Drone())
+
+	seq.pulse_count = 96
+	await seq._stop_all_active_notes(compensated=True)
+
+	recorded = [(pulse, message.type, message.channel, message.note) for pulse, message in seq.recorded_events]
+
+	assert recorded == [(48.0, "note_off", 2, 36), (96.0, "note_off", 5, 72)]
+	assert seq.active_notes == set()
+
+
+@pytest.mark.asyncio
+async def test_a_release_is_not_recorded_when_nothing_is_recording (patch_midi: None) -> None:
+
+	"""Live playback without record=True keeps no events, released notes included."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI")
+	seq.active_notes = {(0, 2, 36)}
+	seq.pulse_count = 48
+
+	await seq._stop_all_active_notes(compensated=True)
+
+	assert seq.recorded_events == []
+	assert seq.active_notes == set()

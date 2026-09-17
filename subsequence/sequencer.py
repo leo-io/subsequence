@@ -761,6 +761,12 @@ class Sequencer:
 
 			last_pulse = pulse
 
+		# The file ends where playback stopped, not at its last event, so a
+		# render of N bars is N bars long in a DAW even when its last bar ends
+		# in silence.  A recording saved without playing ends at its last event.
+		end_pulse = max(last_pulse, float(self.pulse_count))
+		track.append(mido.MetaMessage('end_of_track', time=int((end_pulse - last_pulse) * ticks_per_pulse)))
+
 		try:
 			mid.save(filename)
 			logger.info(f"Saved {filename}")
@@ -2235,10 +2241,16 @@ class Sequencer:
 				``stop()`` leaves this False because it cancels the pending sends
 				first, which makes the immediate form safe and faster; ``pause()``
 				sets it because the rig keeps playing.
+
+		A recording hears each release (``_record_release``), so a note still
+		sounding when a render or recording ends, or when the transport pauses,
+		is closed in the file where it stopped (#2790).
 		"""
 
 		async with self.queue_lock:
 			for dev, channel, note in list(self.active_notes):
+
+				self._record_release(channel, note)
 
 				if compensated:
 					try:
@@ -2263,6 +2275,19 @@ class Sequencer:
 			self.active_notes.clear()
 
 
+	def _record_release (self, channel: int, note: int) -> None:
+
+		"""Record a note-off at the current pulse for a note silenced outside the event queue.
+
+		Only ``_process_pulse`` records what it dispatches, so a release sent
+		straight from ``stop()``, ``pause()`` or ``unregister()`` never reached
+		the file, and the note hung there to its end (#2790).
+		"""
+
+		if self.recording:
+			self._record_event(self.pulse_count, mido.Message('note_off', channel=channel, note=note, velocity=0))
+
+
 	async def _stop_pattern_notes (self, pattern: PatternLike) -> None:
 
 		"""Send note_off for active notes belonging to a single pattern.
@@ -2284,6 +2309,8 @@ class Sequencer:
 			stranded = [t for t in self.active_notes if (t[0], t[1]) in targets]
 
 			for dev, channel, note in stranded:
+				self._record_release(channel, note)
+
 				# Route through latency compensation, NOT straight to the
 				# port: a note_on for this device may still be deferred in
 				# _pending_sends, and an immediate note_off would overtake it,

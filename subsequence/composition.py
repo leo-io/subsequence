@@ -1357,7 +1357,8 @@ class Composition:
 				every random decision (chord choices, drum probability, etc.)
 				will be identical on every run.
 			record: When True, record all MIDI events to a file, which opens
-				with the time signature and starting tempo as ``render()``'s does.
+				with the time signature and starting tempo as ``render()``'s does,
+				and ends where playback stopped with every sounding note released.
 			record_filename: Optional filename for the recording (defaults to timestamp).
 			zero_indexed_channels: When False (default), MIDI channels use
 				1-based numbering (1-16) matching instrument labelling.
@@ -5517,6 +5518,8 @@ class Composition:
 		standard MIDI file that can be imported into any DAW: it opens with the
 		composition's time signature and starting tempo, and a tempo change is
 		written where it happens, so the DAW's bar lines fall where the music's do.
+		The file lasts exactly as long as the render, and a note still sounding at
+		its end is released there.
 
 		All patterns, scheduled callbacks, and harmony logic run exactly as
 		they would during live playback — BPM transitions, generative fills,
