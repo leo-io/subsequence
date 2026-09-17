@@ -1144,7 +1144,7 @@ class Sequencer:
 
 		If ``pattern.mirrors`` is non-empty, every note, CC, pitch bend, program
 		change, SysEx, NRPN/RPN burst, and drone event is duplicated onto each
-		mirror destination — see the "MIDI mirroring" section of the README.
+		mirror destination.  OSC events are not mirrored.
 
 		**Bandwidth note**: each mirror destination multiplies the per-pattern
 		event count.  A dense pattern with two mirrors emits 3× the original.

@@ -32,7 +32,7 @@ Rule of thumb
 
 The two-file workflow (``examples/live_init.py`` + ``examples/live_patterns.py``)
 is still supported and recommended if you prefer the misuse-impossible
-separation — see the README "Live coding via file watching" section.
+separation — ``examples/live_init.py`` describes it.
 """
 
 import subsequence

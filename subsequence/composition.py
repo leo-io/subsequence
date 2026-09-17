@@ -1918,12 +1918,23 @@ class Composition:
 		(``style="functional_major"``).
 
 		Parameters:
-			style: The harmonic style to use. Built-in: "functional_major"
-				(alias "diatonic_major"), "hooktheory_major" (alias
-				"pop_major"), "turnaround", "aeolian_minor",
-				"phrygian_minor", "lydian_major", "dorian_minor",
-				"chromatic_mediant", "suspended", "mixolydian", "whole_tone",
-				"diminished". See README for full descriptions.
+			style: The harmonic style to use, by name or as a ``ChordGraph``.
+				Built-in: ``"functional_major"`` (alias ``"diatonic_major"``),
+				the standard major key; ``"hooktheory_major"`` (alias
+				``"pop_major"``), the same chords weighted by how often pop and
+				rock songs make each move; ``"turnaround"``, ii–V–I turnarounds
+				modulating through all twelve keys, with minor ones as far as
+				``minor_turnaround_weight`` allows; ``"aeolian_minor"``,
+				natural minor with Phrygian and harmonic-minor colours;
+				``"phrygian_minor"``, a dark palette of four minor chords (i,
+				bii, iv, v); ``"lydian_major"``, bright and floating, from the
+				raised fourth; ``"dorian_minor"``, minor with a major IV (soul,
+				funk); ``"chromatic_mediant"``, film-score shifts between roots
+				a third apart; ``"suspended"``, open sus2 and sus4 chords with
+				no thirds; ``"mixolydian"``, major with a flat seventh, open and
+				unresolved; ``"whole_tone"``, augmented chords in symmetrical,
+				dreamlike drift; ``"diminished"``, minor-third symmetry, angular
+				and disorienting.
 			cycle_beats: How many beats each live chord lasts.  Defaults to
 				one bar (``composition.bar_beats``): 4 in 4/4, 3 in 3/4.
 				Bound progressions carry their own harmonic rhythm in their
@@ -3572,8 +3583,19 @@ class Composition:
 		Call BEFORE ``composition.play()``.  Reloads happen on the
 		composition's event loop, so all mutations are thread-safe.
 
-		See the "Live coding via file watching" section of the README for
-		the recommended wrapper-script + live-file split.
+		The watched file runs in a fresh namespace on every save, holding only
+		``composition`` and ``subsequence``: a name defined in the script that
+		calls ``watch()`` cannot be seen there, and whatever the file creates at
+		its top level is created again.  State that must outlive a save goes on
+		``composition.data``, set up once before ``watch()`` and read back in the
+		watched file.  One-time setup (devices, ``harmony()``, ``form()``) belongs
+		in that calling script too, or every save runs it again.
+
+		A save replaces a running pattern's body, heard from its next cycle.
+		Its decorator arguments (``channel``, ``beats``/``bars``,
+		``reschedule_lookahead``, ``min_energy``, ``device``, ``mirrors``) keep
+		their first values until the composition restarts; change a running
+		pattern's length from its body with ``p.set_length()``.
 
 		Parameters:
 			path: Path to the Python file to watch.
@@ -4176,11 +4198,14 @@ class Composition:
 				(1-16 by default; 0-15 if ``zero_indexed_channels=True``).
 			drum_note_map: Optional per-destination drum map.  When set, mirrored
 				drum hits are re-resolved by name through it, so a named voice
-				lands on this device's own note number — see the README
-				"MIDI mirroring" section.
+				lands on this device's own note number.  Without it the mirror
+				copies the raw note number, which may be a different voice on a
+				device with another drum map.
 
-		Bandwidth: each mirror adds another full copy of the pattern's events.
-		See the README "MIDI mirroring" section for the tradeoffs.
+		Trade-offs: each mirror adds another full copy of the pattern's events,
+		which can crowd a slow DIN-MIDI link.  A tuned part's rotation across a
+		channel pool collapses onto the mirror's single channel, so the mirror
+		cannot play it in tune.  OSC events are not mirrored.
 		"""
 
 		if name not in self._running_patterns:

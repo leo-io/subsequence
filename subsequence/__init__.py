@@ -101,8 +101,7 @@ Composition tools:
   walk, probability gates. Deterministic seeding makes every decision
   repeatable: set it composition-wide (``seed=42``) or per generator
   (``seed=`` on any generator, with ``rng=`` for an explicit instance —
-  precedence ``rng`` > ``seed`` > the pattern's ``p.rng``). See the
-  README "Conventions" section for the API's shared vocabulary.
+  precedence ``rng`` > ``seed`` > the pattern's ``p.rng``).
 - **Pattern transforms.** Legato, detached, fixed gate (``p.duration()``),
   reverse, time-stretch, rotate, transpose, invert, randomize, and
   conditional ``p.every()``.

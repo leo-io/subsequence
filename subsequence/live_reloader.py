@@ -34,7 +34,8 @@ Existing patterns hot-swap in place via the decorator path: when the
 same function name is re-decorated while ``_is_live=True``, the running
 pattern's ``_builder_fn`` is replaced and the next rebuild uses the new
 logic.  The pattern's channel, mirrors, device, and cycle counter are
-preserved — only the build logic changes.
+preserved — only the build logic changes, so a save that edits a
+decorator's arguments is not heard until the composition restarts.
 
 Error handling
 ──────────────
@@ -59,11 +60,13 @@ catching ``OSError`` around the read.
 Module-level state in the watched file
 ──────────────────────────────────────
 
-Each reload uses a fresh namespace dict.  Module-level objects in the
-watched file (e.g. ``state = MelodicState(...)``) are recreated on every
-reload — long-lived state belongs on ``composition.data`` or in the
-wrapper script (the file that calls ``composition.watch()``), not in
-the live file itself.
+Each reload uses a fresh namespace dict holding only ``composition`` and
+``subsequence``.  Module-level objects in the watched file (e.g.
+``state = MelodicState(...)``) are recreated on every reload, and names
+defined in the wrapper script (the file that calls ``composition.watch()``)
+are not visible.  Long-lived state belongs on ``composition.data``: create
+it once in the wrapper, before ``watch()``, and read it back from
+``composition.data`` in the live file.
 
 Security note
 ─────────────

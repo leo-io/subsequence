@@ -13,9 +13,14 @@ Things worth knowing
 ────────────────────
 
 Module-level state in the live file (e.g. a ``MelodicState``) is
-recreated on every reload.  For long-lived state, stash it on
-``composition.data`` or define it in this wrapper file before the
-``watch()`` call.
+recreated on every reload, and the live file cannot see names defined
+here.  For long-lived state, create it in this file before the
+``watch()`` call, put it on ``composition.data``, and read it back from
+``composition.data`` in the live file.
+
+A save replaces each pattern's body, heard from its next cycle.  Its
+decorator arguments (``channel``, ``beats``, ``min_energy`` and the rest)
+keep their first values until you restart.
 
 Syntax errors are caught before exec and skipped — your previous
 patterns keep running until you fix and save again.  Runtime errors
