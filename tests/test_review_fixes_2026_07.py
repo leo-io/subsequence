@@ -569,12 +569,13 @@ async def test_onset_bend_priority_beats_note_push_order (patch_midi: None) -> N
 
 def test_midi_event_priority_outranks_sequence () -> None:
 
-	"""At a shared pulse, a lower priority sorts first regardless of push order."""
+	"""At a shared pulse, a lower priority sorts first among events of one kind, regardless of push order."""
 
 	early = subsequence.sequencer.MidiEvent(pulse=0, message_type="pitchwheel", channel=0, priority=-1, sequence=10)
-	late = subsequence.sequencer.MidiEvent(pulse=0, message_type="note_on", channel=0, priority=0, sequence=1)
+	late = subsequence.sequencer.MidiEvent(pulse=0, message_type="pitchwheel", channel=0, priority=0, sequence=1)
+	note = subsequence.sequencer.MidiEvent(pulse=0, message_type="note_on", channel=0, velocity=100, priority=-5, sequence=0)
 
-	assert early < late
+	assert early < late < note
 
 
 # ── sequencer: unregister note_offs ride latency compensation ──────────────────

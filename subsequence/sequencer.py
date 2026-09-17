@@ -56,6 +56,19 @@ class PatternLike (typing.Protocol):
 		...
 
 
+def _dispatch_rank (message_type: str, velocity: int) -> int:
+
+	"""0 for a note-off (a note-on at velocity 0 is one), 2 for a note-on, 1 for everything else."""
+
+	if message_type == 'note_off' or (message_type == 'note_on' and velocity == 0):
+		return 0
+
+	if message_type == 'note_on':
+		return 2
+
+	return 1
+
+
 @dataclasses.dataclass (order=True)
 class MidiEvent:
 
@@ -70,13 +83,21 @@ class MidiEvent:
 	at push time (see ``Sequencer._push_event``); direct constructions in
 	tests can leave it at the default.
 
-	``priority`` outranks the FIFO tie-breaker at a shared pulse: events
-	with a lower priority dispatch first.  Notes are pushed before CC
-	events, so a tuning onset bend (which must reach the synth BEFORE its
-	note_on) carries priority ``-1``; everything else stays at ``0``.
+	``rank`` comes first at a shared pulse, and follows from the message
+	(#2791): note-offs go out first, then everything that sets a channel's
+	state (bank select, program change, CCs, NRPN, pitch bend, SysEx, OSC),
+	then note-ons.  So a note starts with the sound, controller values and
+	bend it shares its moment with, and a note ending on that moment is
+	released before the next begins.  It is set when the event is built and
+	again when it is pushed (``Sequencer._push_event``).
+
+	``priority`` orders events of one rank: lower first.  A tuning onset bend
+	carries ``-1`` so it lands ahead of any other bend on its pulse;
+	everything else stays at ``0``.
 	"""
 
 	pulse: int
+	rank: int = dataclasses.field(init=False, default=1)
 	message_type: str = dataclasses.field(compare=False)
 	channel: int = dataclasses.field(compare=False)
 	note: int = dataclasses.field(compare=False, default=0)
@@ -87,6 +108,13 @@ class MidiEvent:
 	device: int = dataclasses.field(compare=False, default=0)
 	priority: int = 0
 	sequence: int = 0
+
+
+	def __post_init__ (self) -> None:
+
+		"""Place the event among others at its pulse by what it is."""
+
+		self.rank = _dispatch_rank(self.message_type, self.velocity)
 
 
 	def to_mido (self) -> typing.Optional[typing.Union[mido.Message, mido.MetaMessage]]:
@@ -1067,12 +1095,13 @@ class Sequencer:
 
 		"""Push a MidiEvent onto the queue, stamping a FIFO tie-breaker.
 
-		The ``sequence`` field guarantees that events sharing a ``pulse``
-		dispatch in insertion order — required for NRPN/RPN bursts and any
-		future protocol that emits multiple co-scheduled CCs (e.g. Bank
-		Select before Program Change).
+		The ``sequence`` field guarantees that events of one rank sharing a
+		``pulse`` dispatch in insertion order — required for NRPN/RPN bursts
+		and Bank Select before Program Change.  The rank is re-read here, so an
+		event altered after it was built still sorts by what it now is.
 		"""
 
+		event.rank = _dispatch_rank(event.message_type, event.velocity)
 		event.sequence = next(self._event_counter)
 		heapq.heappush(self.event_queue, event)
 
@@ -1178,8 +1207,11 @@ class Sequencer:
 						)
 						self._push_event(on_event)
 
+						# At least a pulse after its note-on: note-offs lead their
+						# pulse, so a zero-length note would otherwise be released
+						# before it started and hang.
 						off_event = MidiEvent(
-							pulse = abs_pulse + note.duration,
+							pulse = abs_pulse + max(1, note.duration),
 							message_type = 'note_off',
 							channel = note_channel,
 							note = note_value,

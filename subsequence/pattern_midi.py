@@ -617,7 +617,9 @@ class PatternMidiMixin:
 		To select a patch in a specific bank, provide ``bank_msb`` and/or
 		``bank_lsb``.  The bank select CC messages (CC 0 for MSB, CC 32 for
 		LSB) are sent at the same beat position immediately before the
-		program change, in the order the synthesizer expects.
+		program change, in the order the synthesizer expects.  All of them
+		reach the synthesizer before any note starting on the same beat, so
+		that note already plays with the new patch.
 
 		Parameters:
 			program: Program (patch) number (0–127).

@@ -275,11 +275,12 @@ async def test_osc_event_noop_without_server (patch_midi: None) -> None:
 
 def test_same_pulse_events_preserve_insertion_order () -> None:
 
-	"""Events sharing a pulse must dispatch in FIFO order.
+	"""Controller events sharing a pulse dispatch in FIFO order, and a note-on among them goes last.
 
 	NRPN/RPN bursts (CC 99 → 98 → 6 → 38) and Bank Select before Program
-	Change rely on this guarantee.  Without the ``MidiEvent.sequence``
-	tie-breaker, ``heapq`` ordering of equal-pulse events is undefined.
+	Change rely on the FIFO guarantee.  Without the ``MidiEvent.sequence``
+	tie-breaker, ``heapq`` ordering of equal-pulse events is undefined.  The
+	note-on pushed fifth sounds after every controller on its pulse (#2791).
 	"""
 
 	import heapq
@@ -309,7 +310,7 @@ def test_same_pulse_events_preserve_insertion_order () -> None:
 		event = heapq.heappop(sequencer.event_queue)
 		dispatched_values.append(event.value)
 
-	assert dispatched_values == list(range(len(control_sequence)))
+	assert dispatched_values == [0, 1, 2, 3, 5, 6, 7, 8, 9, 4]
 
 
 def test_event_counter_resets_independently_per_sequencer () -> None:
