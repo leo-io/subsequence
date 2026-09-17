@@ -1,11 +1,13 @@
 """Tests for subsequence.tuning — Tuning class, .scl parser, and subsequence.tuning.apply_tuning_to_pattern()."""
 
+import logging
 import math
 import pathlib
 import typing
 
 import pytest
 
+import subsequence
 import subsequence.constants
 import subsequence.constants.durations
 import subsequence.pattern
@@ -529,3 +531,58 @@ def test_tuning_exported_from_package () -> None:
 	import subsequence
 	assert hasattr(subsequence, "Tuning")
 	assert subsequence.Tuning is subsequence.tuning.Tuning
+
+
+# ── A chord without a channel pool is told so, once (#2799) ─────────────────
+
+def _warnings_rendering (caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path, pitches: typing.List[int], channels: typing.Optional[typing.List[int]]) -> typing.List[str]:
+
+	"""Render four bars of a part playing *pitches* together under a composition tuning; return the tuning warnings."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=channels)
+
+	@composition.pattern(channel=3, beats=4)
+	def pad (p: typing.Any) -> None:
+		for pitch in pitches:
+			p.note(pitch, beat=0, duration=4)
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.tuning"):
+		composition.render(bars=4, filename=str(tmp_path / "tuned.mid"))
+
+	return [record.getMessage() for record in caplog.records if record.name == "subsequence.tuning"]
+
+
+def test_a_tuned_chord_with_no_pool_is_warned_about_once_by_name (patch_midi: None, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path) -> None:
+
+	"""Four bars rebuild the pad four times; the warning names it and says what to give it, once."""
+
+	warnings = _warnings_rendering(caplog, tmp_path, [52, 55, 59], None)
+
+	assert len(warnings) == 1
+	assert "'pad'" in warnings[0] and "channels=" in warnings[0]
+
+
+@pytest.mark.parametrize("pitches, channels", [
+	pytest.param([72], None, id="one note at a time"),
+	pytest.param([52, 55, 59], [4, 5, 6], id="a chord with a pool"),
+])
+def test_a_tuned_part_that_can_be_in_tune_is_not_warned_about (patch_midi: None, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path, pitches: typing.List[int], channels: typing.Optional[typing.List[int]]) -> None:
+
+	"""A single line needs no pool, and a chord with one has a channel per note."""
+
+	assert _warnings_rendering(caplog, tmp_path, pitches, channels) == []
+
+
+def test_a_bare_pattern_is_named_by_its_channel (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""Direct use with no builder function says which channel the overlapping notes are on."""
+
+	pattern = subsequence.pattern.Pattern(channel=2, length=4)
+	pattern.add_note(0, 60, 100, 96)
+	pattern.add_note(0, 64, 100, 96)
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.tuning"):
+		subsequence.tuning.apply_tuning_to_pattern(pattern, subsequence.tuning.Tuning.equal(19))
+
+	assert [record.getMessage()[:32] for record in caplog.records] == ["A tuned part on channel 3 plays "]

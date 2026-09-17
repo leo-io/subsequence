@@ -29,10 +29,15 @@ import logging
 import math
 import os
 import typing
+import weakref
 
 import subsequence.pattern
 
 logger = logging.getLogger(__name__)
+
+# Parts already told their overlapping notes share one pitch wheel, so a part
+# rebuilt every cycle is told once rather than every bar (#2799).
+_warned_shared_wheel: "weakref.WeakSet[subsequence.pattern.Pattern]" = weakref.WeakSet()
 
 
 # ── Tuning class ─────────────────────────────────────────────────────────────
@@ -290,6 +295,8 @@ def apply_tuning_to_pattern (
 	   exact tuned frequency.
 	3. If ``channels`` is provided and the pattern has overlapping notes,
 	   notes are spread across the channel pool (``ChannelAllocator``).
+	   Without a pool, overlapping notes share one channel's pitch wheel, so
+	   each note's bend retunes the others; that is logged once per part.
 
 	Existing pitchwheel events (e.g., from ``p.portamento()`` or
 	``p.slide()``) are shifted additively by the tuning offset of the note
@@ -314,7 +321,17 @@ def apply_tuning_to_pattern (
 
 	# ── Step 1: determine if polyphony requires channel rotation ─────────────
 	allocator: typing.Optional[ChannelAllocator] = None
-	if channels is not None:
+	if channels is None:
+		if pattern not in _warned_shared_wheel and _has_overlapping_notes(pattern):
+			_warned_shared_wheel.add(pattern)
+			builder = getattr(pattern, "_builder_fn", None)
+			part = f"Tuned part '{builder.__name__}'" if builder is not None else f"A tuned part on channel {pattern.channel + 1}"
+			logger.warning(
+				f"{part} plays notes that overlap on one MIDI channel, which has a single pitch wheel, "
+				"so every note sounding together takes the last tuning bend sent and at most one of them is in tune. "
+				"Give it a channels= pool with a channel for each note that sounds at once."
+			)
+	else:
 		# Check whether the pattern actually has overlapping notes
 		if _has_overlapping_notes(pattern):
 			allocator = ChannelAllocator(channels)
