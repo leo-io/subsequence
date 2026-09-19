@@ -1637,11 +1637,8 @@ class PatternBuilder(
 		if spacing <= 0:
 			raise ValueError("Spacing must be positive")
 
-		beat = 0.0
-
-		while beat < self._pattern.length:
+		for beat in subsequence.pattern.spaced_onsets(0.0, self._pattern.length, spacing):
 			self.note(pitch=pitch, beat=beat, velocity=velocity, duration=duration)
-			beat += spacing
 		return self
 
 	def arpeggio (
@@ -1801,9 +1798,7 @@ class PatternBuilder(
 
 		# Place notes one at a time via self.note() so a (low, high)
 		# velocity tuple produces a fresh random draw per arp note.
-		position = beat
-		i = 0
-		while position < end:
+		for i, position in enumerate(subsequence.pattern.spaced_onsets(beat, end, spacing)):
 			midi, origin, _ = resolved[i % len(resolved)]
 			self.note(
 				# The name where there is one, so note() resolves and carries it
@@ -1813,8 +1808,6 @@ class PatternBuilder(
 				velocity = velocity,
 				duration = duration,
 			)
-			position += spacing
-			i += 1
 		return self
 
 	def _warn_positioned_articulation (self, method: str, beat: subsequence.declarations.GridBeats) -> None:

@@ -27,6 +27,33 @@ MirrorSpec = typing.Union[
 ]
 
 
+def spaced_onsets (start: float, end: float, spacing: float, pulses_per_beat: int = subsequence.constants.MIDI_QUARTER_NOTE) -> typing.List[float]:
+
+	"""Every onset from *start* at *spacing* beats that plays before *end*.
+
+	Each onset is ``start + i × spacing``, never a running sum.  Adding up a
+	spacing that binary cannot hold exactly (a third of a beat, a tenth)
+	lands just short of *end*, and the extra onset that let through fell on
+	*end* itself: the next cycle's downbeat, or the next chord's first note
+	(#2960).  An onset counts only if its pulse is before *end*'s, so float
+	noise cannot put one there either.
+	"""
+
+	end_pulse = subsequence.constants.pulses.beats_to_pulses(end, pulses_per_beat)
+	onsets: typing.List[float] = []
+	index = 0
+
+	while True:
+
+		onset = start + index * spacing
+
+		if onset >= end or subsequence.constants.pulses.beats_to_pulses(onset, pulses_per_beat) >= end_pulse:
+			return onsets
+
+		onsets.append(onset)
+		index += 1
+
+
 @dataclasses.dataclass
 class Note:
 
@@ -365,20 +392,14 @@ class Pattern:
 		if duration_beats <= 0:
 			raise ValueError("Note duration must be positive")
 
-		beat = 0.0
-		pitch_index = 0
-
-		while beat < self.length:
-			pitch = pitches[pitch_index % len(pitches)]
+		for pitch_index, beat in enumerate(spaced_onsets(0.0, self.length, spacing_beats, pulses_per_beat)):
 			self.add_note_beats(
 				beat_position = beat,
-				pitch = pitch,
+				pitch = pitches[pitch_index % len(pitches)],
 				velocity = velocity,
 				duration_beats = duration_beats,
 				pulses_per_beat = pulses_per_beat
 			)
-			beat += spacing_beats
-			pitch_index += 1
 
 
 	def add_raw_note_beats (self, message_type: str, beat_position: float, pitch: int, velocity: int = 0, pulses_per_beat: int = subsequence.constants.MIDI_QUARTER_NOTE, origin: typing.Optional[str] = None) -> None:
