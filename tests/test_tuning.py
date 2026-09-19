@@ -780,3 +780,29 @@ def test_parts_that_share_nothing_are_not_warned_about (patch_midi: None, caplog
 	_lead(composition, channel=2)
 
 	assert _pool_warnings(composition, caplog, tmp_path) == []
+
+
+def test_a_chord_part_s_single_note_bar_stays_on_the_pool (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""A pad that plays a chord, then a bar of one note: that note sits on the pool's first channel, not the pad's own (#2925)."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[5, 6, 7])
+
+	@composition.pattern(channel=3, beats=4)
+	def pad (p: typing.Any) -> None:
+		for pitch in ((52, 55, 59) if p.cycle % 2 == 0 else (52,)):
+			p.note(pitch, beat=0, duration=4)
+
+	path = str(tmp_path / "pad.mid")
+	composition.render(bars=4, filename=path)
+
+	now = 0
+	by_bar: typing.Dict[int, typing.Set[int]] = {}
+
+	for message in mido.MidiFile(path).tracks[0]:
+		now += message.time
+		if message.type == "note_on" and message.velocity > 0:
+			by_bar.setdefault(now // 1920, set()).add(message.channel + 1)
+
+	assert by_bar == {0: {5, 6, 7}, 1: {5}, 2: {5, 6, 7}, 3: {5}}

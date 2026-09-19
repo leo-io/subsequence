@@ -3008,7 +3008,10 @@ class Composition:
 
 		Only a part whose notes overlap plays through the pool.  A part that
 		plays one note at a time keeps its own channel, and its own pitch
-		wheel.  Two parts that both need the pool would retune each other, so
+		wheel.  Once a part has played overlapping notes through the pool it
+		stays there, so a bar where it plays a single note sits on the pool's
+		first channel rather than moving its instrument.  Two parts that both
+		need the pool would retune each other, so
 		that is warned about, naming them; give one of them a pool of its own
 		with ``p.apply_tuning(channels=...)``.
 
@@ -6477,7 +6480,9 @@ class Composition:
 						bend_range=composition_ref._tuning_bend_range,
 						channels=composition_ref._tuning_channels,
 						reference_note=composition_ref._tuning_reference_note,
-						shared_pool=True,
+						# A part that has played chords through the pool stays on it,
+						# so a bar of single notes does not move its instrument (#2925).
+						shared_pool=self._builder_fn.__name__ not in composition_ref._tuning_pool_parts,
 					)
 
 					if rotated:
