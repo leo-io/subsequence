@@ -164,7 +164,7 @@ class PatternAlgorithmicMixin:
 		# mean the same thing; only the wire told them apart.
 		if isinstance(velocity, (tuple, list)):
 			if len(velocity) != 2:
-				raise ValueError(f"velocity range must be (low, high), got {velocity!r}")
+				raise ValueError(f"velocity= takes one value or a (low, high) range; for one value per step or row use velocities= where the verb offers it, got {velocity!r}")
 
 			low, high = int(velocity[0]), int(velocity[1])
 			if low > high:
@@ -613,12 +613,11 @@ class PatternAlgorithmicMixin:
 		self,
 		pitch: subsequence.declarations.Pitch,
 		density: subsequence.declarations.UnitInterval = 0.3,
-		velocity: typing.Union[
-			int,
-			typing.Tuple[int, int],
+		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.GHOST_FILL_VELOCITY,
+		velocities: typing.Optional[typing.Union[
 			typing.Sequence[typing.Union[int, float]],
 			typing.Callable[[int], typing.Union[int, float]]
-		] = subsequence.constants.velocity.GHOST_FILL_VELOCITY,
+		]] = None,
 		bias: typing.Union[subsequence.declarations.BiasCurve, typing.List[float]] = "uniform",
 		no_overlap: bool = True,
 		grid: typing.Optional[subsequence.declarations.StepCount] = None,
@@ -638,10 +637,12 @@ class PatternAlgorithmicMixin:
 			pitch: MIDI note number or drum name.
 			density: Overall density (0.0–1.0).  How many available steps
 				receive ghost notes.  0.3 = roughly 30% of steps at peak bias.
-			velocity: Single velocity, ``(low, high)`` tuple for random range,
-				a list/sequence of values (indexed by step), or a callable
-				that takes the step index ``i`` and returns a velocity.
-				Allows dynamic values like Perlin noise curves.
+			velocity: Single velocity, or a ``(low, high)`` range drawn per
+				note.  A two-element list means the same range, since JSON
+				has no tuple.
+			velocities: One value per step, as a list read by step index or a
+				callable taking the step index ``i``.  Allows dynamic values
+				like Perlin noise curves.  Wins over ``velocity``.
 			bias: Probability distribution shape:
 
 				- ``"uniform"``    - equal probability everywhere
@@ -718,16 +719,12 @@ class PatternAlgorithmicMixin:
 			if no_overlap and self._has_pitch_at_beat(pitch, i * step_duration):
 				continue
 
-			if callable(velocity):
-				vel = int(velocity(i))
-			elif isinstance(velocity, tuple):
-				if len(velocity) != 2:
-					raise ValueError(f"ghost_fill velocity tuple must be (low, high); for a per-step sequence use a list, got {velocity!r}")
-				vel = rng.randint(int(velocity[0]), int(velocity[1]))
-			elif isinstance(velocity, list):
-				vel = int(velocity[i % len(velocity)])
+			if velocities is None:
+				vel = self._resolve_velocity(velocity, rng)
+			elif callable(velocities):
+				vel = int(velocities(i))
 			else:
-				vel = int(typing.cast(typing.Union[int, float], velocity))
+				vel = int(velocities[i % len(velocities)])
 
 			self.note(pitch=pitch, beat=i * step_duration, velocity=vel, duration=duration)
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
@@ -797,7 +794,8 @@ class PatternAlgorithmicMixin:
 		pitches: typing.Sequence[subsequence.declarations.Pitch],
 		rule: str = "B368/S245",
 		generation: typing.Optional[int] = None,
-		velocity: typing.Union[int, typing.Tuple[int, int], typing.List[int]] = subsequence.constants.velocity.DEFAULT_CA_VELOCITY,
+		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_CA_VELOCITY,
+		velocities: typing.Optional[typing.List[int]] = None,
 		duration: subsequence.declarations.GateBeats = 0.1,
 		no_overlap: bool = False,
 		probability: subsequence.declarations.UnitInterval = 1.0,
@@ -823,8 +821,9 @@ class PatternAlgorithmicMixin:
 			      Life, ``"B368/S245"`` for Morley.
 			generation: CA generation to render.  Defaults to ``self.cycle``
 			    so the grid evolves each bar automatically.
-			velocity: Single MIDI velocity for all rows, or a list with one
-			          value per row.
+			velocity: Single MIDI velocity for every row, or a ``(low, high)``
+			          range drawn per note.
+			velocities: One value per row.  Wins over ``velocity``.
 			duration: Note duration in beats.
 			no_overlap: If True, skip notes where same pitch already exists.
 			probability: Chance (0.0–1.0) that each live cell plays — 1.0 places them all, lower thins.
@@ -849,8 +848,8 @@ class PatternAlgorithmicMixin:
 		if not pitches:
 			raise ValueError("pitches list cannot be empty")
 
-		if isinstance(velocity, list) and not velocity:
-			raise ValueError("velocity list cannot be empty")
+		if velocities is not None and not velocities:
+			raise ValueError("velocities list cannot be empty")
 
 		if generation is None:
 			generation = self.cycle
@@ -899,9 +898,9 @@ class PatternAlgorithmicMixin:
 		for row_idx, pitch in enumerate(pitches):
 			row_velocity: subsequence.declarations.VelocityValue
 
-			if isinstance(velocity, list):
-				row_velocity = int(velocity[row_idx % len(velocity)])
-			elif isinstance(velocity, tuple):
+			if velocities is not None:
+				row_velocity = int(velocities[row_idx % len(velocities)])
+			elif isinstance(velocity, (tuple, list)):
 				# (low, high) range - resolved per placed note downstream.
 				row_velocity = velocity
 			else:

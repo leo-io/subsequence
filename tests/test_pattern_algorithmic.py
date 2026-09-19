@@ -560,12 +560,12 @@ def test_cellular_2d_empty_pitches_raises () -> None:
 
 def test_cellular_2d_empty_velocity_list_raises () -> None:
 
-	"""cellular_2d with an empty velocity list raises a clear error (was ZeroDivisionError)."""
+	"""cellular_2d with an empty per-row velocities list raises a clear error (was ZeroDivisionError)."""
 
 	pattern, builder = _make_builder()
 
-	with pytest.raises(ValueError, match="velocity list cannot be empty"):
-		builder.cellular_2d([60], velocity=[])
+	with pytest.raises(ValueError, match="velocities list cannot be empty"):
+		builder.cellular_2d([60], velocities=[])
 
 
 def test_ghost_fill_zero_grid_is_noop () -> None:

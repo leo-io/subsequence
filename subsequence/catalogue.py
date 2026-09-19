@@ -216,6 +216,14 @@ TRANSFORMS: typing.Tuple[str, ...] = (
 _NOT_FOR_PEOPLE: typing.FrozenSet[str] = frozenset({"self", "rng", "seed"})
 
 
+# A value per step or per row is a shape none of the five kinds can draw, and a
+# surface sending a two-element array for it played that pair alternately where
+# it meant a range (#2963).  The verbs that offer one publish ``velocity`` as
+# the range instead, and name this in ``dropped`` so nothing looks complete
+# that is not.
+_PER_STEP_LISTS: typing.FrozenSet[str] = frozenset({"velocities"})
+
+
 def _is_optional (annotation: typing.Any) -> bool:
 
 	"""True when *annotation* is ``Optional[...]`` — a Union including None."""
@@ -699,6 +707,10 @@ def _describe (name: str) -> typing.Dict[str, typing.Any]:
 	for parameter_name, parameter in signature.parameters.items():
 
 		if parameter_name in _NOT_FOR_PEOPLE:
+			continue
+
+		if parameter_name in _PER_STEP_LISTS:
+			dropped.append(parameter_name)
 			continue
 
 		annotation = hints.get(parameter_name, parameter.annotation)

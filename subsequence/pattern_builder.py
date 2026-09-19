@@ -1530,7 +1530,7 @@ class PatternBuilder(
 		return subsequence.motifs.Motif(events=tuple(events), length=span)
 
 	@subsequence.declarations.bounded
-	def sequence (self, steps: typing.List[subsequence.declarations.StepPosition], pitches: typing.Union[subsequence.declarations.Pitch, typing.Sequence[subsequence.declarations.Pitch]], velocities: typing.Union[int, typing.Tuple[int, int], typing.List[int]] = subsequence.constants.velocity.DEFAULT_VELOCITY, durations: typing.Union[float, typing.List[float]] = 0.1, grid: typing.Optional[subsequence.declarations.StepCount] = None, probability: subsequence.declarations.UnitInterval = 1.0, seed: typing.Optional[int] = None, rng: typing.Optional[random.Random] = None) -> "PatternBuilder":
+	def sequence (self, steps: typing.List[subsequence.declarations.StepPosition], pitches: typing.Union[subsequence.declarations.Pitch, typing.Sequence[subsequence.declarations.Pitch]], velocities: typing.Union[int, typing.Tuple[int, int], typing.List[int]] = subsequence.constants.velocity.DEFAULT_VELOCITY, velocity: typing.Optional[subsequence.declarations.VelocityValue] = None, durations: typing.Union[float, typing.List[float]] = 0.1, grid: typing.Optional[subsequence.declarations.StepCount] = None, probability: subsequence.declarations.UnitInterval = 1.0, seed: typing.Optional[int] = None, rng: typing.Optional[random.Random] = None) -> "PatternBuilder":
 
 		"""
 		A multi-parameter step sequencer.
@@ -1548,6 +1548,10 @@ class PatternBuilder(
 				a fresh random draw per step, or a list of velocities
 				matched to the steps one-to-one (a short list repeats its
 				final value, a long list is truncated — both warn).
+			velocity: The same as ``velocities`` for a single value or a
+				``(low, high)`` range, and the name every other verb uses —
+				which is what a control surface drives, since a two-element
+				list here means one value per step.  Pass one or the other.
 			durations: Duration or list of durations (default 0.1).
 			grid: Grid resolution. Defaults to the pattern's
 				``default_grid`` (derived from the decorator's ``beats``/``steps``
@@ -1560,6 +1564,23 @@ class PatternBuilder(
 
 		if not steps:
 			return self
+
+		if velocity is not None:
+
+			if velocities != subsequence.constants.velocity.DEFAULT_VELOCITY:
+				raise ValueError("sequence() takes velocity= or velocities=, not both: velocity= is one value or a (low, high) range, velocities= is one value per step")
+
+			# A list here is the range a surface sends, never one value per
+			# step: that is what velocities= is for (#2963).
+			if isinstance(velocity, list):
+
+				if len(velocity) != 2:
+					raise ValueError(f"velocity= takes one value or a (low, high) range; for one value per step use velocities=, got {velocity!r}")
+
+				velocities = (int(velocity[0]), int(velocity[1]))
+
+			else:
+				velocities = velocity
 
 		rng = self._rng_from(seed, rng)
 

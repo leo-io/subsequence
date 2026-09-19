@@ -124,6 +124,13 @@ KNOWINGLY_DROPPED: typing.FrozenSet[typing.Tuple[str, str]] = frozenset({
 	# which is too thin a thread to hang thirty controls on, so this waits to
 	# be asked for deliberately rather than invented here (#2411).
 	("sequence", "durations"),
+	# One velocity per step, or per row.  A surface sends a two-element array
+	# for a range, which read as a pair of per-step values here and played
+	# them alternately, so these verbs publish velocity= as the range and
+	# leave the per-step form to code (#2963).
+	("ghost_fill", "velocities"),
+	("cellular_2d", "velocities"),
+	("sequence", "velocities"),
 	# A scale name, deliberately a bare str: register_scale() exists "for use
 	# with p.snap_to_scale()", so a Literal would make mypy refuse a scale the
 	# user legitimately registered — the one case where annotating would do

@@ -6,6 +6,7 @@ import typing
 
 import pytest
 
+import subsequence
 import subsequence.chords
 import subsequence.constants
 import subsequence.constants.durations
@@ -105,7 +106,7 @@ def test_resolve_velocity_tuple_uses_explicit_rng () -> None:
 def test_resolve_velocity_wrong_tuple_length_raises () -> None:
 
 	_, builder = _make_builder()
-	with pytest.raises(ValueError, match="velocity range must be"):
+	with pytest.raises(ValueError, match=r"velocity= takes one value or a \(low, high\) range"):
 		builder._resolve_velocity((60, 70, 80))
 
 
@@ -430,7 +431,7 @@ def test_invalid_velocity_raises_at_builder () -> None:
 	with pytest.raises(TypeError):
 		builder.hit_steps(pitch=60, steps=[0, 4, 8, 12], velocity="loud")
 
-	with pytest.raises(ValueError, match="velocity range must be"):
+	with pytest.raises(ValueError, match=r"velocity= takes one value or a \(low, high\) range"):
 		builder.hit_steps(pitch=60, steps=[0, 4, 8, 12], velocity=(60, 80, 100))
 
 
@@ -488,5 +489,117 @@ def test_a_pair_of_the_wrong_length_is_still_refused () -> None:
 
 	_, builder = _make_builder()
 
-	with pytest.raises(ValueError, match="velocity range must be"):
+	with pytest.raises(ValueError, match=r"velocity= takes one value or a \(low, high\) range"):
 		builder._resolve_velocity([1, 2, 3])		# type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# velocity= is the range; velocities= is the per-step list (#2963)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("verb", ["ghost_fill", "cellular_2d", "sequence"])
+def test_the_catalogue_publishes_velocity_as_a_range_and_leaves_the_per_step_list_to_code (verb: str) -> None:
+
+	"""A surface sends a two-element array; the verbs that also take a per-step list publish only the range."""
+
+	entry = subsequence.describe_generator(verb)
+	published = {parameter["name"]: parameter for parameter in entry["parameters"]}
+
+	assert published["velocity"]["kind"] == "range"
+	assert published["velocity"]["unit"] == "MIDI velocity"
+	assert "velocities" not in published
+	assert "velocities" in entry["dropped"]
+	assert entry["partial"] is False
+
+
+def test_a_two_element_array_is_a_range_for_ghost_fill () -> None:
+
+	"""The bug: [25, 45] played 25, 45, 25, 45… by step where it meant a range."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.rng = random.Random(4)
+	builder.ghost_fill(38, density=1.0, velocity=[25, 45], bias="uniform")
+
+	velocities = [note.velocity for step in pattern.steps.values() for note in step.notes]
+
+	assert velocities, "nothing was placed"
+	assert all(25 <= velocity <= 45 for velocity in velocities)
+	assert len(set(velocities)) > 2
+
+
+def test_a_two_element_array_is_a_range_for_cellular_2d_rows () -> None:
+
+	"""Per row it used to be 25 then 45; as a range every note draws inside it."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.rng = random.Random(4)
+	builder.cellular_2d([60, 64], generation=0, initial_state=[[1] * 16, [1] * 16], velocity=[25, 45])
+
+	velocities = [note.velocity for step in pattern.steps.values() for note in step.notes]
+
+	assert velocities
+	assert all(25 <= velocity <= 45 for velocity in velocities)
+	assert len(set(velocities)) > 2
+
+
+def test_a_two_element_array_is_a_range_for_sequence () -> None:
+
+	"""sequence() keeps velocities= for per-step values, and gains velocity= for the range a surface sends."""
+
+	as_list, list_builder = _make_builder(length=4)
+	list_builder.rng = random.Random(4)
+	list_builder.sequence(steps=[0, 4, 8, 12], pitches=60, velocity=[25, 45])
+
+	as_tuple, tuple_builder = _make_builder(length=4)
+	tuple_builder.rng = random.Random(4)
+	tuple_builder.sequence(steps=[0, 4, 8, 12], pitches=60, velocities=(25, 45))
+
+	drawn = [as_list.steps[pulse].notes[0].velocity for pulse in sorted(as_list.steps)]
+
+	assert len(drawn) == 4
+	assert all(25 <= velocity <= 45 for velocity in drawn)
+	assert drawn != [25, 45, 25, 45], "the list was read as one value per step"
+	assert drawn == [as_tuple.steps[pulse].notes[0].velocity for pulse in sorted(as_tuple.steps)]
+
+
+@pytest.mark.parametrize("verb", ["ghost_fill", "cellular_2d", "sequence"])
+def test_a_longer_list_in_velocity_says_where_it_belongs (verb: str) -> None:
+
+	"""The per-step form moved, so the error names it rather than talking about a range."""
+
+	pattern, builder = _make_builder(length=4)
+
+	with pytest.raises(ValueError, match="velocities="):
+		if verb == "ghost_fill":
+			builder.ghost_fill(38, density=1.0, velocity=[20, 40, 60, 80])
+		elif verb == "cellular_2d":
+			builder.cellular_2d([60], generation=0, velocity=[20, 40, 60, 80])
+		else:
+			builder.sequence(steps=[0, 4], pitches=60, velocity=[20, 40, 60, 80])
+
+
+def test_velocities_still_places_one_value_per_step_and_per_row () -> None:
+
+	"""What moved is the name, not the feature."""
+
+	pattern, builder = _make_builder(length=4)
+	builder.ghost_fill(38, density=1.0, velocities=[20, 40, 60, 80], bias="uniform")
+
+	at_steps = [pattern.steps[pulse].notes[0].velocity for pulse in sorted(pattern.steps)[:4]]
+
+	assert at_steps == [20, 40, 60, 80]
+
+	rows, row_builder = _make_builder(length=4)
+	row_builder.cellular_2d([60, 64], generation=0, initial_state=[[1] * 16, [1] * 16], velocities=[90, 50])
+
+	assert {note.pitch: note.velocity for step in rows.steps.values() for note in step.notes} == {60: 90, 64: 50}
+
+
+def test_sequence_refuses_both_velocity_and_velocities () -> None:
+
+	"""One or the other, said plainly, rather than one quietly winning."""
+
+	pattern, builder = _make_builder(length=4)
+
+	with pytest.raises(ValueError, match="not both"):
+		builder.sequence(steps=[0, 4], pitches=60, velocity=100, velocities=[10, 20])

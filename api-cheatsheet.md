@@ -149,7 +149,7 @@ The musician's 'palette' for creating musical content.
 | `cc(control, value, beat) -> subsequence.pattern_builder.PatternBuilder` | Send a single CC message at a beat position. |
 | `cc_ramp(control, start, end, beat_start, beat_end, resolution, shape) -> subsequence.pattern_builder.PatternBuilder` | Interpolate a CC value over a beat range. |
 | `cellular_1d(pitch, rule, generation, velocity, duration, no_overlap, probability, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate an evolving rhythm using a 1D cellular automaton. |
-| `cellular_2d(pitches, rule, generation, velocity, duration, no_overlap, probability, initial_state, density, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate polyphonic patterns using a 2D Life-like cellular automaton. |
+| `cellular_2d(pitches, rule, generation, velocity, velocities, duration, no_overlap, probability, initial_state, density, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate polyphonic patterns using a 2D Life-like cellular automaton. |
 | `chord(chord_obj, root, velocity, sustain, duration, inversion, count, legato, detached, beat) -> PatternBuilder` | Place a chord at ``beat`` (the start of the pattern by default). |
 | `de_bruijn(pitches, window, spacing, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melody that exhaustively traverses all pitch subsequences. |
 | `detached(beats) -> PatternBuilder` | Shorten note durations so a guaranteed silence precedes the next onset. |
@@ -162,7 +162,7 @@ The musician's 'palette' for creating musical content.
 | `every(n, fn) -> PatternBuilder` | Apply a transformation every Nth cycle. |
 | `evolve(pitches, length, drift, velocity, duration, spacing, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Loop a pitch sequence that gradually mutates each cycle. |
 | `fibonacci(pitches, modulus, count, spacing, velocity, duration, a, b, mapping, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Play the Fibonacci sequence as a repeating melodic cycle. |
-| `ghost_fill(pitch, density, velocity, bias, no_overlap, grid, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Fill the pattern with probability-biased ghost notes. |
+| `ghost_fill(pitch, density, velocity, velocities, bias, no_overlap, grid, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Fill the pattern with probability-biased ghost notes. |
 | `golden(pitches, count, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes at golden-ratio-spaced beat positions. |
 | `grid *(property)*` | Number of grid slots in this pattern (e.g. 16 for a 4-beat sixteenth-note pattern). |
 | `groove(template, strength) -> PatternBuilder` | Apply a groove template to all notes in the pattern. |
@@ -205,7 +205,7 @@ The musician's 'palette' for creating musical content.
 | `section_motif(part) -> Optional[Any]` | The Motif/Phrase bound to the current section (and part), or ``None``. |
 | `self_avoiding_walk(pitches, spacing, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melody using a self-avoiding random walk. |
 | `seq(notation, pitch, velocity, seed, rng) -> PatternBuilder` | Build a pattern using an expressive string-based 'mini-notation'. |
-| `sequence(steps, pitches, velocities, durations, grid, probability, seed, rng) -> PatternBuilder` | A multi-parameter step sequencer. |
+| `sequence(steps, pitches, velocities, velocity, durations, grid, probability, seed, rng) -> PatternBuilder` | A multi-parameter step sequencer. |
 | `set_length(length, steps) -> PatternBuilder` | Change how long the pattern is, in beats or in its own steps. |
 | `signal(name) -> float` | Read a conductor signal at the current bar. |
 | `silence(beat) -> PatternBuilder` | Sends an 'All Notes Off' (CC 123) and 'All Sound Off' (CC 120) message on the pattern's channel to immediately silence any ringing notes or drones. |

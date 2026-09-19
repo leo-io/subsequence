@@ -4238,13 +4238,13 @@ def test_ghost_fill_deterministic () -> None:
 
 def test_ghost_fill_velocity_sequence () -> None:
 
-	"""A sequence passed to velocity should assign per-step velocities."""
+	"""A sequence passed to velocities= assigns one value per step."""
 
 	pattern, builder = _make_builder(length=4)
 	builder.rng = random.Random(42)
 
 	velocities = [20, 40, 60, 80]
-	builder.ghost_fill(38, density=1.0, velocity=velocities, bias="uniform")
+	builder.ghost_fill(38, density=1.0, velocities=velocities, bias="uniform")
 
 	# grid is 16 by default, so steps 0-15.
 	for step_idx in range(16):
@@ -4254,7 +4254,7 @@ def test_ghost_fill_velocity_sequence () -> None:
 
 def test_ghost_fill_velocity_callable () -> None:
 
-	"""A callable passed to velocity should evaluate per step."""
+	"""A callable passed to velocities= is evaluated per step."""
 
 	pattern, builder = _make_builder(length=4)
 	builder.rng = random.Random(42)
@@ -4262,7 +4262,7 @@ def test_ghost_fill_velocity_callable () -> None:
 	def my_vel (i: int) -> int:
 		return 10 + (i * 5)
 
-	builder.ghost_fill(38, density=1.0, velocity=my_vel, bias="uniform")
+	builder.ghost_fill(38, density=1.0, velocities=my_vel, bias="uniform")
 
 	for step_idx in range(16):
 		pulse = int(step_idx * 0.25 * subsequence.constants.MIDI_QUARTER_NOTE)
@@ -4424,7 +4424,7 @@ def test_cellular_2d_velocity_list () -> None:
 	# Row 0 (kick): velocity 90. Row 1 (hat): velocity 50.
 	seed_grid = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 	             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
-	builder.cellular_2d(["kick", "hat"], generation=0, initial_state=seed_grid, velocity=[90, 50])
+	builder.cellular_2d(["kick", "hat"], generation=0, initial_state=seed_grid, velocities=[90, 50])
 
 	kick_velocities = [
 		n.velocity for step in pattern.steps.values()
