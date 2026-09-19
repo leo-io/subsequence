@@ -1,6 +1,8 @@
 # Subsequence
 
-**A stateful algorithmic MIDI sequencer for Python.** Subsequence is a generative MIDI sequencer and algorithmic composition engine for your studio. It gives you a palette of algorithmic building blocks — Euclidean generators, cellular automata, L-systems, Markov chains — and a stateful engine that lets them interact and evolve over time, driving your hardware synths and VSTs with rock-solid timing.
+**A stateful algorithmic MIDI sequencer for Python.**
+
+Subsequence is a generative MIDI sequencer and algorithmic composition engine for your studio. It gives you a palette of algorithmic building blocks — Euclidean generators, cellular automata, L-systems, Markov chains — and a stateful engine that lets them interact and evolve over time, driving your hardware synths and VSTs with rock-solid timing.
 
 It's designed for the musician who wants generative music with as much control — or chaos — as they choose, where patterns combine, react to context, and develop in ways that reward exploration. Unlike tools that loop a fixed pattern forever, Subsequence rebuilds every pattern fresh before each cycle, granting macro-level structural control and narrative evolution. Each rebuild has full context — the current chord, the composition section, the cycle count, shared data from other patterns. A Euclidean rhythm can thin itself as tension builds; a cellular automaton can seed from the harmony.
 
