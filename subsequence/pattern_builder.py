@@ -1345,7 +1345,20 @@ class PatternBuilder(
 			channel = self._pattern.channel,
 			length = self._pattern.length,
 			device = self._pattern.device,
+			# The same destinations, so a voice only a mirror's kit has still
+			# resolves here: without them a scratch dropped it, and the layer
+			# lost a part of the kit that plays perfectly well (#2968).
+			mirrors = self._pattern.mirrors,
 		)
+
+		# One pattern as far as warnings go: a drum name nothing maps is
+		# reported once across the pattern and its scratches, naming the
+		# pattern rather than a channel.
+		child._warned_drum_names = self._pattern._warned_drum_names
+		builder_fn = getattr(self._pattern, "_builder_fn", None)
+
+		if builder_fn is not None:
+			child._builder_fn = builder_fn		# type: ignore[attr-defined]
 
 		# The harmony window is anchored on the absolute beat axis, so a
 		# scratch has to sit at the same place in the bar or a degree would

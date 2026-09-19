@@ -8,11 +8,15 @@ scratches were made — invisible, and it would quietly break `lock()`'s promise
 that a locked pattern realises identically each cycle.
 """
 
+import logging
 import random
 import typing
 
+import pytest
+
 import subsequence.pattern
 import subsequence.pattern_builder
+import subsequence.sequencer
 
 
 def _builder (
@@ -285,3 +289,71 @@ def test_through_the_engine_a_scratch_moves_with_its_pattern_and_holds_under_loc
 	assert len(set(free)) > 1
 	assert free == _rendered_bars(tmp_path, locked=False, name="free-again")
 	assert len(set(_rendered_bars(tmp_path, locked=True, name="locked"))) == 1
+
+
+# ---------------------------------------------------------------------------
+# The destinations: a scratch plays where its pattern plays (#2968)
+# ---------------------------------------------------------------------------
+
+def _kit_builder () -> subsequence.pattern_builder.PatternBuilder:
+
+	"""A kit on channel 10 whose mirror carries a kit of its own, including a voice this one lacks."""
+
+	pattern = subsequence.pattern.Pattern(
+		channel = 9,
+		length = 4,
+		mirrors = [(0, 10, {"kick": 60, "snare": 62, "clap": 65})],
+	)
+
+	return subsequence.pattern_builder.PatternBuilder(
+		pattern, cycle=0, rng=random.Random(7), stream_seed=12345,
+		drum_note_map = {"kick": 36, "snare": 38},
+	)
+
+
+def test_a_scratch_carries_its_pattern_s_mirrors () -> None:
+
+	"""A generator behaves the same on a scratch as on the pattern, which includes where its voices can sound."""
+
+	parent = _kit_builder()
+	scratch = parent.scratch("layer")
+
+	assert scratch._pattern.mirrors == parent._pattern.mirrors
+
+
+def test_a_voice_only_a_mirror_maps_survives_a_scratch (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""Captured from a scratch and placed, a clap the primary kit lacks still reaches the mirror that has it."""
+
+	parent = _kit_builder()
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_builder"):
+		layer = parent.scratch("layer")
+		layer.hit("clap", [0.0], duration=0.25)
+		parent.motif(layer.capture(0.0, 4.0))
+
+	placed = [note for pulse in sorted(parent._pattern.steps) for note in parent._pattern.steps[pulse].notes]
+	mirror = subsequence.sequencer._MirrorTarget(0, 10, {"kick": 60, "snare": 62, "clap": 65})
+
+	assert [(note.origin, note.primary_unmapped) for note in placed] == [("clap", True)]
+	assert subsequence.sequencer._destination_pitch(placed[0], mirror, primary=False) == 65
+	assert subsequence.sequencer._destination_pitch(placed[0], mirror, primary=True) is None
+	assert "clap" not in caplog.text
+
+
+def test_a_name_no_destination_maps_is_warned_about_once_across_a_scratch_and_its_pattern (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""One pattern as far as warnings go, and the message names the pattern, not a channel."""
+
+	parent = _kit_builder()
+	parent._pattern._builder_fn = lambda p: None
+	parent._pattern._builder_fn.__name__ = "drums"
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_builder"):
+		parent.scratch("layer").hit("triangle", [0.0])
+		parent.hit("triangle", [1.0])
+
+	warnings = [record.getMessage() for record in caplog.records if "triangle" in record.getMessage()]
+
+	assert len(warnings) == 1
+	assert "pattern 'drums'" in warnings[0]
