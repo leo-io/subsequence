@@ -70,6 +70,26 @@ def _dispatch_rank (message_type: str, velocity: int) -> int:
 	return 1
 
 
+def _forward_identity (message: mido.Message, device: int) -> typing.Optional[typing.Tuple[typing.Any, ...]]:
+
+	"""What makes two forwarded messages the same control, or None where every message matters.
+
+	A control's later value replaces its earlier one; a note, or anything
+	else forwarded, is an event in its own right and is always kept (#2967).
+	"""
+
+	if message.type == 'control_change':
+		return (device, message.type, message.channel, message.control)
+
+	if message.type in ('pitchwheel', 'aftertouch', 'program_change'):
+		return (device, message.type, message.channel)
+
+	if message.type == 'polytouch':
+		return (device, message.type, message.channel, message.note)
+
+	return None
+
+
 def _can_sound (channel: typing.Any, note: typing.Any, velocity: typing.Any) -> bool:
 
 	"""Whether a note-on with these values is a message MIDI can carry: a 0-15 channel and 0-127 note and velocity, all whole numbers.
@@ -1732,12 +1752,52 @@ class Sequencer:
 		if not self.running:
 			return next_pulse_time + held_for
 
+		# A knob turned while the transport was held queued every value it
+		# passed through; send where it now stands, not its whole journey.
+		self._coalesce_forwards()
+
 		if self.clock_output:
 			self._send_clock_message("continue")
 
 		await self.events.emit_async("resume")
 
 		return next_pulse_time + held_for
+
+
+	def _coalesce_forwards (self) -> None:
+
+		"""Keep only the latest value of each control the transport held back.
+
+		Queued ``cc_forward`` messages drain a pulse at a time, so a pause
+		queues every value a knob passed through and the resume sent the lot
+		within a millisecond — the knob's journey rather than where it now is
+		(#2967).  Notes and anything else queued keep every message, and the
+		controls that remain stay in the order they were last touched.
+
+		Runs on the loop thread, where the buffer is drained.
+		"""
+
+		if not self._forward_buffer:
+			return
+
+		held = list(self._forward_buffer)
+		self._forward_buffer.clear()
+
+		kept: typing.List[typing.Tuple[int, typing.Any, int]] = []
+		seen: typing.Set[typing.Tuple[typing.Any, ...]] = set()
+
+		for pulse, message, device in reversed(held):
+
+			identity = _forward_identity(message, device)
+
+			if identity is not None:
+				if identity in seen:
+					continue
+				seen.add(identity)
+
+			kept.append((pulse, message, device))
+
+		self._forward_buffer.extend(reversed(kept))
 
 
 	async def _run_loop (self) -> None:

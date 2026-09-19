@@ -11,6 +11,7 @@ the entire held span at once on resume.
 """
 
 import asyncio
+import mido
 import time
 import typing
 
@@ -364,6 +365,35 @@ async def test_held_time_is_accumulated_not_charged_to_the_music (patch_midi: No
 
 		assert sequencer.start_time == started_at, "start_time must not be shifted"
 		assert sequencer._paused_seconds >= _PAUSE_SECONDS * 0.8
+
+	finally:
+		await sequencer.stop()
+
+
+@pytest.mark.asyncio
+async def test_a_knob_turned_through_a_pause_arrives_where_it_now_stands (patch_midi: None) -> None:
+
+	"""A queued cc_forward sweep during the hold used to burst out at the resume; only the latest value of each control is sent (#2967)."""
+
+	spy = conftest.SpyMidiOut()
+	sequencer = _running_sequencer()
+	sequencer._output_devices.add("Forwarded", spy)
+	await sequencer.start()
+
+	try:
+		await asyncio.sleep(0.05)
+		sequencer.pause()
+		await asyncio.sleep(0.05)
+
+		for value in range(0, 40):
+			sequencer._forward_buffer.append((sequencer.pulse_count, mido.Message('control_change', channel=0, control=74, value=value), 1))
+
+		sequencer.resume()
+		await asyncio.sleep(0.15)
+
+		forwarded = [message.value for message in spy.sent if message.type == "control_change" and message.control == 74]
+
+		assert forwarded == [39]
 
 	finally:
 		await sequencer.stop()

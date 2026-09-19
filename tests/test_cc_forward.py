@@ -389,3 +389,42 @@ def test_callable_with_output_channel_passes_none_through (patch_midi: None) -> 
 	comp.cc_forward(1, lambda value, channel: None, output_channel=5)
 
 	assert comp._cc_forwards[0]['transform'](64, 2) is None
+
+
+def test_a_held_sweep_keeps_only_each_control_s_latest_value (patch_midi: None) -> None:
+
+	"""Coalescing what a pause held back: one message per control, in the order they were last touched (#2967)."""
+
+	seq = _make_sequencer(conftest.SpyMidiOut())
+
+	for value in range(60):
+		seq._forward_buffer.append((0, mido.Message('control_change', channel=0, control=74, value=value), 0))
+
+	seq._forward_buffer.append((0, mido.Message('control_change', channel=0, control=1, value=9), 0))
+	seq._forward_buffer.append((0, mido.Message('control_change', channel=0, control=74, value=60), 1))
+	seq._forward_buffer.append((0, mido.Message('pitchwheel', channel=0, pitch=-2000), 0))
+	seq._forward_buffer.append((0, mido.Message('pitchwheel', channel=0, pitch=1000), 0))
+
+	seq._coalesce_forwards()
+
+	assert [(message.type, getattr(message, "control", None), device) for _, message, device in seq._forward_buffer] == [
+		("control_change", 74, 0),
+		("control_change", 1, 0),
+		("control_change", 74, 1),
+		("pitchwheel", None, 0),
+	]
+	assert [message.value if message.type == "control_change" else message.pitch for _, message, _ in seq._forward_buffer] == [59, 9, 60, 1000]
+
+
+def test_notes_queued_behind_a_pause_are_all_kept (patch_midi: None) -> None:
+
+	"""Only controls coalesce: every note matters, so none is dropped."""
+
+	seq = _make_sequencer(conftest.SpyMidiOut())
+
+	for note in (60, 62, 60):
+		seq._forward_buffer.append((0, mido.Message('note_on', channel=0, note=note, velocity=90), 0))
+
+	seq._coalesce_forwards()
+
+	assert [message.note for _, message, _ in seq._forward_buffer] == [60, 62, 60]
