@@ -10,6 +10,7 @@ live-added patterns derive the same stream they would have had at startup.
 
 import logging
 import random
+import typing
 import zlib
 
 import pytest
@@ -334,3 +335,84 @@ def test_locked_pattern_realizes_identically_each_rebuild (patch_midi: None) -> 
 
 	assert draws[2] == draws[3]  # locked: identical realization every rebuild
 	assert draws[2] == random.Random(composition.seed_for("wobble")).random()
+
+
+# ── A printed seed can be given back (#2802) ─────────────────────────────────
+
+def test_a_printed_seed_brings_its_variation_back_on_another_run (patch_midi: None, capsys: pytest.CaptureFixture) -> None:
+
+	"""Rerolled twice on one run; on a fresh run, the seed it printed deals the lead the same stream."""
+
+	first = _make(seed=42)
+	first.reroll("lead")
+	first.reroll("lead")
+	printed = int(capsys.readouterr().out.strip().splitlines()[-1].split("effective seed ")[1].split()[0])
+
+	second = _make(seed=42)
+	second.reroll("lead", seed=printed)
+	draws: typing.List[float] = []
+
+	def lead (p: typing.Any) -> None:
+		draws.append(p.rng.random())
+
+	second._build_pattern_from_pending(_pending(lead))
+
+	assert second.seed_for("lead") == first.seed_for("lead") == printed
+	assert draws == [random.Random(printed).random()]
+	assert f"effective seed {printed}" in capsys.readouterr().out
+
+
+def test_a_given_seed_lasts_until_the_next_plain_reroll (patch_midi: None) -> None:
+
+	"""seed= pins the stream without spending a reroll; the next plain reroll deals as it would have."""
+
+	composition = _make(seed=42)
+
+	composition.reroll("lead", seed=1234)
+	assert composition.seed_for("lead") == 1234
+
+	composition.reroll("lead")
+	assert composition.seed_for("lead") == zlib.crc32(b"42:lead:1")
+
+
+def test_a_given_seed_reaches_a_running_pattern_even_unseeded (patch_midi: None) -> None:
+
+	"""The running pattern's next cycle draws from the given seed, whether or not the composition has one."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	draws: typing.List[float] = []
+
+	def lead (p: typing.Any) -> None:
+		draws.append(p.rng.random())
+
+	pattern = composition._build_pattern_from_pending(_pending(lead))
+	composition._running_patterns["lead"] = pattern
+
+	composition.reroll("lead", seed=7)
+	pattern._rebuild()
+
+	assert composition.seed_for("lead") == 7 and composition.seed_for("bass") is None
+	assert draws[-1] == random.Random(7).random()
+
+
+def test_a_locked_name_refuses_a_given_seed_too (patch_midi: None, capsys: pytest.CaptureFixture) -> None:
+
+	"""lock() holds a stream against a given seed as against a plain reroll."""
+
+	composition = _make(seed=42)
+	before = composition.seed_for("lead")
+	composition.lock("lead")
+
+	composition.reroll("lead", seed=5)
+
+	assert composition.seed_for("lead") == before
+	assert "refused" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("seed", [2.5, True, "2994986849"])
+def test_a_seed_is_a_whole_number (patch_midi: None, seed: typing.Any) -> None:
+
+	"""What reroll() prints is a whole number, and nothing else is taken for one."""
+
+	with pytest.raises(TypeError, match="whole number"):
+		_make(seed=42).reroll("lead", seed=seed)

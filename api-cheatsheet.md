@@ -101,7 +101,7 @@ The top-level controller for a musical piece.
 | `play() -> None` | Start the composition. |
 | `render(bars, filename, max_minutes) -> None` | Render the composition to a MIDI file without real-time playback. |
 | `request_cadence(cadence, bar) -> None` | Ask the live engine to approach a cadence arriving at a bar. |
-| `reroll(name) -> None` | Deal a named stream a fresh deterministic seed — try a new variation. |
+| `reroll(name, seed) -> None` | Deal a named stream a fresh deterministic seed to try a new variation, or give it back one you noted. |
 | `resume() -> None` | Continue playback from where :meth:`pause` held it. |
 | `running_patterns *(property)*` | The currently active patterns, keyed by name. |
 | `schedule(fn, cycle_beats, reschedule_lookahead, wait_for_initial, defer) -> None` | Register a custom function to run on a repeating beat-based cycle. |

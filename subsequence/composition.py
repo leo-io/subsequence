@@ -1414,6 +1414,9 @@ class Composition:
 		self._harmony_count: int = 0
 		self._form_count: int = 0
 		self._reroll_nonces: typing.Dict[str, int] = {}
+		# Seeds given back with reroll(name, seed=), which a stream keeps until
+		# the next plain reroll(name).
+		self._given_seeds: typing.Dict[str, int] = {}
 		self._locked_names: typing.Set[str] = set()
 
 		self._sequencer = subsequence.sequencer.Sequencer(
@@ -2848,9 +2851,16 @@ class Composition:
 
 		The derivation is ``zlib.crc32(f"{seed}:{name}")`` — crc32 rather
 		than ``hash()`` because it is stable across processes — plus the
-		per-name nonce when ``reroll()`` has been called.  Returns None when
-		the composition is unseeded.
+		per-name nonce when ``reroll()`` has been called.  A seed given back
+		with ``reroll(name, seed=)`` takes the place of all of that, seeded
+		composition or not.  Otherwise returns None when the composition is
+		unseeded.
 		"""
+
+		given = self._given_seeds.get(name)
+
+		if given is not None:
+			return given
 
 		if self._seed is None:
 			return None
@@ -2874,8 +2884,9 @@ class Composition:
 		Works for pattern names and equally for any name you invent for a
 		standalone value generator (``seed=composition.seed_for("hook")``),
 		so its randomness keys off the composition seed without sharing any
-		other consumer's stream.  Reflects ``reroll()`` nonces.  Returns None
-		when the composition is unseeded.
+		other consumer's stream.  Reflects ``reroll()``, including a seed
+		given back with ``seed=``.  Returns None when the composition is
+		unseeded and the stream was given no seed.
 
 		Example:
 			```python
@@ -2885,29 +2896,44 @@ class Composition:
 
 		return self._stream_seed(name)
 
-	def reroll (self, name: str) -> None:
+	def reroll (self, name: str, seed: typing.Optional[int] = None) -> None:
 
 		"""
-		Deal a named stream a fresh deterministic seed — try a new variation.
+		Deal a named stream a fresh deterministic seed to try a new variation,
+		or give it back one you noted.
 
-		Bumps the per-name nonce and prints the new effective seed.  The
-		nonce lives only in this process, so the printed seed is what lets a
-		variation you like survive a restart: note it down, or ``lock()`` the
-		name to pin it for the session.  Refuses on locked names.
+		Prints the stream's new effective seed.  A variation you like survives
+		a restart either way round: keep the ``reroll()`` calls in your
+		script, which deal the same seeds in the same order on every run, or
+		pass the printed seed back with ``seed=``, which gives the stream
+		exactly that seed until the next plain ``reroll(name)``.  ``lock()``
+		pins a stream for the session.  Refuses on locked names.
 
 		Parameters:
 			name: The stream name — usually a pattern name.
+			seed: A seed ``reroll()`` printed, to bring that variation back.
 
 		Example:
 			```python
-			comp.reroll("lead")    # prints: reroll('lead') -> effective seed ...
+			comp.reroll("lead")                   # prints: reroll('lead') -> effective seed 2994986849 ...
+			comp.reroll("lead", seed=2994986849)  # that variation again, on any run
 			```
 		"""
+
+		if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
+			raise TypeError(f"reroll() seed must be a whole number, like the one reroll() printed - got {seed!r}")
 
 		if name in self._locked_names:
 			print(f"reroll('{name}') refused: '{name}' is locked - call unlock('{name}') first")
 			return
 
+		if seed is not None:
+			self._given_seeds[name] = seed
+			self._reseat(name, seed)
+			print(f"reroll('{name}', seed={seed}) -> effective seed {seed}")
+			return
+
+		self._given_seeds.pop(name, None)
 		self._reroll_nonces[name] = self._reroll_nonces.get(name, 0) + 1
 		effective = self._stream_seed(name)
 
@@ -2915,12 +2941,17 @@ class Composition:
 			print(f"reroll('{name}'): composition has no seed - randomness is unseeded")
 			return
 
+		self._reseat(name, effective)
+		print(f"reroll('{name}') -> effective seed {effective} (nonce {self._reroll_nonces[name]})")
+
+	def _reseat (self, name: str, seed: int) -> None:
+
+		"""Give a running pattern of this name a stream dealt from *seed*."""
+
 		running = self._running_patterns.get(name)
 
 		if running is not None and hasattr(running, "_rng"):
-			running._rng = random.Random(effective)
-
-		print(f"reroll('{name}') -> effective seed {effective} (nonce {self._reroll_nonces[name]})")
+			running._rng = random.Random(seed)
 
 	def lock (self, name: str) -> None:
 
