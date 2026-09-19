@@ -29,6 +29,10 @@ class Groove:
 	feel — swing, shuffle, MPC-style pocket, or anything extracted from an
 	Ableton ``.agr`` file.
 
+	The offsets repeat from the start of the piece, not from the start of each
+	pattern, so the same groove given to parts of different lengths keeps them
+	in one feel.
+
 	Parameters:
 		offsets: Timing offset per grid slot, in beats. Repeats cyclically.
 			Positive values delay the note; negative values push it earlier.
@@ -241,6 +245,7 @@ def apply_groove (
 	groove: Groove,
 	pulses_per_quarter: int = subsequence.constants.MIDI_QUARTER_NOTE,
 	strength: float = 1.0,
+	origin_pulse: int = 0,
 ) -> typing.Dict[int, "subsequence.pattern.Step"]:
 
 	"""
@@ -250,6 +255,11 @@ def apply_groove (
 	that slot, to the nearest whole pulse. Notes between grid positions are
 	left untouched.
 
+	Which slot a note falls in is counted from ``origin_pulse``, the point on
+	the song's timeline where these steps begin. So a groove keeps its phase
+	against the music rather than restarting with every pattern, and parts of
+	any length swing together.
+
 	Parameters:
 		steps: Step dictionary (pulse → Step).
 		groove: The groove template to apply.
@@ -258,6 +268,10 @@ def apply_groove (
 			0.0 leaves all timing and velocity unchanged; 1.0 applies
 			the full groove. Intermediate values blend between the two,
 			equivalent to Ableton’s TimingAmount / VelocityAmount dials.
+		origin_pulse: Where these steps start on the song's timeline
+			(default 0). ``PatternBuilder.groove()`` passes the cycle's
+			start, so a pattern that is not a whole number of groove
+			cycles long still swings with everything else.
 	"""
 
 	if not 0.0 <= strength <= 1.0:
@@ -275,9 +289,11 @@ def apply_groove (
 
 	for old_pulse, step in steps.items():
 
-		# Find nearest grid position
-		grid_index = round(old_pulse / grid_pulses)
-		ideal_pulse = grid_index * grid_pulses
+		# Find the nearest grid position, counted on the song's timeline so a
+		# groove keeps its phase against the music however long this pattern
+		# is (#2788).  ideal_pulse comes back to the pattern's own axis.
+		grid_index = round((old_pulse + origin_pulse) / grid_pulses)
+		ideal_pulse = grid_index * grid_pulses - origin_pulse
 
 		# Only groove notes that sit close to a grid position; notes deliberately
 		# placed between grid lines (flams, pushes) keep both their timing AND

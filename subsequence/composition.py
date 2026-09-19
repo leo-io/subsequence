@@ -5481,6 +5481,23 @@ class Composition:
 		# Create a temporary Pattern
 		pattern = subsequence.pattern.Pattern(channel=resolved_channel, length=beat_length, device=resolved_device_idx, mirrors=resolved_mirrors)
 
+		# Calculate the start pulse based on quantize, before the build, so the
+		# builder knows where on the song's timeline it will play (a groove
+		# counts its slots from there, #2788).
+		current_pulse = self._sequencer.pulse_count
+		pulses_per_beat = subsequence.constants.MIDI_QUARTER_NOTE
+
+		if quantize == 0:
+			# Immediate: use current pulse
+			start_pulse = current_pulse
+
+		else:
+			# Quantize to the next multiple of (quantize * pulses_per_beat)
+			quantize_pulses = subsequence.constants.pulses.beats_to_pulses(quantize, pulses_per_beat)
+			start_pulse = ((current_pulse // quantize_pulses) + 1) * quantize_pulses
+
+		pattern._cycle_start_pulse = start_pulse
+
 		# Resolve the section context once: the one-shot inherits the section's
 		# effective key/scale (so a triggered degree resolves like everywhere
 		# else) and a harmony view at the current playhead (so ChordTone /
@@ -5532,19 +5549,6 @@ class Composition:
 		except Exception:
 			logger.exception("Error in trigger builder — pattern will be silent")
 			return
-
-		# Calculate the start pulse based on quantize
-		current_pulse = self._sequencer.pulse_count
-		pulses_per_beat = subsequence.constants.MIDI_QUARTER_NOTE
-
-		if quantize == 0:
-			# Immediate: use current pulse
-			start_pulse = current_pulse
-
-		else:
-			# Quantize to the next multiple of (quantize * pulses_per_beat)
-			quantize_pulses = subsequence.constants.pulses.beats_to_pulses(quantize, pulses_per_beat)
-			start_pulse = ((current_pulse // quantize_pulses) + 1) * quantize_pulses
 
 		self._schedule_one_shot(pattern, start_pulse)
 

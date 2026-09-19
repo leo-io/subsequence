@@ -2267,6 +2267,10 @@ class PatternBuilder(
 		62.5%, 65–68 as 67% and 69–72 as 71%.  ``strength`` scales the delay
 		before it is rounded, so it moves in the same whole pulses.
 
+		Swing is counted from the start of the piece rather than the start of
+		this pattern, so a three-sixteenth hat line and a one-bar kick given
+		the same percentage swing together.
+
 		Parameters:
 			percent: Swing amount as a percentage (50-75 is the useful range).
 				50 = straight, 57 = moderate shuffle, 67 ≈ triplet swing.
@@ -2306,6 +2310,13 @@ class PatternBuilder(
 		have been placed. It pairs well with ``p.randomize()`` for
 		structured feel plus organic micro-variation.
 
+		A groove's slots are counted from the start of the piece, not from the
+		start of each pattern, so one ``Groove`` given to every part swings
+		them all together whatever their lengths. A pattern shorter than the
+		groove's cycle (``grid × len(offsets)``) therefore plays a different
+		stretch of the groove each time round, which is how a long custom
+		groove shapes a short pattern.
+
 		Parameters:
 			template: A ``Groove`` instance defining the timing/velocity template.
 			strength: How much of the groove to apply (0.0-1.0). 0.0 = no
@@ -2326,7 +2337,8 @@ class PatternBuilder(
 		"""
 
 		self._pattern.steps = subsequence.groove.apply_groove(
-			self._pattern.steps, template, strength=strength
+			self._pattern.steps, template, strength=strength,
+			origin_pulse=self._pattern._cycle_start_pulse,
 		)
 		return self
 

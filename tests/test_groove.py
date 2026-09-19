@@ -1,8 +1,11 @@
 import os
+import pathlib
 import typing
 
+import mido
 import pytest
 
+import subsequence
 import subsequence.groove
 import subsequence.pattern
 import subsequence.pattern_builder
@@ -542,3 +545,108 @@ def test_swing_lands_in_whole_pulse_steps_as_its_docs_list_them () -> None:
 
 	for described in sixteenths + eighths[1:6]:
 		assert described in doc, described
+
+
+# ── A groove is counted on the song's timeline, so parts of any length swing together (#2788) ──
+
+def _swung_note_at (local_pulse: int, origin_pulse: int, percent: float = 57.0) -> int:
+
+	"""Where one note sitting at *local_pulse* lands when its cycle starts at *origin_pulse*."""
+
+	step = subsequence.pattern.Step()
+	step.notes.append(subsequence.pattern.Note(pitch=42, velocity=80, duration=1, channel=9))
+	moved = subsequence.groove.apply_groove(
+		{local_pulse: step}, subsequence.groove.Groove.swing(percent), origin_pulse=origin_pulse
+	)
+	(pulse,) = moved.keys()
+
+	return pulse
+
+
+def _note_on_pulses (composition: subsequence.Composition, bars: int, tmp_path: pathlib.Path) -> typing.List[float]:
+
+	"""Render and return every note-on's position in pulses (20 ticks each, at 480 PPQN)."""
+
+	path = str(tmp_path / "groove.mid")
+	composition.render(bars=bars, filename=path)
+
+	now = 0
+	pulses = []
+
+	for message in mido.MidiFile(path).tracks[0]:
+		now += message.time
+		if message.type == "note_on" and message.velocity > 0:
+			pulses.append(now / 20)
+
+	assert pulses, "the render placed no notes"
+
+	return pulses
+
+
+def test_a_note_swings_by_where_its_cycle_starts_in_the_piece () -> None:
+
+	"""The same note in the same place in its pattern: straight from a downbeat, delayed from a second sixteenth."""
+
+	assert _swung_note_at(0, origin_pulse=0) == 0
+	assert _swung_note_at(0, origin_pulse=6) == 1
+	assert _swung_note_at(0, origin_pulse=12) == 0
+	assert _swung_note_at(0, origin_pulse=18) == 1
+
+
+def test_a_groove_counts_from_the_song_by_default_so_old_calls_are_unchanged () -> None:
+
+	"""apply_groove() without an origin is exactly what it always was: the pattern starts the count."""
+
+	assert _swung_note_at(6, origin_pulse=0) == 7
+	assert _swung_note_at(0, origin_pulse=0) == 0
+
+
+def test_a_pattern_that_is_not_a_whole_number_of_groove_cycles_swings_with_the_bar (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Three sixteenths long: its hits that fall on a second sixteenth are delayed like every other part's (#2788)."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=10, beats=0.75, reschedule_lookahead=0.75)
+	def hats (p: typing.Any) -> None:
+		p.note(42, beat=0, duration=0.25)
+		p.swing(57)
+
+	assert _note_on_pulses(composition, 3, tmp_path)[:8] == [0, 19, 36, 55, 72, 91, 108, 127]
+
+
+def test_a_whole_bar_pattern_swings_exactly_as_it_did_before (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Sixteen hats a bar over two bars: every off-step still one pulse late, and bar 2 repeats bar 1."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=10, beats=4)
+	def hats (p: typing.Any) -> None:
+		for step in range(16):
+			p.note(42, beat=step * 0.25, duration=0.25)
+		p.swing(57)
+
+	expected = [bar * 96 + pair * 12 + offset for bar in (0, 1) for pair in range(8) for offset in (0, 7)]
+
+	assert _note_on_pulses(composition, 2, tmp_path) == expected
+
+
+def test_a_triggered_part_swings_by_where_it_lands_in_the_piece (patch_midi: None, monkeypatch: pytest.MonkeyPatch) -> None:
+
+	"""A swung one-shot landing on a second sixteenth is delayed like every other part; landing on a downbeat, it is not."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	scheduled: typing.List[typing.Tuple[int, typing.List[int]]] = []
+
+	monkeypatch.setattr(composition, "_schedule_one_shot", lambda pattern, start_pulse: scheduled.append((start_pulse, sorted(pattern.steps))))
+
+	def hit (p: typing.Any) -> None:
+		p.note(42, beat=0, duration=0.1)
+		p.swing(57)
+
+	for now in (1, 7):
+		composition._sequencer.pulse_count = now
+		composition.trigger(hit, channel=10, quantize=0.25)
+
+	assert scheduled == [(6, [1]), (12, [0])]
