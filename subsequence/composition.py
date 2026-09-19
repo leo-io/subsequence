@@ -1474,6 +1474,9 @@ class Composition:
 		self._running_patterns: typing.Dict[str, typing.Any] = {}
 		self._input_device: typing.Optional[str] = None
 		self._input_device_alias: typing.Optional[str] = None
+		# What the primary output was asked for by, which a wildcard or partial
+		# name loses once the port opens under its own full name (#2964).
+		self._requested_output_device: typing.Optional[str] = output_device
 		self._clock_follow: bool = False
 		self._clock_output: bool = False
 		self._cc_mappings: typing.List[typing.Dict[str, typing.Any]] = []
@@ -5919,6 +5922,11 @@ class Composition:
 		# 2. Pre-calculate output device names.
 		if self._sequencer.output_device_name:
 			self._output_device_names[self._sequencer.output_device_name] = 0
+			# The string that opened it answers for it too: a partial or
+			# wildcard name opens a port under the port's own full name, and
+			# device="what I asked for" used to route to device 0 (#2964).
+			if self._requested_output_device:
+				self._output_device_names.setdefault(self._requested_output_device, 0)
 			# Primary device (index 0) is open by now (_init_midi_output ran in
 			# the Sequencer constructor), so its latency can be set safely here.
 			if self._output_latency_ms:
@@ -5982,6 +5990,9 @@ class Composition:
 			if open_name and port is not None:
 				idx = self._sequencer.add_output_device(open_name, port, out.latency_ms)
 				self._output_device_names[open_name] = idx
+				# As for the primary: the name midi_output() was given keeps
+				# addressing it, wildcards and partial names included (#2964).
+				self._output_device_names.setdefault(out.device, idx)
 				if out.alias is not None:
 					self._output_device_names[out.alias] = idx
 			else:

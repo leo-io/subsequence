@@ -6,6 +6,7 @@ Multi-device tests follow.
 """
 
 import asyncio
+import pathlib
 
 import mido
 import pytest
@@ -726,3 +727,21 @@ async def test_clock_follower_ignores_other_devices (monkeypatch) -> None:
 	
 	# Only the clock message from device 1 should have reached _estimate_bpm
 	assert len(processed_clocks) == 1
+
+
+def test_a_device_answers_to_the_name_that_opened_it (patch_midi_multi, tmp_path: pathlib.Path) -> None:
+
+	"""A partial or wildcard name opens a port under the port's full name; the string that opened it must still address it (#2964)."""
+
+	comp = subsequence.Composition(bpm=120, output_device="Primary")
+	index = comp.midi_output("*Third*")
+
+	@comp.pattern(channel=1, beats=4, device="*Third*")
+	def lead (p: "subsequence.pattern_builder.PatternBuilder") -> None:
+		p.note(60, beat=0)
+
+	comp.render(bars=1, filename=str(tmp_path / "routing.mid"))
+
+	assert comp._output_device_names.get("*Third*") == index
+	assert comp._output_device_names.get("Primary") == 0
+	assert comp._running_patterns["lead"].device == index
