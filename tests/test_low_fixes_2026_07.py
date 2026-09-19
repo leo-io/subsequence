@@ -9,6 +9,7 @@ on an offline machine).
 """
 
 import dataclasses
+import logging
 import typing
 
 import pytest
@@ -235,15 +236,40 @@ def test_slide_rejects_notes_and_steps_together () -> None:
 		builder.slide(notes=[1], steps=[4])
 
 
-def test_slide_out_of_range_note_index_raises_musically () -> None:
+def test_slide_skips_a_note_the_bar_does_not_have_and_slides_the_rest (caplog: pytest.LogCaptureFixture) -> None:
 
-	"""An out-of-range note index names the pattern's note count, not an IndexError."""
+	"""Note 5 of a four-note bar is passed over, so the part still plays, and note 1 still slides (#2792)."""
 
-	builder, _ = make_builder()
+	builder, pat = make_builder()
 	builder.sequence(steps=[0, 4, 8, 12], pitches=[40, 42, 40, 43])
 
-	with pytest.raises(ValueError, match="note index 5 is outside this pattern's 4 notes"):
-		builder.slide(notes=[5])
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_midi"):
+		builder.slide(notes=[1, 5])
+		builder._finish_build()
+
+	bends = [e.pulse for e in pat.cc_events if e.message_type == "pitchwheel"]
+
+	assert bends and max(bends) == 24, bends
+	assert caplog.records == []
+
+
+def test_slide_says_once_when_none_of_its_notes_is_there (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""Every named note missing is a mistake rather than a sparse bar: nothing slides, and it is said the first time only."""
+
+	builder, pat = make_builder()
+	builder.sequence(steps=[0, 4, 8, 12], pitches=[40, 42, 40, 43])
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_midi"):
+		for _ in range(3):
+			builder.slide(notes=[5, 7])
+			builder._finish_build()
+
+	messages = [record.getMessage() for record in caplog.records]
+
+	assert [e for e in pat.cc_events if e.message_type == "pitchwheel"] == []
+	assert len(messages) == 1, messages
+	assert "slides into notes [5, 7], but this cycle has 4 notes, so it did not slide" in messages[0]
 
 
 def test_slide_negative_note_index_still_works () -> None:
@@ -254,6 +280,7 @@ def test_slide_negative_note_index_still_works () -> None:
 	builder.sequence(steps=[0, 4, 8, 12], pitches=[40, 42, 40, 41])
 	builder.legato(0.95)
 	builder.slide(notes=[-1], time=0.2)
+	builder._finish_build()
 
 	assert any(e.message_type == "pitchwheel" for e in pat.cc_events)
 
@@ -304,6 +331,7 @@ def test_bend_emits_endpoint_when_resolution_skips_it () -> None:
 	# Duration 24 pulses, ramp over pulses 0..24 with resolution 5: 24 % 5 != 0,
 	# so the target value must still be emitted at the ramp's final pulse.
 	builder.bend(note=0, amount=1.0, resolution=5)
+	builder._finish_build()
 
 	wheel = [e for e in pat.cc_events if e.message_type == "pitchwheel"]
 	final = [e for e in wheel if e.pulse == 24]

@@ -507,6 +507,7 @@ def test_builder_apply_tuning_method () -> None:
 
 	t = subsequence.tuning.Tuning.equal(12)
 	result = builder.apply_tuning(t, bend_range=2.0)
+	builder._finish_build()
 
 	assert result is builder  # method chaining
 	bends = _bend_events(pattern)
@@ -519,6 +520,7 @@ def test_builder_apply_tuning_sets_flag () -> None:
 	builder.note(60, beat=0, velocity=80, duration=0.5)
 	t = subsequence.tuning.Tuning.equal(12)
 	builder.apply_tuning(t)
+	builder._finish_build()
 	assert builder._tuning_applied is True
 
 

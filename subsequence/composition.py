@@ -4758,6 +4758,7 @@ class Composition:
 
 		try:
 			builder.motif(rule.fill)
+			builder._finish_build()
 		except Exception:
 			logger.exception("transition fill failed to build — the boundary plays without it")
 			return
@@ -5546,6 +5547,8 @@ class Composition:
 			else:
 				fn(builder)
 
+			builder._finish_build()
+
 		except Exception:
 			logger.exception("Error in trigger builder — pattern will be silent")
 			return
@@ -6287,6 +6290,9 @@ class Composition:
 
 					else:
 						self._builder_fn(builder)
+
+					# Glides and tunings are laid against the notes' final places.
+					builder._finish_build()
 
 				except Exception:
 					# Discard whatever the builder placed before it raised —

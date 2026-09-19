@@ -1,3 +1,4 @@
+import logging
 import random
 import typing
 
@@ -3389,6 +3390,7 @@ def test_bend_last_note () -> None:
 	last_duration = max(n.duration for n in builder._pattern.steps[last_pos].notes)
 
 	builder.bend(note=-1, amount=0.5)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 
@@ -3408,6 +3410,7 @@ def test_bend_first_note () -> None:
 	builder.legato(0.9)
 
 	builder.bend(note=0, amount=-0.5)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	assert bend_events[0].pulse == 0  # ramp starts at note onset
@@ -3427,6 +3430,7 @@ def test_bend_with_start_end_fraction () -> None:
 	duration = max(n.duration for n in builder._pattern.steps[first_pos].notes)
 
 	builder.bend(note=0, amount=1.0, start=0.5, end=0.9, resolution=1)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	ramp_events = bend_events[:-1]
@@ -3462,6 +3466,7 @@ def test_bend_inserts_reset_at_next_note () -> None:
 	next_note_pulse = sorted_positions[1]  # note after note 0
 
 	builder.bend(note=0, amount=0.5)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	reset_event = bend_events[-1]
@@ -3484,6 +3489,7 @@ def test_bend_reset_wraps_to_bar_start () -> None:
 	builder.legato(0.9)
 
 	builder.bend(note=-1, amount=0.5)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	reset_event = bend_events[-1]
@@ -3503,6 +3509,7 @@ def test_bend_with_easing () -> None:
 
 	# resolution=48 → 2 events: pulse 0 (t=0) and pulse 48 (t=1)
 	builder.bend(note=0, amount=1.0, shape="ease_in", resolution=48)
+	builder._finish_build()
 
 	bend_events = sorted(
 		[e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel'],
@@ -3521,19 +3528,24 @@ def test_bend_empty_pattern () -> None:
 
 	_, builder = _make_builder(length=4)
 	builder.bend(note=0, amount=0.5)  # should not raise
+	builder._finish_build()
 
 	assert builder._pattern.cc_events == []
 
 
-def test_bend_index_out_of_range () -> None:
+def test_bend_skips_a_note_the_bar_does_not_have (caplog: pytest.LogCaptureFixture) -> None:
 
-	"""bend() with an out-of-range index should raise IndexError."""
+	"""bend() on a note the cycle does not have bends nothing and says so, rather than silencing the part (#2792)."""
 
 	_, builder = _make_builder(length=4)
 	builder._pattern.add_note(position=0, pitch=40, velocity=80, duration=6)
 
-	with pytest.raises(IndexError):
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_midi"):
 		builder.bend(note=5, amount=0.5)
+		builder._finish_build()
+
+	assert builder._pattern.cc_events == []
+	assert "bends note 5, but this cycle has 1 note, so it did not bend" in caplog.text
 
 
 # ── p.portamento() ────────────────────────────────────────────────────────────
@@ -3549,6 +3561,7 @@ def test_portamento_generates_glides_between_notes () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, resolution=1, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 
@@ -3568,6 +3581,7 @@ def test_portamento_resets_at_each_note_onset () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, resolution=1, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	reset_events = [e for e in bend_events if e.value == 0 and e.pulse == 48]
@@ -3585,6 +3599,7 @@ def test_portamento_skips_large_intervals () -> None:
 	builder._pattern.add_note(position=48, pitch=45, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, bend_range=2.0, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	assert len(bend_events) == 0  # skipped — no events generated
@@ -3600,6 +3615,7 @@ def test_portamento_bend_range_none () -> None:
 	builder._pattern.add_note(position=48, pitch=55, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, bend_range=None, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	# Should have generated events despite large interval; value clamped to ±8191
@@ -3617,6 +3633,7 @@ def test_portamento_wrap_true () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, resolution=1, wrap=True)
+	builder._finish_build()
 
 	# With wrap=True the reset lands on the NEXT cycle's first onset
 	# (total 96 + first onset 0), after any wrap-spilled glide events.
@@ -3635,6 +3652,7 @@ def test_portamento_wrap_false () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=40)
 
 	builder.portamento(time=0.25, resolution=1, wrap=False)
+	builder._finish_build()
 
 	# With wrap=False there should be no *ramp* events (non-zero value) in the tail
 	# of the last note (position 48, duration 40, tail starts at 60)
@@ -3653,6 +3671,7 @@ def test_portamento_time_fraction () -> None:
 
 	time_frac = 0.5
 	builder.portamento(time=time_frac, resolution=1, wrap=False)
+	builder._finish_build()
 
 	# Collect all pitchwheel events except the reset at pulse 48
 	all_bend = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
@@ -3677,6 +3696,7 @@ def test_slide_by_note_index () -> None:
 
 	# Only slide into note index 1 (position 48)
 	builder.slide(notes=[1], time=0.25, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 
@@ -3705,6 +3725,7 @@ def test_slide_by_step_index () -> None:
 	builder._pattern.add_note(position=24, pitch=42, velocity=80, duration=20)
 
 	builder.slide(steps=[4], time=0.5, wrap=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 
@@ -3724,6 +3745,7 @@ def test_slide_extend_true () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=20)
 
 	builder.slide(notes=[1], time=0.25, extend=True, wrap=False)
+	builder._finish_build()
 
 	# Preceding note (at position 0) should be extended to reach position 48
 	preceding_note = builder._pattern.steps[0].notes[0]
@@ -3739,6 +3761,7 @@ def test_slide_extend_false () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=20)
 
 	builder.slide(notes=[1], time=0.25, extend=False, wrap=False)
+	builder._finish_build()
 
 	preceding_note = builder._pattern.steps[0].notes[0]
 	assert preceding_note.duration == 20  # unchanged
@@ -3765,6 +3788,7 @@ def test_slide_wrap () -> None:
 
 	# Flag note at index 0 as the destination (wrap from last → first)
 	builder.slide(notes=[0], time=0.5, wrap=True, extend=False)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 
@@ -6541,6 +6565,7 @@ def test_portamento_wrap_reset_respects_first_onset () -> None:
 	builder._pattern.add_note(position=48, pitch=42, velocity=80, duration=44)
 
 	builder.portamento(time=0.25, resolution=1, wrap=True)
+	builder._finish_build()
 
 	bend_events = [e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel']
 	resets = [e for e in bend_events if e.value == 0 and e.pulse >= 96]
@@ -6564,6 +6589,7 @@ def test_slide_extend_glide_lands_on_target_onset () -> None:
 	builder._pattern.add_note(position=24, pitch=42, velocity=80, duration=2)
 
 	builder.slide(notes=[1], time=0.5, wrap=False)
+	builder._finish_build()
 
 	ramp_events = sorted(
 		(e for e in builder._pattern.cc_events if e.message_type == 'pitchwheel' and e.value != 0),

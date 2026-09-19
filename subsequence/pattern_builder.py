@@ -7,6 +7,7 @@ the plain data types in ``pattern``.
 """
 
 import dataclasses
+import functools
 import logging
 import random
 import time
@@ -221,6 +222,10 @@ class PatternBuilder(
 		self._section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = section_motifs
 		self._held_notes: typing.Optional[subsequence.held_notes.HeldNotes] = held_notes
 		self._tuning_applied: bool = False  # set by apply_tuning() to prevent double-apply
+		# Glides and tunings wait for the build to finish, so they are laid
+		# against the notes where they finally sit — see _finish_build().
+		self._pending_glides: typing.List[typing.Callable[[], None]] = []
+		self._pending_tunings: typing.List[typing.Callable[[], None]] = []
 		# This pattern's derived stream seed, so scratch() can take a child
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
@@ -2802,9 +2807,14 @@ class PatternBuilder(
 
 		For each note in the pattern, the nearest 12-TET MIDI pitch is
 		computed and a pitchwheel ``CcEvent`` is injected at the note's onset
-		to shift the synthesiser to the exact tuned frequency.  Existing pitch
-		bend events (from ``p.portamento()``, ``p.slide()``, etc.) are shifted
+		to shift the synthesiser to the exact tuned frequency.  Other pitch
+		bends (from ``p.portamento()``, ``p.slide()``, etc.) are shifted
 		additively so they still work correctly within the tuned pitch space.
+
+		The tuning is applied when the build finishes, after the notes have
+		reached their final places and any glides have been laid, so it can be
+		called anywhere in the builder: before or after ``p.groove()``,
+		``p.slide()`` or anything else.
 
 		For polyphonic patterns, supply a ``channels`` pool.  Notes will be
 		spread across those channels so each can carry an independent pitch
@@ -2836,15 +2846,35 @@ class PatternBuilder(
 			```
 		"""
 		import subsequence.tuning
-		subsequence.tuning.apply_tuning_to_pattern(
+		self._pending_tunings.append(functools.partial(
+			subsequence.tuning.apply_tuning_to_pattern,
 			self._pattern,
 			tuning,
 			bend_range=bend_range,
 			channels=channels,
 			reference_note=reference_note,
-		)
+		))
 		self._tuning_applied = True
 		return self
+
+	def _finish_build (self) -> None:
+
+		"""Lay what depends on where the notes finally sit: glides, then tunings.
+
+		The engine calls this once the builder function has returned, so a
+		glide ends on its target's actual onset and a tuned note's bend lands
+		with the note, whatever transforms ran after them (#2792).  Glides go
+		first because a tuning shifts every pitch bend already present.
+		"""
+
+		for lay in self._pending_glides:
+			lay()
+
+		for tune in self._pending_tunings:
+			tune()
+
+		self._pending_glides.clear()
+		self._pending_tunings.clear()
 
 	def reverse (self) -> "PatternBuilder":
 

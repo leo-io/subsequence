@@ -4,7 +4,10 @@ This module is not intended to be used directly. ``PatternMidiMixin``
 is inherited by ``PatternBuilder`` in ``pattern_builder.py``.
 """
 
+import functools
+import logging
 import typing
+import weakref
 
 import pymididefs.cc
 import pymididefs.rpn
@@ -14,6 +17,20 @@ import subsequence.constants.pulses
 import subsequence.declarations
 import subsequence.easing
 import subsequence.pattern
+
+
+logger = logging.getLogger(__name__)
+
+# Parts already told that a bend or slide named a note they did not have,
+# by verb, so a rebuilding part says it once rather than every cycle.
+_warned_missing_targets: "weakref.WeakKeyDictionary[subsequence.pattern.Pattern, typing.Set[str]]" = weakref.WeakKeyDictionary()
+
+
+def _notes (count: int) -> str:
+
+	"""'1 note', '4 notes'."""
+
+	return f"{count} note" if count == 1 else f"{count} notes"
 
 
 class PatternMidiMixin:
@@ -29,6 +46,7 @@ class PatternMidiMixin:
 	_default_grid: int
 	_cc_name_map: typing.Optional[typing.Dict[str, int]]
 	_nrpn_name_map: typing.Optional[typing.Dict[str, int]]
+	_pending_glides: typing.List[typing.Callable[[], None]]
 
 	if typing.TYPE_CHECKING:
 		import subsequence.pattern_builder  # noqa: F401 — type-checking only
@@ -869,11 +887,16 @@ class PatternMidiMixin:
 		"""Bend a specific note by index.
 
 		Generates a pitch bend ramp that covers a fraction of the target note's
-		duration, then resets to 0.0 at the next note's onset.  Call this
-		*after* ``legato()`` / ``detached()`` / ``duration()`` so that note durations are final.
+		duration, then resets to 0.0 at the next note's onset.
+
+		The bend is laid when the build finishes, against the notes where they
+		finally sit, so it can be called anywhere in the builder: before or
+		after ``legato()``, ``groove()`` or any other transform.  The index
+		counts the notes as they finally play.
 
 		Parameters:
-			note: Note index (0 = first, -1 = last, etc.).
+			note: Note index (0 = first, -1 = last, etc.).  If this cycle has no
+				such note, nothing is bent, and a warning says so once.
 			amount: Target bend normalised to -1.0..1.0 (positive = up).
 				With a standard ±2-semitone pitch wheel range, 0.5 = 1 semitone.
 			start: Fraction of the note's duration at which the ramp begins
@@ -883,9 +906,6 @@ class PatternMidiMixin:
 			shape: Easing curve — a name string (e.g. ``"ease_in"``) or any
 			       callable mapping [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			resolution: Pulses between pitch bend messages.
-
-		Raises:
-			IndexError: If *note* is out of range for the current pattern.
 
 		Example:
 			```python
@@ -900,18 +920,40 @@ class PatternMidiMixin:
 			```
 		"""
 
+		self._check_glide(shape, resolution)
+		self._pending_glides.append(functools.partial(self._lay_bend, note, amount, start, end, shape, resolution))
+		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+
+	def _lay_bend (
+		self,
+		note: int,
+		amount: float,
+		start: float,
+		end: float,
+		shape: typing.Union[subsequence.declarations.EasingCurve, subsequence.easing.EasingFn],
+		resolution: int,
+	) -> None:
+
+		"""Lay the bend ``bend()`` asked for, against the notes where they finally sit."""
+
 		if not self._pattern.steps:
-			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+			return
 
 		sorted_positions = sorted(self._pattern.steps.keys())
+		n = len(sorted_positions)
+
+		# A note the cycle does not have is skipped, so a sparse bar still plays.
+		if not -n <= note < n:
+			self._say_once("bend", f"bends note {note}, but this cycle has {_notes(n)}, so it did not bend.")
+			return
 
 		# Resolve note index (supports negative indexing)
 		position = sorted_positions[note]
-		note_idx = note if note >= 0 else len(sorted_positions) + note
+		note_idx = note if note >= 0 else n + note
 
 		# Duration: use the longest note at this step
 		step = self._pattern.steps[position]
-		note_duration = max(n.duration for n in step.notes)
+		note_duration = max(sounding.duration for sounding in step.notes)
 
 		# Clamp start/end fractions and compute pulse range for the ramp
 		start_clamped = max(0.0, min(1.0, start))
@@ -939,7 +981,6 @@ class PatternMidiMixin:
 				value = reset_midi,
 			)
 		)
-		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	def portamento (
 		self,
@@ -953,8 +994,12 @@ class PatternMidiMixin:
 		"""Glide between all consecutive notes using pitch bend.
 
 		Generates a pitch bend ramp in the tail of each note, bending toward
-		the next note's pitch, then resets at the next note's onset.  Call this
-		*after* ``legato()`` / ``detached()`` / ``duration()`` so that note durations are final.
+		the next note's pitch, then resets at the next note's onset.
+
+		The glides are laid when the build finishes, against the notes where
+		they finally sit, so this can be called anywhere in the builder: before
+		or after ``legato()``, ``groove()`` or any other transform.  Each glide
+		ends on the next note's actual onset, swung or not.
 
 		Most effective on mono instruments where pitch bend is per-channel.
 
@@ -993,8 +1038,23 @@ class PatternMidiMixin:
 				f"pitch-wheel range) — got {bend_range}. Pass None to disable range checking."
 			)
 
+		self._check_glide(shape, resolution)
+		self._pending_glides.append(functools.partial(self._lay_portamento, time, shape, resolution, bend_range, wrap))
+		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+
+	def _lay_portamento (
+		self,
+		time: float,
+		shape: typing.Union[subsequence.declarations.EasingCurve, subsequence.easing.EasingFn],
+		resolution: int,
+		bend_range: typing.Optional[float],
+		wrap: bool,
+	) -> None:
+
+		"""Lay the glides ``portamento()`` asked for, against the notes where they finally sit."""
+
 		if not self._pattern.steps:
-			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+			return
 
 		sorted_positions = sorted(self._pattern.steps.keys())
 		n = len(sorted_positions)
@@ -1046,7 +1106,6 @@ class PatternMidiMixin:
 					value = 0,
 				)
 			)
-		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	def slide (
 		self,
@@ -1068,15 +1127,22 @@ class PatternMidiMixin:
 		preceding note's duration is extended to meet the slide target, matching
 		the 303's behaviour where slide notes do not retrigger.
 
-		Call this *after* ``legato()`` / ``detached()`` / ``duration()`` so that note durations
-		are final.
+		The slides are laid when the build finishes, against the notes where
+		they finally sit, so this can be called anywhere in the builder: before
+		or after ``legato()``, ``groove()`` or any other transform.  Each glide
+		ends on its target's actual onset, swung or not.
+
+		A target with no note (an index past the last note, or a step no note
+		falls on) is skipped, so a bar that comes out sparse still plays.  If
+		none of the named targets has a note, a warning says so once.
 
 		Parameters:
-			notes: List of note indices to slide *into* (0 = first).
-				Supports negative indexing.  Mutually exclusive with *steps*.
-			steps: List of step grid indices to slide *into*.
-				Converted to pulse positions using ``self._default_grid``.
-				Mutually exclusive with *notes*.
+			notes: List of note indices to slide *into* (0 = first), counting
+				the notes as they finally play.  Supports negative indexing.
+				Mutually exclusive with *steps*.
+			steps: List of step grid indices to slide *into*.  A step's note is
+				found where swing or a groove moved it, from a quarter of a step
+				early to half a step late.  Mutually exclusive with *notes*.
 			time: Fraction of the preceding note's duration used for the glide.
 			shape: Easing curve.  Defaults to ``"linear"``.
 			resolution: Pulses between pitch bend messages.
@@ -1090,8 +1156,7 @@ class PatternMidiMixin:
 				the glide.
 
 		Raises:
-			ValueError: If neither or both of *notes* and *steps* are provided,
-				or a note index falls outside the pattern's notes.
+			ValueError: If neither or both of *notes* and *steps* are provided.
 
 		Example:
 			```python
@@ -1121,31 +1186,64 @@ class PatternMidiMixin:
 				f"pitch-wheel range) — got {bend_range}. Pass None to disable range checking."
 			)
 
+		self._check_glide(shape, resolution)
+		self._pending_glides.append(functools.partial(self._lay_slide, notes, steps, time, shape, resolution, bend_range, wrap, extend))
+		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+
+	def _lay_slide (
+		self,
+		notes: typing.Optional[typing.List[int]],
+		steps: typing.Optional[typing.List[int]],
+		time: float,
+		shape: typing.Union[subsequence.declarations.EasingCurve, subsequence.easing.EasingFn],
+		resolution: int,
+		bend_range: typing.Optional[float],
+		wrap: bool,
+		extend: bool,
+	) -> None:
+
+		"""Lay the slides ``slide()`` asked for, against the notes where they finally sit."""
+
 		if not self._pattern.steps:
-			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+			return
 
 		sorted_positions = sorted(self._pattern.steps.keys())
 		total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 		n = len(sorted_positions)
 
-		# Resolve flagged pulse positions
-		if notes is not None:
-			flagged: typing.Set[int] = set()
-			for idx in notes:
-				if not -n <= idx < n:
-					raise ValueError(f"slide() note index {idx} is outside this pattern's {n} notes")
+		# Resolve each named target to the note it means.  A target with no
+		# note is skipped, so a bar that comes out sparse still plays.
+		flagged: typing.Set[int] = set()
 
-				flagged.add(sorted_positions[idx])
+		if notes is not None:
+			for idx in notes:
+				if -n <= idx < n:
+					flagged.add(sorted_positions[idx])
+
+			if notes and not flagged:
+				self._say_once("slide", f"slides into notes {list(notes)}, but this cycle has {_notes(n)}, so it did not slide.")
+
 		else:
-			# steps is not None.  Resolve each grid step to the SAME pulse the
-			# placement methods use — beats_to_pulses(step * (length / grid)) — so the
-			# flag lands on the note even when the grid doesn't divide the bar
-			# evenly.  Floored uniform spacing (total_pulses // grid) drifts out of
-			# alignment on non-divisor grids, silently flagging nothing.
+			# steps is not None.  Each step's straight position is the SAME
+			# pulse the placement methods use — beats_to_pulses(step * (length /
+			# grid)) — so a step lands even where the grid doesn't divide the
+			# bar evenly.  Its note is the nearest one from a quarter of a step
+			# early to half a step late, which is where swing or a groove moved
+			# it: half a step late is as far as 75% swing reaches, and the two
+			# bounds add to less than a step, so neighbouring steps never claim
+			# the same note.
 			step_beats = self._pattern.length / self._default_grid
-			flagged = set()
+			step_pulses = step_beats * subsequence.constants.MIDI_QUARTER_NOTE
+
 			for s in (steps or []):
-				flagged.add(subsequence.constants.pulses.beats_to_pulses(s * step_beats))
+				straight = subsequence.constants.pulses.beats_to_pulses(s * step_beats)
+				near = [pos for pos in sorted_positions if -0.25 * step_pulses <= pos - straight <= 0.5 * step_pulses]
+
+				if near:
+					flagged.add(min(near, key=lambda pos: abs(pos - straight)))
+
+			if steps and not flagged:
+				self._say_once("slide", f"slides into steps {list(steps)}, but no note falls on any of them, so it did not slide.")
 
 		def _lowest_pitch (pos: int) -> int:
 			return min(note.pitch for note in self._pattern.steps[pos].notes)
@@ -1209,4 +1307,27 @@ class PatternMidiMixin:
 					value = 0,
 				)
 			)
-		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
+
+	def _check_glide (self, shape: typing.Union[str, subsequence.easing.EasingFn], resolution: int) -> None:
+
+		"""Refuse a glide's bad arguments at the call that wrote them, not when the build finishes."""
+
+		if resolution < 1:
+			raise ValueError("resolution must be at least 1 pulse")
+
+		subsequence.easing.get_easing(shape)
+
+	def _say_once (self, verb: str, message: str) -> None:
+
+		"""Warn that a part named a note it does not have, the first time only."""
+
+		warned = _warned_missing_targets.setdefault(self._pattern, set())
+
+		if verb in warned:
+			return
+
+		warned.add(verb)
+		builder_fn = getattr(self._pattern, "_builder_fn", None)
+		part = f"Part '{builder_fn.__name__}'" if builder_fn is not None else f"A part on channel {self._pattern.channel + 1}"
+
+		logger.warning(f"{part} {message} A target with no note is skipped, and this is said once.")
