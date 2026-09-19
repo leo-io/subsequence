@@ -132,7 +132,7 @@ The musician's 'palette' for creating musical content.
 
 | Method | Description |
 |---|---|
-| `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed, repeating) -> None` | Initialize the builder with pattern context, cycle count, and optional section info. |
+| `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed, repeating, zero_indexed_channels) -> None` | Initialize the builder with pattern context, cycle count, and optional section info. |
 | `apply_tuning(tuning, bend_range, channels, reference_note) -> PatternBuilder` | Apply a microtonal tuning to this pattern via pitch bend injection. |
 | `arpeggio(notes, root, velocity, count, inversion, beat, span, spacing, duration, direction, seed, rng) -> PatternBuilder` | Arpeggiate a chord (or a list of pitches) — cycle the notes one at a time at regular beat intervals. |
 | `bar_beats *(property)*` | How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.5 in 7/8. |

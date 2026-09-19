@@ -131,7 +131,7 @@ class PatternBuilder(
 	quarter note) or **steps** (subdivisions of a pattern).
 	"""
 
-	def __init__ (self, pattern: subsequence.pattern.Pattern, cycle: int, conductor: typing.Optional[subsequence.conductor.Conductor] = None, drum_note_map: typing.Optional[typing.Dict[str, int]] = None, cc_name_map: typing.Optional[typing.Dict[str, int]] = None, nrpn_name_map: typing.Optional[typing.Dict[str, int]] = None, section: typing.Any = None, bar: int = 0, rng: typing.Optional[random.Random] = None, tweaks: typing.Optional[typing.Dict[str, typing.Any]] = None, default_grid: int = 16, data: typing.Optional[typing.Dict[str, typing.Any]] = None, key: typing.Optional[str] = None, scale: typing.Optional[str] = None, time_signature: typing.Tuple[int, int] = (4, 4), held_notes: typing.Optional[subsequence.held_notes.HeldNotes] = None, harmony: typing.Optional[typing.Any] = None, section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = None, energy: float = 0.5, stream_seed: typing.Optional[int] = None, repeating: bool = False) -> None:
+	def __init__ (self, pattern: subsequence.pattern.Pattern, cycle: int, conductor: typing.Optional[subsequence.conductor.Conductor] = None, drum_note_map: typing.Optional[typing.Dict[str, int]] = None, cc_name_map: typing.Optional[typing.Dict[str, int]] = None, nrpn_name_map: typing.Optional[typing.Dict[str, int]] = None, section: typing.Any = None, bar: int = 0, rng: typing.Optional[random.Random] = None, tweaks: typing.Optional[typing.Dict[str, typing.Any]] = None, default_grid: int = 16, data: typing.Optional[typing.Dict[str, typing.Any]] = None, key: typing.Optional[str] = None, scale: typing.Optional[str] = None, time_signature: typing.Tuple[int, int] = (4, 4), held_notes: typing.Optional[subsequence.held_notes.HeldNotes] = None, harmony: typing.Optional[typing.Any] = None, section_motifs: typing.Optional[typing.Dict[typing.Tuple[str, typing.Optional[str]], typing.Any]] = None, energy: float = 0.5, stream_seed: typing.Optional[int] = None, repeating: bool = False, zero_indexed_channels: bool = False) -> None:
 
 		"""Initialize the builder with pattern context, cycle count, and optional section info.
 
@@ -191,6 +191,9 @@ class PatternBuilder(
 				``reschedule_lookahead`` would run past.  One-shots —
 				``trigger()`` and transition fills — leave it False: they never
 				reschedule, so their lookahead means nothing.
+			zero_indexed_channels: Whether the composition numbers channels
+				from 0, so a channel pool given to ``apply_tuning()`` is read
+				the way every other channel is.
 		"""
 
 		self._pattern = pattern
@@ -225,12 +228,13 @@ class PatternBuilder(
 		# Glides and tunings wait for the build to finish, so they are laid
 		# against the notes where they finally sit — see _finish_build().
 		self._pending_glides: typing.List[typing.Callable[[], None]] = []
-		self._pending_tunings: typing.List[typing.Callable[[], None]] = []
+		self._pending_tunings: typing.List[typing.Callable[[], object]] = []
 		# This pattern's derived stream seed, so scratch() can take a child
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
 		self._stream_seed: typing.Optional[int] = stream_seed
 		self._repeating: bool = repeating
+		self._zero_indexed_channels: bool = zero_indexed_channels
 
 	@property
 	def grid (self) -> int:
@@ -1357,6 +1361,7 @@ class PatternBuilder(
 			section_motifs = self._section_motifs,
 			energy = self.energy,
 			stream_seed = derived,
+			zero_indexed_channels = self._zero_indexed_channels,
 		)
 
 
@@ -2828,7 +2833,11 @@ class PatternBuilder(
 		Parameters:
 			tuning: The :class:`~subsequence.tuning.Tuning` to apply.
 			bend_range: Synth pitch-bend range in semitones (default ±2).
-			channels: Channel pool for polyphonic rotation.  ``None`` keeps
+			channels: Channel pool for polyphonic rotation, numbered like
+			    every other channel: 1-16, or 0-15 when the composition was
+			    made with ``zero_indexed_channels=True``.  The part plays
+			    through the pool, its notes rotating when they overlap and
+			    otherwise sitting on the pool's first channel.  ``None`` keeps
 			    all notes on the pattern's own channel.
 			reference_note: MIDI note number that maps to scale degree 0.
 			    Default 60 (middle C).
@@ -2846,12 +2855,16 @@ class PatternBuilder(
 			```
 		"""
 		import subsequence.tuning
+
+		# Read the pool now, so a channel it cannot be is refused on this line.
+		pool = None if channels is None else subsequence.tuning.resolve_channel_pool(channels, zero_indexed=self._zero_indexed_channels)
+
 		self._pending_tunings.append(functools.partial(
 			subsequence.tuning.apply_tuning_to_pattern,
 			self._pattern,
 			tuning,
 			bend_range=bend_range,
-			channels=channels,
+			channels=pool,
 			reference_note=reference_note,
 		))
 		self._tuning_applied = True

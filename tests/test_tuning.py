@@ -5,6 +5,7 @@ import math
 import pathlib
 import typing
 
+import mido
 import pytest
 
 import subsequence
@@ -588,3 +589,194 @@ def test_a_bare_pattern_is_named_by_its_channel (caplog: pytest.LogCaptureFixtur
 		subsequence.tuning.apply_tuning_to_pattern(pattern, subsequence.tuning.Tuning.equal(19))
 
 	assert [record.getMessage()[:32] for record in caplog.records] == ["A tuned part on channel 3 plays "]
+
+
+# ── A tuning's pool is numbered like every other channel (#2797) ─────────────
+
+def _channels_played (composition: subsequence.Composition, tmp_path: pathlib.Path, bars: int = 2) -> typing.Dict[str, typing.Set[int]]:
+
+	"""Render and return the 1-16 channels each register's note-ons went out on: 'high' from pitch 70 up, 'low' below."""
+
+	path = str(tmp_path / "pool.mid")
+	composition.render(bars=bars, filename=path)
+
+	played: typing.Dict[str, typing.Set[int]] = {"high": set(), "low": set()}
+
+	for message in mido.MidiFile(path).tracks[0]:
+		if message.type == "note_on" and message.velocity > 0:
+			played["high" if message.note >= 70 else "low"].add(message.channel + 1)
+
+	assert played["high"] or played["low"], "the render played nothing"
+
+	return played
+
+
+def _pad (composition: subsequence.Composition, channel: int = 3, name: str = "pad") -> None:
+
+	"""A held three-note chord, low, on *channel*."""
+
+	def pad (p: typing.Any) -> None:
+		for pitch in (52, 55, 59):
+			p.note(pitch, beat=0, duration=4)
+
+	pad.__name__ = name
+	composition.pattern(channel=channel, beats=4)(pad)
+
+
+def _lead (composition: subsequence.Composition, channel: int, pool: typing.Optional[typing.List[int]] = None) -> None:
+
+	"""One high note at a time on *channel*, tuned through its own *pool* when one is given."""
+
+	@composition.pattern(channel=channel, beats=4)
+	def lead (p: typing.Any) -> None:
+		for beat, pitch in enumerate((76, 79, 81, 79)):
+			p.note(pitch, beat=beat, duration=0.5)
+		if pool is not None:
+			p.apply_tuning(subsequence.tuning.Tuning.equal(19), reference_note=64, channels=pool)
+
+
+def test_a_part_s_own_pool_is_numbered_as_its_channel_is (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The report's own case: a chord on channel 3 tuned through channels=[2, 6, 7] plays on channels 2, 6 and 7."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=3, beats=4)
+	def chord (p: typing.Any) -> None:
+		for pitch in (52, 55, 59):
+			p.note(pitch, beat=0, duration=4)
+		p.apply_tuning(subsequence.tuning.Tuning.equal(19), reference_note=64, channels=[2, 6, 7])
+
+	assert _channels_played(composition, tmp_path)["low"] == {2, 6, 7}
+
+
+def test_the_composition_s_pool_is_numbered_as_every_channel_is (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""channels=[4, 5, 6] means channels 4, 5 and 6."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition)
+
+	assert _channels_played(composition, tmp_path)["low"] == {4, 5, 6}
+
+
+def test_a_pool_follows_zero_indexed_channels_too (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Numbered from 0, [4, 5, 6] is channels 5, 6 and 7 counting from 1, as a pattern's channel=4 would be."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, zero_indexed_channels=True)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition, channel=2)
+
+	assert _channels_played(composition, tmp_path)["low"] == {5, 6, 7}
+
+
+def test_a_part_s_own_pool_follows_zero_indexed_channels_too (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Numbered from 0, a part's own channels=[8, 9, 10] is channels 9, 10 and 11 counting from 1."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, zero_indexed_channels=True)
+
+	@composition.pattern(channel=2, beats=4)
+	def chord (p: typing.Any) -> None:
+		for pitch in (76, 79, 83):
+			p.note(pitch, beat=0, duration=4)
+		p.apply_tuning(subsequence.tuning.Tuning.equal(19), reference_note=64, channels=[8, 9, 10])
+
+	assert _channels_played(composition, tmp_path)["high"] == {9, 10, 11}
+
+
+def test_a_pool_written_for_the_old_numbering_is_refused_by_name (patch_midi: None) -> None:
+
+	"""A 0 in a 1-16 pool was written when pools counted from 0; both ways in say so, and name the same pool one up."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	builder = subsequence.pattern_builder.PatternBuilder(pattern=subsequence.pattern.Pattern(channel=0, length=4), cycle=0)
+
+	with pytest.raises(ValueError, match=r"0 is not a channel.*\[1, 2, 3\] is the same pool now"):
+		composition.tuning(equal=19, channels=[0, 1, 2])
+
+	with pytest.raises(ValueError, match=r"0 is not a channel.*\[1, 2, 3\] is the same pool now"):
+		builder.apply_tuning(subsequence.tuning.Tuning.equal(19), channels=[0, 1, 2])
+
+	with pytest.raises(ValueError, match="MIDI channel must be 1-16, got 17"):
+		composition.tuning(equal=19, channels=[15, 16, 17])
+
+	assert composition._tuning is None
+
+
+# ── A shared pool is for parts whose notes overlap (#2798) ───────────────────
+
+def test_a_part_playing_one_note_at_a_time_keeps_its_own_channel (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The lead stays on channel 2 while the pad's chord spreads over the composition's pool."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition)
+	_lead(composition, channel=2)
+
+	assert _channels_played(composition, tmp_path) == {"high": {2}, "low": {4, 5, 6}}
+
+
+def test_a_part_given_its_own_pool_plays_through_it_even_one_note_at_a_time (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""p.apply_tuning(channels=) is the part asking for the pool, so it keeps playing on the pool's first channel."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	_lead(composition, channel=2, pool=[7, 8])
+
+	assert _channels_played(composition, tmp_path)["high"] == {7}
+
+
+def _pool_warnings (composition: subsequence.Composition, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path) -> typing.List[str]:
+
+	"""Render four bars and return what the composition said about its tuning pool."""
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.composition"):
+		composition.render(bars=4, filename=str(tmp_path / "shared.mid"))
+
+	return [record.getMessage() for record in caplog.records if record.name == "subsequence.composition" and "pool" in record.getMessage()]
+
+
+def test_two_parts_rotating_through_one_pool_are_named_once (patch_midi: None, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path) -> None:
+
+	"""Both chords need the pool, so they retune each other: said once, naming both."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition)
+	_pad(composition, channel=7, name="strings")
+
+	warnings = _pool_warnings(composition, caplog, tmp_path)
+
+	assert len(warnings) == 1, warnings
+	assert "Parts 'pad' and 'strings' play overlapping notes through the tuning's channel pool [4, 5, 6]" in warnings[0]
+
+
+def test_a_part_on_a_channel_inside_the_pool_is_named_once (patch_midi: None, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path) -> None:
+
+	"""The report's shape: a lead on a channel the pad's chord also uses would be retuned by it, so it is named."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition)
+	_lead(composition, channel=5)
+
+	warnings = _pool_warnings(composition, caplog, tmp_path)
+
+	assert len(warnings) == 1, warnings
+	assert "Part 'lead' plays on channel 5, inside the tuning's channel pool [4, 5, 6] that 'pad'" in warnings[0]
+
+
+def test_parts_that_share_nothing_are_not_warned_about (patch_midi: None, caplog: pytest.LogCaptureFixture, tmp_path: pathlib.Path) -> None:
+
+	"""One chord through the pool and a lead on its own channel: nothing to say."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[4, 5, 6])
+	_pad(composition)
+	_lead(composition, channel=2)
+
+	assert _pool_warnings(composition, caplog, tmp_path) == []

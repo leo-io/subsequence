@@ -1504,6 +1504,11 @@ class Composition:
 		self._tuning: typing.Optional[typing.Any] = None       # subsequence.tuning.Tuning
 		self._tuning_bend_range: float = 2.0
 		self._tuning_channels: typing.Optional[typing.List[int]] = None
+		# Parts whose overlapping notes have rotated through the pool, in the
+		# order they joined it, so a second one can be named (#2798).
+		self._tuning_pool_parts: typing.List[str] = []
+		# Other parts already told they sit on a pool channel.
+		self._tuning_pool_named: typing.Set[str] = set()
 		self._tuning_reference_note: int = 60
 		self._tuning_exclude_drums: bool = True
 
@@ -2970,13 +2975,20 @@ class Composition:
 		The synth must be configured to match ``bend_range`` (its pitch-bend range
 		setting in semitones).
 
+		Only a part whose notes overlap plays through the pool.  A part that
+		plays one note at a time keeps its own channel, and its own pitch
+		wheel.  Two parts that both need the pool would retune each other, so
+		that is warned about, naming them; give one of them a pool of its own
+		with ``p.apply_tuning(channels=...)``.
+
 		Parameters:
 			source: Path to a ``.scl`` file.
 			cents: Cent offsets for scale degrees 1..N.
 			ratios: Frequency ratios for scale degrees 1..N.
 			equal: Number of equal divisions of the period.
 			bend_range: Synth pitch-bend range in semitones (default ±2).
-			channels: Channel pool for polyphonic rotation.
+			channels: Channel pool for polyphonic rotation, numbered like every
+			    other channel: 1-16, or 0-15 with ``zero_indexed_channels=True``.
 			reference_note: MIDI note mapped to scale degree 0 (default 60 = C4).
 			exclude_drums: When True (default), skip patterns that have a
 			    ``drum_note_map`` (they use fixed GM pitches, not tuned ones).
@@ -2992,8 +3004,8 @@ class Composition:
 			# 19-TET, monophonic
 			comp.tuning(equal=19, bend_range=2.0)
 
-			# 31-TET with channel rotation for polyphony (channels 1-6)
-			comp.tuning("31tet.scl", channels=[0, 1, 2, 3, 4, 5])
+			# 31-TET with channel rotation for polyphony
+			comp.tuning("31tet.scl", channels=[1, 2, 3, 4, 5, 6])
 			```
 		"""
 		import subsequence.tuning as _tuning_mod
@@ -3013,11 +3025,52 @@ class Composition:
 		else:
 			t = _tuning_mod.Tuning.equal(equal)  # type: ignore[arg-type]
 
+		# Read the pool now, so a channel it cannot be is refused on this line.
+		pool = None if channels is None else _tuning_mod.resolve_channel_pool(channels, zero_indexed=self._zero_indexed_channels)
+
 		self._tuning = t
 		self._tuning_bend_range = bend_range
-		self._tuning_channels = channels
+		self._tuning_channels = pool
+		self._tuning_pool_parts = []
+		self._tuning_pool_named = set()
 		self._tuning_reference_note = reference_note
 		self._tuning_exclude_drums = exclude_drums
+
+	def _join_tuning_pool (self, name: str) -> None:
+
+		"""A part's overlapping notes rotated through the composition's pool: name whatever it would retune (#2798).
+
+		Two parts rotating through one pool share its pitch wheels, and so
+		does any part playing on a channel inside the pool.  Each is named
+		once.  Parts are listed once playback has begun, so a part sitting on
+		a pool channel is named from the rotating part's second cycle.
+		"""
+
+		pool = self._tuning_channels or []
+		shown = [channel if self._zero_indexed_channels else channel + 1 for channel in pool]
+
+		if name not in self._tuning_pool_parts:
+			self._tuning_pool_parts.append(name)
+
+			if len(self._tuning_pool_parts) > 1:
+				names = [f"'{part}'" for part in self._tuning_pool_parts]
+				parts = ", ".join(names[:-1]) + " and " + names[-1]
+				logger.warning(
+					f"Parts {parts} play overlapping notes through the tuning's channel pool {shown}, so they share its "
+					f"pitch wheels and retune each other. Give each its own pool with p.apply_tuning(channels=...)."
+				)
+
+		for other_name, other in self._running_patterns.items():
+
+			if other_name in self._tuning_pool_parts or other_name in self._tuning_pool_named or other.channel not in pool:
+				continue
+
+			self._tuning_pool_named.add(other_name)
+			channel = other.channel if self._zero_indexed_channels else other.channel + 1
+			logger.warning(
+				f"Part '{other_name}' plays on channel {channel}, inside the tuning's channel pool {shown} that '{name}' "
+				f"plays its overlapping notes through, so the pool's pitch bends retune it. Move it to a channel outside the pool."
+			)
 
 	def display (self, enabled: bool = True, grid: bool = False, grid_scale: float = 1.0) -> None:
 
@@ -5532,7 +5585,8 @@ class Composition:
 			time_signature=self.time_signature,
 			held_notes=self._sequencer._held_notes,
 			harmony=trigger_harmony,
-			energy=self._current_energy(trigger_section)
+			energy=self._current_energy(trigger_section),
+			zero_indexed_channels=self._zero_indexed_channels,
 		)
 
 		# Call the builder function
@@ -6263,6 +6317,7 @@ class Composition:
 					# It rebuilds and reschedules every cycle, so set_length() must
 					# keep it at least as long as its reschedule lookahead.
 					repeating = True,
+					zero_indexed_channels = composition_ref._zero_indexed_channels,
 				)
 
 				try:
@@ -6310,13 +6365,17 @@ class Composition:
 					and not (composition_ref._tuning_exclude_drums and self._drum_note_map)
 				):
 					import subsequence.tuning as _tuning_mod
-					_tuning_mod.apply_tuning_to_pattern(
+					rotated = _tuning_mod.apply_tuning_to_pattern(
 						self,
 						composition_ref._tuning,
 						bend_range=composition_ref._tuning_bend_range,
 						channels=composition_ref._tuning_channels,
 						reference_note=composition_ref._tuning_reference_note,
+						shared_pool=True,
 					)
+
+					if rotated:
+						composition_ref._join_tuning_pool(self._builder_fn.__name__)
 
 			def on_reschedule (self) -> None:
 

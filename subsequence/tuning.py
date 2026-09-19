@@ -276,6 +276,37 @@ class ChannelAllocator:
 		return ch
 
 
+def resolve_channel_pool (channels: typing.Sequence[int], zero_indexed: bool = False) -> typing.List[int]:
+
+	"""Read a tuning's channel pool as every other channel argument is read.
+
+	A pool is numbered 1-16, or 0-15 when the composition was made with
+	``zero_indexed_channels=True``, and comes back as the 0-15 channels the
+	engine sends on.  A 0 in a 1-16 pool is refused with a message that says
+	why, because a pool written when pools counted from 0 would otherwise
+	play one channel low without a word.
+
+	Parameters:
+		channels: The pool as the musician numbered it.
+		zero_indexed: Whether the composition numbers channels from 0.
+	"""
+
+	lowest, highest = (0, 15) if zero_indexed else (1, 16)
+
+	if not zero_indexed and 0 in channels:
+		raise ValueError(
+			f"channels={list(channels)}: a tuning's channel pool is numbered 1-16, like every other channel, "
+			f"so 0 is not a channel. Pools used to count from 0, so a pool written then is one channel low: "
+			f"{[channel + 1 for channel in channels]} is the same pool now."
+		)
+
+	for channel in channels:
+		if not lowest <= channel <= highest:
+			raise ValueError(f"MIDI channel must be {lowest}-{highest}, got {channel} in channels={list(channels)}")
+
+	return [channel if zero_indexed else channel - 1 for channel in channels]
+
+
 # ── Pattern transform ─────────────────────────────────────────────────────────
 
 def apply_tuning_to_pattern (
@@ -284,7 +315,8 @@ def apply_tuning_to_pattern (
 	bend_range: float = 2.0,
 	channels: typing.Optional[typing.List[int]] = None,
 	reference_note: int = 60,
-) -> None:
+	shared_pool: bool = False,
+) -> bool:
 	"""Apply a microtonal tuning to all notes in a pattern in place.
 
 	For each note:
@@ -295,6 +327,8 @@ def apply_tuning_to_pattern (
 	   exact tuned frequency.
 	3. If ``channels`` is provided and the pattern has overlapping notes,
 	   notes are spread across the channel pool (``ChannelAllocator``).
+	   A part that plays one note at a time moves to the pool's first
+	   channel, unless the pool is ``shared_pool``, when it keeps its own.
 	   Without a pool, overlapping notes share one channel's pitch wheel, so
 	   each note's bend retunes the others; that is logged once per part.
 
@@ -308,16 +342,22 @@ def apply_tuning_to_pattern (
 		tuning: The ``Tuning`` object specifying cent offsets.
 		bend_range: Must match the MIDI synth's pitch-bend range setting
 		    (default ±2 semitones).
-		channels: Optional explicit channel pool for polyphonic parts.
-		    When ``None``, all notes stay on ``pattern.channel``.  Under
-		    polyphonic rotation, expression events created BEFORE this call
-		    (``portamento()``/``slide()`` bends) are not re-routed per note —
-		    apply tuning last, or avoid combining note-correlated bends with
-		    a channel pool.
+		channels: Optional explicit channel pool for polyphonic parts, as
+		    the 0-15 channels the engine sends on (``resolve_channel_pool``
+		    reads a musician's numbering).  When ``None``, all notes stay on
+		    ``pattern.channel``.  Under polyphonic rotation a glide's bends
+		    (``portamento()``, ``slide()``) are not re-routed per note, so a
+		    glide and a channel pool do not combine well.
 		reference_note: MIDI note number mapped to scale degree 0.
+		shared_pool: The pool is the whole composition's rather than this
+		    part's own, so a part that plays one note at a time keeps its own
+		    channel instead of taking the pool's first.
+
+	Returns:
+		Whether the part's notes rotated through the pool.
 	"""
 	if not pattern.steps:
-		return
+		return False
 
 	# ── Step 1: determine if polyphony requires channel rotation ─────────────
 	allocator: typing.Optional[ChannelAllocator] = None
@@ -335,8 +375,12 @@ def apply_tuning_to_pattern (
 		# Check whether the pattern actually has overlapping notes
 		if _has_overlapping_notes(pattern):
 			allocator = ChannelAllocator(channels)
-		# Even if monophonic, use the first channel from the pool
-		elif channels:
+		# A part given its own pool plays through it even one note at a time,
+		# on the pool's first channel.  A pool the composition shares is for
+		# parts whose notes overlap: one playing a single line keeps its own
+		# channel and pitch wheel, rather than landing on the channel of
+		# another part's chord note and retuning it (#2798).
+		elif channels and not shared_pool:
 			# Re-assign the pattern's notes to the first pool channel
 			for step in pattern.steps.values():
 				for note in step.notes:
@@ -447,6 +491,8 @@ def apply_tuning_to_pattern (
 	# Prepend onset bends (kept first in the list for readability; the
 	# dispatch order guarantee comes from priority above)
 	pattern.cc_events = onset_events + pattern.cc_events
+
+	return allocator is not None
 
 
 def _has_overlapping_notes (pattern: "subsequence.pattern.Pattern") -> bool:
