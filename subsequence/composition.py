@@ -2991,7 +2991,8 @@ class Composition:
 		"""Set a global microtonal tuning for the composition.
 
 		The tuning is applied automatically after each pattern rebuild (before
-		the pattern is scheduled).  Drum patterns (those registered with a
+		the pattern is scheduled), and to every ``trigger()`` one-shot and
+		transition fill as it is built.  Drum patterns (those registered with a
 		``drum_note_map``) are excluded by default.
 
 		Supply exactly one of the source parameters:
@@ -3069,6 +3070,48 @@ class Composition:
 		self._tuning_pool_named = set()
 		self._tuning_reference_note = reference_note
 		self._tuning_exclude_drums = exclude_drums
+
+	def _apply_composition_tuning (
+		self,
+		pattern: subsequence.pattern.Pattern,
+		builder: subsequence.pattern_builder.PatternBuilder,
+		drum_note_map: typing.Optional[typing.Dict[str, int]],
+		part: typing.Optional[str],
+	) -> None:
+
+		"""Tune a pattern just built with the composition's tuning, whichever way it was built (#2926).
+
+		Nothing happens when the composition has no tuning, when the builder
+		tuned the pattern itself with ``p.apply_tuning()``, or for a drum map
+		while ``exclude_drums`` holds.  ``part`` names a repeating pattern: once
+		its notes rotate through the pool it joins it, stays on it (#2925), and
+		is named if it shares it (#2798).  A one-shot, from ``trigger()`` or a
+		transition fill, passes ``None``: its chord still rotates through the
+		pool and its single note keeps its channel, but it neither joins the
+		pool nor is named.
+		"""
+
+		if self._tuning is None or builder._tuning_applied:
+			return
+
+		if self._tuning_exclude_drums and drum_note_map:
+			return
+
+		import subsequence.tuning as _tuning_mod
+
+		rotated = _tuning_mod.apply_tuning_to_pattern(
+			pattern,
+			self._tuning,
+			bend_range = self._tuning_bend_range,
+			channels = self._tuning_channels,
+			reference_note = self._tuning_reference_note,
+			# A part that has played chords through the pool stays on it, so a
+			# bar of single notes does not move its instrument (#2925).
+			shared_pool = part is None or part not in self._tuning_pool_parts,
+		)
+
+		if rotated and part is not None:
+			self._join_tuning_pool(part)
 
 	def _join_tuning_pool (self, name: str) -> None:
 
@@ -4848,6 +4891,7 @@ class Composition:
 		try:
 			builder.motif(rule.fill)
 			builder._finish_build()
+			self._apply_composition_tuning(pattern, builder, drum_map, part = None)
 		except Exception:
 			logger.exception("transition fill failed to build — the boundary plays without it")
 			return
@@ -5708,6 +5752,7 @@ class Composition:
 				fn(builder)
 
 			builder._finish_build()
+			self._apply_composition_tuning(pattern, builder, drum_note_map, part = None)
 
 		except Exception:
 			logger.exception("Error in trigger builder — pattern will be silent")
@@ -6467,26 +6512,7 @@ class Composition:
 					self.raw_note_events = []
 					logger.exception("Error in pattern builder '%s' (cycle %d) - pattern will be silent this cycle", self._builder_fn.__name__, current_cycle)
 
-				# Auto-apply global tuning if set and not already applied by the builder.
-				if (
-					composition_ref._tuning is not None
-					and not builder._tuning_applied
-					and not (composition_ref._tuning_exclude_drums and self._drum_note_map)
-				):
-					import subsequence.tuning as _tuning_mod
-					rotated = _tuning_mod.apply_tuning_to_pattern(
-						self,
-						composition_ref._tuning,
-						bend_range=composition_ref._tuning_bend_range,
-						channels=composition_ref._tuning_channels,
-						reference_note=composition_ref._tuning_reference_note,
-						# A part that has played chords through the pool stays on it,
-						# so a bar of single notes does not move its instrument (#2925).
-						shared_pool=self._builder_fn.__name__ not in composition_ref._tuning_pool_parts,
-					)
-
-					if rotated:
-						composition_ref._join_tuning_pool(self._builder_fn.__name__)
+				composition_ref._apply_composition_tuning(self, builder, self._drum_note_map, part = self._builder_fn.__name__)
 
 			def on_reschedule (self) -> None:
 

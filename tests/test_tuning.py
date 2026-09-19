@@ -806,3 +806,120 @@ def test_a_chord_part_s_single_note_bar_stays_on_the_pool (patch_midi: None, tmp
 			by_bar.setdefault(now // 1920, set()).add(message.channel + 1)
 
 	assert by_bar == {0: {5, 6, 7}, 1: {5}, 2: {5, 6, 7}, 3: {5}}
+
+
+# ── One-shots are tuned like every part (#2926) ──────────────────────────────
+
+def _one_shots (composition: subsequence.Composition) -> typing.List[subsequence.pattern.Pattern]:
+
+	"""Catch every one-shot the composition schedules, instead of scheduling it."""
+
+	fired: typing.List[subsequence.pattern.Pattern] = []
+	composition._schedule_one_shot = lambda pattern, start_pulse: fired.append(pattern)  # type: ignore[method-assign]
+
+	return fired
+
+
+def _sounding (pattern: subsequence.pattern.Pattern) -> typing.Tuple[typing.List[int], typing.List[typing.Tuple[int, int]]]:
+
+	"""A pattern's pitches, and its pitch bends as (pulse, value)."""
+
+	pitches = [note.pitch for step in pattern.steps.values() for note in step.notes]
+	bends = sorted((event.pulse, event.value) for event in pattern.cc_events if event.message_type == "pitchwheel")
+
+	return pitches, bends
+
+
+def _tuned (pitch: int, tuning: subsequence.tuning.Tuning, reference_note: int) -> typing.Tuple[typing.List[int], typing.List[typing.Tuple[int, int]]]:
+
+	"""What one note at pulse 0 becomes under *tuning*: its nearest pitch and its onset bend."""
+
+	nearest, bend = tuning.pitch_bend_for_note(pitch, reference_note=reference_note, bend_range=2.0)
+
+	return [nearest], [(0, subsequence.tuning._norm_to_raw(bend))]
+
+
+def test_a_triggered_note_is_tuned_as_a_part_s_note_is (patch_midi: None) -> None:
+
+	"""Under 19-EDO a triggered 63 plays at its tuned pitch and bend, where it used to play in 12-TET against the tuned parts."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=60)
+	fired = _one_shots(composition)
+
+	composition.trigger(lambda p: p.note(63, beat=0), channel=1, beats=1)
+
+	(shot,) = fired
+	assert _sounding(shot) == _tuned(63, subsequence.tuning.Tuning.equal(19), 60)
+	assert _sounding(shot)[1][0][1] != 0
+
+
+def test_a_triggered_drum_is_left_untuned_as_a_drum_part_is (patch_midi: None) -> None:
+
+	"""exclude_drums reaches one-shots too: a kick keeps its note and gets no bend."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=60)
+	fired = _one_shots(composition)
+
+	composition.trigger(lambda p: p.hit_steps("kick", [0]), channel=10, drum_note_map={"kick": 36})
+
+	(shot,) = fired
+	assert _sounding(shot) == ([36], [])
+
+
+def test_a_triggered_builder_that_tunes_itself_is_tuned_once (patch_midi: None) -> None:
+
+	"""p.apply_tuning() inside the one-shot wins, and the composition's tuning is not laid on top."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=60)
+	fired = _one_shots(composition)
+	twenty_four = subsequence.tuning.Tuning.equal(24)
+
+	def own (p: typing.Any) -> None:
+		p.note(63, beat=0)
+		p.apply_tuning(twenty_four, reference_note=60)
+
+	composition.trigger(own, channel=1, beats=1)
+
+	(shot,) = fired
+	assert _sounding(shot) == _tuned(63, twenty_four, 60)
+
+
+def test_a_transition_fill_is_tuned_as_a_part_s_note_is (patch_midi: None) -> None:
+
+	"""A melodic fill into the chorus plays in the composition's tuning."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C", seed=1)
+	composition.tuning(equal=19, reference_note=64)
+	composition.form(subsequence.Form([subsequence.Section("verse", 2), subsequence.Section("chorus", 2)]))
+	composition.transition(before="*", fill=subsequence.motif([1], length=2), channel=1, beat=0.0)
+	fired = _one_shots(composition)
+
+	state = composition._form_state
+	assert state is not None
+	state.advance()
+	composition._check_transitions(96, False)
+
+	(fill,) = fired
+	assert _sounding(fill) == _tuned(60, subsequence.tuning.Tuning.equal(19), 64)
+
+
+def test_a_triggered_chord_rotates_through_the_pool_without_joining_it (patch_midi: None) -> None:
+
+	"""The chord spreads over the pool to be in tune, but a one-shot is not a part, so it is never named as one."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.tuning(equal=19, reference_note=64, channels=[5, 6, 7])
+	fired = _one_shots(composition)
+
+	def chord (p: typing.Any) -> None:
+		for pitch in (52, 55, 59):
+			p.note(pitch, beat=0, duration=1)
+
+	composition.trigger(chord, channel=3, beats=1)
+
+	(shot,) = fired
+	assert sorted(note.channel + 1 for step in shot.steps.values() for note in step.notes) == [5, 6, 7]
+	assert composition._tuning_pool_parts == []
