@@ -935,6 +935,14 @@ class PatternBuilder(
 
 			resolved = self._resolve_motif_pitch(event.pitch, root, beat + event.beat)
 
+			# A captured drum carries the name it was placed by, so place it by
+			# that name: this kit resolves its own number, a mirror carrying
+			# its own map sounds its own voice, and a kit with no such voice
+			# drops it rather than playing a number that means something else
+			# there (#2372).  A named drum has no pitch to snap either.
+			if isinstance(resolved, int) and getattr(event, "origin", None) is not None:
+				resolved = event.origin
+
 			# The fit dial reads only Degree/int content: drums have no
 			# pitch to snap, ChordTones already are chord tones, and an
 			# Approach's chromaticism is the point.
@@ -1476,6 +1484,12 @@ class PatternBuilder(
 		:meth:`~subsequence.motifs.Motif.transpose` and
 		:meth:`~subsequence.motifs.Motif.invert` go on refusing it — a varied
 		kick is a different instrument, not a variation.
+
+		**A captured drum stays a named drum when it is placed** (#2372).
+		:meth:`motif` puts it back by name, so the kit it is placed on
+		resolves its own number for it, a mirror carrying its own map sounds
+		its own voice, and a kit with no such voice drops it with the usual
+		one-time warning.  Placed back where it came from, nothing changes.
 
 		Parameters:
 			beat: Window start within the pattern.

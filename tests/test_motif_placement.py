@@ -4,6 +4,7 @@ homomorphism, control-gesture emission, span clamping, capture, and the
 metric weight table.
 """
 
+import logging
 import random
 import typing
 
@@ -15,6 +16,7 @@ import subsequence.constants
 import subsequence.pattern
 import subsequence.pattern_builder
 import subsequence.sequence_utils
+import subsequence.sequencer
 
 
 M = subsequence.Motif
@@ -671,3 +673,79 @@ def test_metric_weights_three_four_has_no_half_bar () -> None:
 	assert w[0] == 1.0
 	assert w[4] == w[8] == 0.5
 	assert 0.75 not in w
+
+
+# ---------------------------------------------------------------------------
+# A captured drum is a named drum (#2372)
+# ---------------------------------------------------------------------------
+
+def _placed_with_origin (p: subsequence.pattern_builder.PatternBuilder) -> typing.List[typing.Tuple[int, typing.Optional[str]]]:
+
+	"""Every note placed, as (pitch, origin), in time order."""
+
+	return [
+		(note.pitch, note.origin)
+		for pulse in sorted(p._pattern.steps)
+		for note in p._pattern.steps[pulse].notes
+	]
+
+
+def test_a_captured_drum_is_placed_by_its_name () -> None:
+
+	"""Placed back on the kit it came from, it sounds the same numbers — and now carries the name each mirror re-resolves."""
+
+	p = _drum_builder()
+	p.motif(_captured_kit())
+
+	assert _placed_with_origin(p) == [(36, "kick"), (38, "snare")]
+
+	other_kit = subsequence.sequencer._MirrorTarget(1, 5, {"kick": 60, "snare": 62})
+	notes = [note for pulse in sorted(p._pattern.steps) for note in p._pattern.steps[pulse].notes]
+
+	assert [subsequence.sequencer._destination_pitch(note, other_kit, primary=False) for note in notes] == [60, 62]
+
+
+def test_a_captured_drum_rebound_to_another_kit_plays_that_kit_s_voice () -> None:
+
+	"""The decision on #2372: a captured groove is this rhythm on this kit, so a kit that maps kick to 35 plays 35."""
+
+	p = _builder(drum_note_map={"kick": 35, "snare": 39})
+	p.motif(_captured_kit())
+
+	assert _placed_with_origin(p) == [(35, "kick"), (39, "snare")]
+
+
+def test_a_captured_drum_a_kit_has_no_voice_for_is_dropped (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""Exactly as a hand-written p.hit("kick") is: silence and one warning, never a wrong voice."""
+
+	p = _builder(drum_note_map={"snare": 39})
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_builder"):
+		p.motif(_captured_kit())
+
+	assert _placed_with_origin(p) == [(39, "snare")]
+	assert "kick" in caplog.text
+
+
+def test_a_captured_drum_is_never_snapped_to_a_scale () -> None:
+
+	"""fit reads Degree and int content; a kick's number is neither, whatever capture made of it."""
+
+	p = _builder(drum_note_map={"kick": 36, "snare": 38}, key="C", scale="major")
+	p.motif(_captured_kit(), fit=1.0)
+
+	assert _placed_with_origin(p) == [(36, "kick"), (38, "snare")]
+
+
+def test_a_captured_pitched_note_is_still_absolute () -> None:
+
+	"""Only drums carry a name; a captured melody is the numbers it was."""
+
+	source = _builder()
+	source.motif(M.notes([60, 64], beats=[0.0, 1.0], durations=0.5))
+
+	p = _builder(drum_note_map={"kick": 36})
+	p.motif(source.capture(beat=0.0, span=4.0))
+
+	assert _placed_with_origin(p) == [(60, None), (64, None)]
