@@ -453,6 +453,12 @@ def bounded (fn: _Decorated) -> _Decorated:
 			if not isinstance(given, (int, float)) or isinstance(given, bool):
 				continue
 
+			# A NaN has nowhere to be clamped to (every comparison with it is
+			# false, so it used to pass through as given), and an infinity is
+			# never a value anyone meant (#2965).
+			if not math.isfinite(given):
+				raise ValueError(f"{fn.__name__}({name}={given}) is not a finite number")
+
 			pinned = span.clamp(given)
 
 			if pinned == given:

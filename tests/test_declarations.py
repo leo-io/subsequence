@@ -8,6 +8,7 @@ every time a control overshot.
 """
 
 import logging
+import math
 import typing
 
 import pymididefs.rpn
@@ -377,3 +378,20 @@ class _capture:
 
 		self.logger.removeHandler(self.handler)
 		self.logger.setLevel(self.previous)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf], ids=["nan", "inf", "-inf"])
+def test_a_value_that_is_not_a_finite_number_is_refused_naming_the_parameter (value: float) -> None:
+
+	"""A NaN has no place to be clamped to, and every comparison with it is false, so it used to pass through as given (#2965)."""
+
+	with pytest.raises(ValueError, match=r"ghost_fill\(density=.*\) is not a finite number"):
+		_builder().ghost_fill(60, density=value)
+
+
+def test_infinity_is_refused_where_the_span_is_open_above () -> None:
+
+	"""repeat()'s spacing has a floor and no ceiling, so nothing would have caught an infinite one."""
+
+	with pytest.raises(ValueError, match=r"repeat\(spacing=inf\) is not a finite number"):
+		_builder().repeat(60, spacing=math.inf)
