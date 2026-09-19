@@ -60,7 +60,7 @@ def exported_modules () -> typing.List[typing.Tuple[str, types.ModuleType]]:
 
 def exported_functions () -> typing.List[typing.Tuple[str, typing.Any]]:
 
-	"""The exported functions, each documented with a row under Global Functions."""
+	"""The exported functions, each documented with a row under Global functions."""
 
 	return [
 		(name, member) for name, member in exports()
@@ -207,7 +207,7 @@ def generate_markdown () -> str:
 
 	"""Iterate through the public API surface and generate a Markdown cheat sheet."""
 
-	output = ["# Subsequence API Cheat Sheet\n"]
+	output = ["# Subsequence API cheat sheet\n"]
 	output.append("This document provides a quick overview of the public classes, methods, and functions available in the Subsequence API.\n")
 
 	# The inventory first: every name ``subsequence.__all__`` exports, each of
@@ -304,7 +304,7 @@ def generate_markdown () -> str:
 
 		output.append("\n")
 
-	output.append("## Global Functions\n\n")
+	output.append("## Global functions\n\n")
 	output.append("| Function | Description |")
 	output.append("|---|---|")
 
@@ -322,7 +322,7 @@ def generate_markdown () -> str:
 		code_col = f"`{name}{signature}`"
 		output.append(f"| {escape_md(code_col)} | {escape_md(desc)} |")
 
-	output.append("\n## Sequence Utilities (`subsequence.sequence_utils`)\n\n")
+	output.append("\n## Sequence utilities (`subsequence.sequence_utils`)\n\n")
 	output.append("Functions for generating and transforming sequences.\n\n")
 	output.append("| Function | Description |")
 	output.append("|---|---|")

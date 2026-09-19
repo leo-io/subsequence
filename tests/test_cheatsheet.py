@@ -123,7 +123,7 @@ def test_the_sheet_on_disk_is_what_the_generator_produces () -> None:
 
 def _documented (markdown: str) -> typing.Tuple[typing.Set[str], typing.Set[str], typing.Set[str]]:
 
-	"""The names the sheet gives a section of their own, a Global Functions row, and a Sequence Utilities row."""
+	"""The names the sheet gives a section of their own, a Global functions row, and a Sequence utilities row."""
 
 	sections: typing.Set[str] = set()
 	functions: typing.Set[str] = set()
@@ -141,9 +141,9 @@ def _documented (markdown: str) -> typing.Tuple[typing.Set[str], typing.Set[str]
 
 		row = re.match(r"\| `(\w+)\(", line)
 
-		if row and heading == "## Global Functions":
+		if row and heading == "## Global functions":
 			functions.add(row.group(1))
-		elif row and heading.startswith("## Sequence Utilities"):
+		elif row and heading.startswith("## Sequence utilities"):
 			utilities.add(row.group(1))
 
 	return sections, functions, utilities
@@ -167,7 +167,7 @@ def test_every_export_has_its_own_section_or_row () -> None:
 		if isinstance(member, (type, types.ModuleType)):
 			assert name in sections, f"exported {name} has no section of its own"
 		else:
-			assert name in functions, f"exported {name} has no row under Global Functions"
+			assert name in functions, f"exported {name} has no row under Global functions"
 
 
 def test_the_sheet_documents_nothing_outside_the_declared_surface () -> None:
@@ -177,7 +177,7 @@ def test_the_sheet_documents_nothing_outside_the_declared_surface () -> None:
 	sections, functions, utilities = _documented(GENERATOR.generate_markdown())
 
 	assert sections - set(subsequence.__all__) == set(), "a section documents something that is not exported"
-	assert functions - set(subsequence.__all__) == set(), "a Global Functions row names something that is not exported"
+	assert functions - set(subsequence.__all__) == set(), "a Global functions row names something that is not exported"
 	assert utilities == set(subsequence.sequence_utils.__all__)
 
 
@@ -189,8 +189,8 @@ def test_the_documented_surface_parser_sees_what_it_counts () -> None:
 		"## Package-level exports", "| `Composition` | class | x |",
 		"## `Composition`", "| `play() -> None` | x |",
 		"## `roles`", "| `BASS` | dict |",
-		"## Global Functions", "| `sieve(classes) -> List[int]` | x |",
-		"## Sequence Utilities (`subsequence.sequence_utils`)", "| `fold(values) -> List[int]` | x |",
+		"## Global functions", "| `sieve(classes) -> List[int]` | x |",
+		"## Sequence utilities (`subsequence.sequence_utils`)", "| `fold(values) -> List[int]` | x |",
 	])
 
 	assert _documented(fragment) == ({"Composition", "roles"}, {"sieve"}, {"fold"})

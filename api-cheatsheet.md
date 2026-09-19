@@ -1,4 +1,4 @@
-# Subsequence API Cheat Sheet
+# Subsequence API cheat sheet
 
 This document provides a quick overview of the public classes, methods, and functions available in the Subsequence API.
 
@@ -511,7 +511,7 @@ Role parameter bundles — starting points you splat, not a role API.
 | `ROLES` | dict of `bass`, `pad`, `lead`, `arp` |
 
 
-## Global Functions
+## Global functions
 
 
 | Function | Description |
@@ -534,7 +534,7 @@ Role parameter bundles — starting points you splat, not a role API.
 | `transforms() -> List[Dict[str, Any]]` | Describe every transform Subsequence offers, as plain data. |
 | `describe_transform(name) -> Dict[str, Any]` | Describe one transform's parameters as plain data. |
 
-## Sequence Utilities (`subsequence.sequence_utils`)
+## Sequence utilities (`subsequence.sequence_utils`)
 
 
 Functions for generating and transforming sequences.
