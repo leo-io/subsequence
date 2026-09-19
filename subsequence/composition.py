@@ -3675,11 +3675,13 @@ class Composition:
 		watched file.  One-time setup (devices, ``harmony()``, ``form()``) belongs
 		in that calling script too, or every save runs it again.
 
-		A save replaces a running pattern's body, heard from its next cycle.
-		Its decorator arguments (``channel``, ``beats``/``bars``,
-		``reschedule_lookahead``, ``min_energy``, ``device``, ``mirrors``) keep
-		their first values until the composition restarts; change a running
-		pattern's length from its body with ``p.set_length()``.
+		A save replaces a running pattern's body, and any decorator argument
+		the save changed (``channel``, ``beats``/``bars``,
+		``reschedule_lookahead``, ``min_energy``, ``mirrors``, the maps), all
+		heard from its next cycle.  An argument the save left alone keeps what
+		the performance did to it, such as a ``mirror()``.  ``device`` is the
+		exception, because opening a port while the clock runs would be heard:
+		a pattern moves to a new device when the composition restarts.
 
 		Parameters:
 			path: Path to the Python file to watch.
@@ -5077,24 +5079,6 @@ class Composition:
 			# pattern is still present in the source (see _apply_source_async).
 			self._declared_names.add(fn.__name__)
 
-			# Hot-swap: if we're live and a pattern with this name exists, replace its builder.
-			if self._is_live and fn.__name__ in self._running_patterns:
-				running = self._running_patterns[fn.__name__]
-				running._builder_fn = fn
-				running._wants_chord = _fn_has_parameter(fn, "chord")
-				logger.info(f"Hot-swapped pattern: {fn.__name__}")
-				return fn
-
-			# Names key the seeded stream, mutes, tweaks, and reroll/lock — a
-			# duplicate means two scheduled copies sharing one stream with
-			# only one reachable by name.  Warn loudly at registration.
-			if any(existing.builder_fn.__name__ == fn.__name__ for existing in self._pending_patterns):
-				logger.warning(
-					f"Duplicate pattern name '{fn.__name__}': both copies will be "
-					f"scheduled, they share one seeded stream, and only one is "
-					f"reachable by name — rename one of them."
-				)
-
 			pending = _PendingPattern(
 				builder_fn = fn,
 				channel = channel,  # already resolved to 0-indexed
@@ -5113,11 +5097,105 @@ class Composition:
 				min_energy = min_energy,
 			)
 
+			# Live, with a pattern of this name running: this is a save.  Swap
+			# in the new body and apply what the declaration changed.
+			if self._is_live and fn.__name__ in self._running_patterns:
+				self._redeclare(self._running_patterns[fn.__name__], pending, "pattern", _fn_has_parameter(fn, "chord"))
+				return fn
+
+			# Names key the seeded stream, mutes, tweaks, and reroll/lock — a
+			# duplicate means two scheduled copies sharing one stream with
+			# only one reachable by name.  Warn loudly at registration.
+			if any(existing.builder_fn.__name__ == fn.__name__ for existing in self._pending_patterns):
+				logger.warning(
+					f"Duplicate pattern name '{fn.__name__}': both copies will be "
+					f"scheduled, they share one seeded stream, and only one is "
+					f"reachable by name — rename one of them."
+				)
+
 			self._pending_patterns.append(pending)
 
 			return fn
 
 		return decorator
+
+	def _redeclare (self, running: typing.Any, pending: _PendingPattern, kind: str, wants_chord: bool) -> None:
+
+		"""A live save declared a running pattern again: swap in its body and apply what the declaration changed (#2905).
+
+		Only arguments that differ from the last declaration are applied, so a
+		save that leaves one alone keeps what the performance did to it: a
+		``mirror()``, an ``unmirror()``, a ``set_length()``.  All of it is heard
+		from the pattern's next rebuild.  The length, grid and lookahead reach
+		the sequencer as ``set_length()``'s do, re-read after each rebuild; the
+		channel and mirrors take effect when the next cycle is scheduled, where
+		a drone left sounding on a channel the pattern has moved from is
+		released.
+
+		The device is the exception.  Opening a MIDI port is slow, and a stall
+		where the clock runs is heard, so a changed device waits for a restart
+		and says so.  A length the lookahead cannot fit is refused before
+		anything changes, so a refused save leaves the pattern as it was.
+		"""
+
+		before = running._declared
+		name = pending.builder_fn.__name__
+
+		length_changed = (pending.length, pending.default_grid) != (before.length, before.default_grid)
+		lookahead_changed = pending.reschedule_lookahead != before.reschedule_lookahead
+
+		length = pending.length if length_changed else running.length
+		lookahead = pending.reschedule_lookahead if lookahead_changed else running.reschedule_lookahead
+
+		# The sequencer's own check, so a save is refused as a declaration is.
+		if length_changed or lookahead_changed:
+			self._sequencer._get_schedule_timing(length, lookahead)
+
+		running._builder_fn = pending.builder_fn
+		running._wants_chord = wants_chord
+
+		# In the order that keeps the pair valid at every step, since a rebuild
+		# on the clock's thread may read them between the two.
+		if lookahead <= running.reschedule_lookahead:
+			running.reschedule_lookahead = lookahead
+			running.length = length
+		else:
+			running.length = length
+			running.reschedule_lookahead = lookahead
+
+		if length_changed:
+			running._default_grid = pending.default_grid
+			running._step_beats = pending.length / pending.default_grid if pending.default_grid > 0 else None
+
+		if pending.channel != before.channel:
+			running.channel = pending.channel
+
+		if pending.mirrors != before.mirrors:
+			running.mirrors[:] = pending.mirrors
+
+		if pending.min_energy != before.min_energy:
+			running._min_energy = pending.min_energy
+
+		if pending.drum_note_map != before.drum_note_map:
+			running._drum_note_map = pending.drum_note_map
+
+		if pending.cc_name_map != before.cc_name_map:
+			running._cc_name_map = pending.cc_name_map
+
+		if pending.nrpn_name_map != before.nrpn_name_map:
+			running._nrpn_name_map = pending.nrpn_name_map
+
+		if pending.voice_leading != before.voice_leading:
+			running._voice_leading_state = subsequence.voicings.VoiceLeadingState() if pending.voice_leading else None
+
+		if pending.raw_device != before.raw_device:
+			logger.warning(
+				f"{kind.capitalize()} '{name}' now names a different device, which it moves to when the piece "
+				f"restarts: opening a port while the clock runs would be heard. Until then it plays where it was."
+			)
+
+		running._declared = pending
+		logger.info(f"Hot-swapped {kind}: {name}")
 
 	def layer (
 		self,
@@ -5223,13 +5301,6 @@ class Composition:
 		# tweaks, or mirrors (mirrors the pattern() decorator's hot-swap).
 		self._declared_names.add(merged_builder.__name__)
 
-		if self._is_live and merged_builder.__name__ in self._running_patterns:
-			running = self._running_patterns[merged_builder.__name__]
-			running._builder_fn = merged_builder
-			running._wants_chord = wants_chord
-			logger.info(f"Hot-swapped layer: {merged_builder.__name__}")
-			return
-
 		pending = _PendingPattern(
 			builder_fn = merged_builder,
 			channel = resolved_channel,  # already resolved to 0-indexed above
@@ -5244,6 +5315,10 @@ class Composition:
 			device = 0 if (device is None or isinstance(device, str)) else device,
 			raw_device = device,
 		)
+
+		if self._is_live and merged_builder.__name__ in self._running_patterns:
+			self._redeclare(self._running_patterns[merged_builder.__name__], pending, "layer", wants_chord)
+			return
 
 		self._pending_patterns.append(pending)
 
@@ -5349,13 +5424,6 @@ class Composition:
 			primary = (device if device is not None else 0, resolved_channel)
 		resolved_mirrors = self._resolve_mirrors(mirrors, primary=primary)
 
-		if self._is_live and chords_builder.__name__ in self._running_patterns:
-			running = self._running_patterns[chords_builder.__name__]
-			running._builder_fn = chords_builder
-			running._wants_chord = False
-			logger.info(f"Hot-swapped chords: {chords_builder.__name__}")
-			return timeline
-
 		pending = _PendingPattern(
 			builder_fn = chords_builder,
 			channel = resolved_channel,
@@ -5368,6 +5436,10 @@ class Composition:
 			device = 0 if (device is None or isinstance(device, str)) else device,
 			raw_device = device,
 		)
+
+		if self._is_live and chords_builder.__name__ in self._running_patterns:
+			self._redeclare(self._running_patterns[chords_builder.__name__], pending, "chords", False)
+			return timeline
 		self._pending_patterns.append(pending)
 		return timeline
 
@@ -6236,6 +6308,9 @@ class Composition:
 					mirrors = pending.mirrors,
 				)
 
+				# What the source last declared, so a save can apply only what
+				# it changed (#2905).
+				self._declared = pending
 				self._builder_fn = pending.builder_fn
 				self._drum_note_map = pending.drum_note_map
 				self._cc_name_map = pending.cc_name_map

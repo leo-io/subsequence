@@ -31,11 +31,13 @@ diff-and-unregister against the running set.  Errors from any phase are
 logged but do not abort the watcher.
 
 Existing patterns hot-swap in place via the decorator path: when the
-same function name is re-decorated while ``_is_live=True``, the running
-pattern's ``_builder_fn`` is replaced and the next rebuild uses the new
-logic.  The pattern's channel, mirrors, device, and cycle counter are
-preserved — only the build logic changes, so a save that edits a
-decorator's arguments is not heard until the composition restarts.
+same function name is re-decorated while ``_is_live=True``,
+``Composition._redeclare`` replaces the running pattern's
+``_builder_fn`` and applies each decorator argument that differs from
+its last declaration, all heard from the next rebuild.  The cycle
+counter, stream, mutes and tweaks carry on.  A changed device is the
+exception, applied when the composition restarts, because opening a
+port while the clock runs would be heard.
 
 Error handling
 ──────────────

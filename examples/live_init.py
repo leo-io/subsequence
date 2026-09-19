@@ -18,9 +18,9 @@ here.  For long-lived state, create it in this file before the
 ``watch()`` call, put it on ``composition.data``, and read it back from
 ``composition.data`` in the live file.
 
-A save replaces each pattern's body, heard from its next cycle.  Its
-decorator arguments (``channel``, ``beats``, ``min_energy`` and the rest)
-keep their first values until you restart.
+A save replaces each pattern's body, and any decorator argument you
+changed (``channel``, ``beats``, ``min_energy`` and the rest), heard from
+its next cycle.  Only a changed ``device`` waits until you restart.
 
 Syntax errors are caught before exec and skipped — your previous
 patterns keep running until you fix and save again.  Runtime errors

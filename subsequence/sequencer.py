@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import typing
+import weakref
 
 import mido
 
@@ -540,6 +541,11 @@ class Sequencer:
 		self.current_bar: int = -1
 		self.current_beat: int = -1
 		self.active_notes: typing.Set[typing.Tuple[int, int, int]] = set()  # (device, channel, note)
+
+		# The drones each pattern has scheduled on and not yet off, per
+		# destination, so one left on a destination the pattern stops playing
+		# to (its channel changed, a mirror went) can be released there.
+		self._held_drones: "weakref.WeakKeyDictionary[typing.Any, typing.Set[typing.Tuple[int, int, int]]]" = weakref.WeakKeyDictionary()
 
 		# Transport pause.  ``pause()``/``resume()`` only flip _paused — a plain
 		# bool so they are safe to call from a UI or OSC thread — and the clock
@@ -1170,6 +1176,25 @@ class Sequencer:
 
 		async with self.queue_lock:
 
+			# A drone sounds until the pattern turns it off, and it turns it off
+			# only where it plays now.  One it holds on a destination it has
+			# left would ring for ever, so it is released as this cycle starts,
+			# before anything plays where the pattern went.
+			held = self._held_drones.setdefault(pattern, set())
+			playing_to = {(target.device, target.channel) for target in destinations}
+
+			for device, channel, note in sorted(held):
+				if (device, channel) not in playing_to:
+					held.discard((device, channel, note))
+					self._push_event(MidiEvent(
+						pulse = start_pulse,
+						message_type = 'note_off',
+						channel = channel,
+						note = note,
+						velocity = 0,
+						device = device,
+					))
+
 			for position, step in pattern.steps.items():
 
 				abs_pulse = start_pulse + position
@@ -1285,6 +1310,11 @@ class Sequencer:
 						device = target.device,
 					)
 					self._push_event(midi_event)
+
+					if midi_event.rank == 2:
+						held.add((target.device, target.channel, note_value))
+					else:
+						held.discard((target.device, target.channel, note_value))
 
 			# OSC events — never mirrored.  OSC isn't bound to a MIDI port and
 			# mirroring it would require a different abstraction (multiple OSC
@@ -2248,6 +2278,8 @@ class Sequencer:
 		"""
 
 		async with self.queue_lock:
+			self._held_drones.clear()
+
 			for dev, channel, note in list(self.active_notes):
 
 				self._record_release(channel, note)
@@ -2307,6 +2339,7 @@ class Sequencer:
 		async with self.queue_lock:
 
 			stranded = [t for t in self.active_notes if (t[0], t[1]) in targets]
+			self._held_drones.pop(pattern, None)
 
 			for dev, channel, note in stranded:
 				self._record_release(channel, note)
