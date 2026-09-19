@@ -760,3 +760,23 @@ def test_an_lsystem_that_fits_exactly_is_not_warned_about () -> None:
 	finally:
 		logger.removeHandler(handler)
 		logger.setLevel(previous)
+
+
+def test_a_second_rule_set_of_the_same_size_is_warned_about_too (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""The warn-once key is the rule set itself, not how many rules it has (#2966).
+
+	Two different two-rule sets, both past the budget at 13 generations, are
+	two different things to be told about; the same set rebuilt is one.
+	"""
+
+	subsequence.pattern_algorithmic._warned_budgets.clear()
+
+	with caplog.at_level(logging.WARNING, logger="subsequence.pattern_algorithmic"):
+		for rules in ({"a": "ab", "b": "ba"}, {"a": "ba", "b": "ab"}, {"a": "ab", "b": "ba"}):
+			_, builder = _make_builder(length=4)
+			builder.lsystem(axiom="a", rules=rules, generations=13, pitch_map={"a": 60, "b": 64})
+
+	warnings = [record for record in caplog.records if "budget" in record.getMessage()]
+
+	assert len(warnings) == 2

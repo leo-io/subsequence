@@ -38,11 +38,12 @@ logger = logging.getLogger(__name__)
 # already advises a window of 2 to 4 for practical bar lengths.
 _MAX_GENERATED_SYMBOLS = 4096
 
-# Which (verb, pitch-pool size, window) triples have already been warned about.
+# Which budget overruns have already been warned about: de_bruijn's (verb,
+# pitch-pool size, window) and lsystem's (verb, axiom, rules, generations).
 # A rebuild runs every bar, so warning per call would fill the log for as long
 # as a control sat past the bound — the first one is the useful one, exactly as
 # in declarations.bounded.
-_warned_budgets: typing.Set[typing.Tuple[str, int, int]] = set()
+_warned_budgets: typing.Set[typing.Tuple[typing.Any, ...]] = set()
 
 
 def _fit_to_budget (verb: str, alphabet: int, window: int) -> int:
@@ -1166,7 +1167,9 @@ class PatternAlgorithmicMixin:
 		)
 
 		if applied < generations:
-			key = ("lsystem", len(rules), generations)
+			# Keyed on the rule set itself: two sets of the same size are two
+			# different things to be told about (#2966).
+			key = ("lsystem", axiom, repr(sorted(rules.items())), generations)
 			if key not in _warned_budgets:
 				_warned_budgets.add(key)
 				logger.warning(
