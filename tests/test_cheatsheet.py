@@ -195,3 +195,13 @@ def test_the_documented_surface_parser_sees_what_it_counts () -> None:
 
 	assert _documented(fragment) == ({"Composition", "roles"}, {"sieve"}, {"fold"})
 
+
+
+def test_the_sheet_prints_no_em_dash () -> None:
+
+	"""subsystem.co publishes the sheet and never prints an em dash; a docstring's becomes a spaced hyphen (#2585)."""
+
+	sheet = GENERATOR.generate_markdown()
+
+	assert "—" not in sheet
+	assert " - " in sheet

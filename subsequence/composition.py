@@ -1317,7 +1317,7 @@ class Composition:
 	) -> None:
 
 		"""
-		Initialize a new composition.
+		Initialise a new composition.
 
 		Parameters:
 			output_device: Which MIDI output port to use, matched against
@@ -2956,7 +2956,7 @@ class Composition:
 	def lock (self, name: str) -> None:
 
 		"""
-		Pin a named stream: keep its current effective seed and realization.
+		Pin a named stream: keep its current effective seed and realisation.
 
 		Engine-side state, so it survives live reload (it is never a builder
 		swap): a locked pattern re-deals its stream from the same effective
@@ -5611,7 +5611,7 @@ class Composition:
 	) -> None:
 
 		"""
-		Trigger a one-shot pattern immediately or on a quantized boundary.
+		Trigger a one-shot pattern immediately or on a quantised boundary.
 
 		This is useful for real-time response to sensors, OSC messages, or other
 		external events. The builder function is called immediately with a fresh

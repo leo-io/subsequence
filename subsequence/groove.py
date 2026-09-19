@@ -21,7 +21,7 @@ if typing.TYPE_CHECKING:
 class Groove:
 
 	"""
-	A timing/velocity template applied to quantized grid positions.
+	A timing/velocity template applied to quantised grid positions.
 
 	A groove is a repeating pattern of per-step timing offsets and optional
 	velocity adjustments aligned to a rhythmic grid. Apply it as a post-build

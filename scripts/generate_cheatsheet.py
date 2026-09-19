@@ -94,6 +94,10 @@ def get_first_line (doc: typing.Optional[str]) -> str:
 	first_para = first_para.replace('\n', ' ')
 	first_para = re.sub(r'\s+', ' ', first_para)
 
+	# subsystem.co publishes this sheet, and the site never prints an em
+	# dash: its dash is a spaced hyphen (#2585).  Docstrings keep theirs.
+	first_para = re.sub(r'\s*\u2014\s*', ' - ', first_para)
+
 	return re.sub(r'^[\s*`-]*', '', first_para).strip()
 
 
