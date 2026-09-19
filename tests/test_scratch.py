@@ -190,3 +190,98 @@ def test_a_scratch_of_a_scratch_keeps_deriving () -> None:
 
 	assert inner._stream_seed is not None
 	assert inner._stream_seed != builder._stream_seed
+
+
+# ---------------------------------------------------------------------------
+# Across cycles: a scratch varies exactly when its parent does (#2962)
+# ---------------------------------------------------------------------------
+
+def _cycles (fresh_stream_each_cycle: bool, cycles: int = 4) -> typing.List[typing.Tuple[int, ...]]:
+
+	"""Each cycle's scratch layer, as a pattern rebuilt `cycles` times would place it.
+
+	An unlocked pattern's stream runs on from cycle to cycle, and the parent
+	draws from it; a locked one is re-dealt from its seed before every build.
+	"""
+
+	stream = random.Random(7)
+	layers = []
+
+	for cycle in range(cycles):
+
+		if fresh_stream_each_cycle:
+			stream = random.Random(7)
+
+		pattern = subsequence.pattern.Pattern(channel=3, length=4)
+		builder = subsequence.pattern_builder.PatternBuilder(pattern, cycle=cycle, rng=stream, stream_seed=12345)
+		builder.ghost_fill(60, density=0.5)
+		layer = builder.scratch("hats").ghost_fill(42, density=0.5)
+		layers.append(tuple(note.position for note in layer.placed()))
+
+	assert all(layers), "a scratch placed nothing"
+
+	return layers
+
+
+def test_a_scratch_varies_from_cycle_to_cycle_as_its_parent_does () -> None:
+
+	"""Seeded and unlocked, the parent moves every cycle, and so does its scratch."""
+
+	assert len(set(_cycles(fresh_stream_each_cycle=False))) == 4
+
+
+def test_a_scratch_under_a_locked_pattern_repeats_every_cycle () -> None:
+
+	"""lock() re-deals the stream before each build, and a scratch under it realises identically too."""
+
+	assert len(set(_cycles(fresh_stream_each_cycle=True))) == 1
+
+
+def test_a_varying_scratch_still_repeats_run_to_run () -> None:
+
+	"""The variation is part of the seed's take: two runs with one seed give the same cycles."""
+
+	assert _cycles(fresh_stream_each_cycle=False) == _cycles(fresh_stream_each_cycle=False)
+
+
+def _rendered_bars (tmp_path: typing.Any, locked: bool, name: str) -> typing.List[typing.Tuple[int, ...]]:
+
+	"""Each bar's scratch-placed hats, rendered through the engine with a composition seed."""
+
+	import mido
+	import subsequence
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, seed=3)
+
+	@composition.pattern(channel=10, beats=4)
+	def kit (p: typing.Any) -> None:
+		p.ghost_fill(36, density=0.3)
+		p.motif(p.scratch("hats").ghost_fill(42, density=0.5).capture(0.0, 4.0))
+
+	if locked:
+		composition.lock("kit")
+
+	path = str(tmp_path / f"{name}.mid")
+	composition.render(bars=4, filename=path)
+
+	now, bars = 0, [[] for _ in range(4)]
+
+	for message in mido.MidiFile(path).tracks[0]:
+		now += message.time
+		if message.type == "note_on" and message.velocity > 0 and message.note == 42:
+			bars[now // 1920].append(now % 1920)
+
+	assert all(bars), "a bar had no scratch hats"
+
+	return [tuple(bar) for bar in bars]
+
+
+def test_through_the_engine_a_scratch_moves_with_its_pattern_and_holds_under_lock (patch_midi: None, tmp_path: typing.Any) -> None:
+
+	"""Unlocked, the scratch's hats change bar to bar and repeat run to run; locked, every bar is the same."""
+
+	free = _rendered_bars(tmp_path, locked=False, name="free")
+
+	assert len(set(free)) > 1
+	assert free == _rendered_bars(tmp_path, locked=False, name="free-again")
+	assert len(set(_rendered_bars(tmp_path, locked=True, name="locked"))) == 1

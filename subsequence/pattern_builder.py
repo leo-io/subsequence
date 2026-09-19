@@ -10,6 +10,7 @@ import dataclasses
 import functools
 import logging
 import random
+import struct
 import time
 import typing
 import zlib
@@ -233,6 +234,11 @@ class PatternBuilder(
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
 		self._stream_seed: typing.Optional[int] = stream_seed
+		# Where that stream stood as this build began, so a scratch varies
+		# exactly when this pattern does: an unlocked stream has run on since
+		# the last cycle, and lock() re-deals a locked one to the same place
+		# (#2962).  Only a seeded stream is worth the copy.
+		self._stream_at_start: typing.Optional[typing.Tuple[typing.Any, ...]] = self.rng.getstate() if stream_seed is not None else None
 		self._repeating: bool = repeating
 		self._zero_indexed_channels: bool = zero_indexed_channels
 
@@ -1306,9 +1312,12 @@ class PatternBuilder(
 		only for a fixed number of them.  A fresh unseeded stream would be
 		worse: it would break reproducibility outright.  So the child is
 		derived by name, the same ``crc32`` way ``Composition`` derives a
-		pattern's stream from the composition seed.  Set a seed once at the
-		top and every scratch under it is reproducible; two scratches with
-		different names never draw the same numbers.
+		pattern's stream from the composition seed, and from where this
+		pattern's stream stood when the build began.  Set a seed once at the
+		top and every scratch under it is reproducible, and it changes from
+		cycle to cycle exactly when this pattern does: under ``lock()`` it
+		repeats, as the pattern does.  Two scratches with different names never
+		draw the same numbers.
 
 		Parameters:
 			name: Names this scratch's stream.  Give each one its own name if
@@ -1337,7 +1346,7 @@ class PatternBuilder(
 
 		derived = (
 			None if self._stream_seed is None
-			else zlib.crc32(f"{self._stream_seed}:{name}".encode())
+			else zlib.crc32(f"{self._stream_seed}:{name}:{self._stream_position()}".encode())
 		)
 
 		return PatternBuilder(
@@ -1364,6 +1373,17 @@ class PatternBuilder(
 			zero_indexed_channels = self._zero_indexed_channels,
 		)
 
+
+	def _stream_position (self) -> int:
+
+		"""A fingerprint of where this pattern's stream stood as the build began: the same on every platform, and 0 unseeded."""
+
+		if self._stream_at_start is None:
+			return 0
+
+		words = self._stream_at_start[1]
+
+		return zlib.crc32(struct.pack(f"<{len(words)}I", *words))
 
 	def placed (self) -> typing.List[subsequence.pattern.PlacedNote]:
 
