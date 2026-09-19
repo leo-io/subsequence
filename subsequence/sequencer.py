@@ -70,6 +70,21 @@ def _dispatch_rank (message_type: str, velocity: int) -> int:
 	return 1
 
 
+def _can_sound (channel: typing.Any, note: typing.Any, velocity: typing.Any) -> bool:
+
+	"""Whether a note-on with these values is a message MIDI can carry: a 0-15 channel and 0-127 note and velocity, all whole numbers.
+
+	One that is not fails to send and never sounds, so nothing tracks it as
+	sounding: a release built for it would fail in turn, and a stop that
+	failed there would leave every valid note ringing (#2958).
+	"""
+
+	return all(
+		isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= limit
+		for value, limit in ((channel, 15), (note, 127), (velocity, 127))
+	)
+
+
 @dataclasses.dataclass (order=True)
 class MidiEvent:
 
@@ -2229,9 +2244,11 @@ class Sequencer:
 				# and skipped; subsequent events continue normally.
 				try:
 
-					# Track active notes (keyed by device, channel, note)
+					# Track active notes (keyed by device, channel, note) - only
+					# those MIDI can carry, since any other never sounds.
 					if event.message_type == 'note_on' and event.velocity > 0:
-						self.active_notes.add((event.device, event.channel, event.note))
+						if _can_sound(event.channel, event.note, event.velocity):
+							self.active_notes.add((event.device, event.channel, event.note))
 					elif event.message_type == 'note_off' or (event.message_type == 'note_on' and event.velocity == 0):
 						if (event.device, event.channel, event.note) in self.active_notes:
 							self.active_notes.remove((event.device, event.channel, event.note))
@@ -2314,10 +2331,19 @@ class Sequencer:
 		Only ``_process_pulse`` records what it dispatches, so a release sent
 		straight from ``stop()``, ``pause()`` or ``unregister()`` never reached
 		the file, and the note hung there to its end (#2790).
+
+		It never raises: it runs inside the passes that silence everything,
+		and one that failed part-way would leave the notes after it ringing
+		and the recording unsaved (#2958).
 		"""
 
-		if self.recording:
+		if not self.recording:
+			return
+
+		try:
 			self._record_event(self.pulse_count, mido.Message('note_off', channel=channel, note=note, velocity=0))
+		except (ValueError, TypeError):
+			logger.exception(f"Could not record the release of note {note!r} on channel {channel!r} - continuing")
 
 
 	async def _stop_pattern_notes (self, pattern: PatternLike) -> None:

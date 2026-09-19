@@ -429,3 +429,112 @@ async def test_a_release_is_not_recorded_when_nothing_is_recording (patch_midi: 
 
 	assert seq.recorded_events == []
 	assert seq.active_notes == set()
+
+
+# ---------------------------------------------------------------------------
+# A note no MIDI message can carry (#2958)
+# ---------------------------------------------------------------------------
+
+async def _sounded_at_pulse_zero (seq: subsequence.sequencer.Sequencer, notes: typing.List[typing.Tuple[int, int]]) -> None:
+
+	"""Dispatch a note-on for each (note, channel) at pulse 0, as a pattern's first step would."""
+
+	for note, channel in notes:
+		seq._push_event(subsequence.sequencer.MidiEvent(pulse=0, message_type="note_on", channel=channel, note=note, velocity=100))
+
+	await seq._process_pulse(0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("compensated", [False, True])
+async def test_a_note_no_message_can_carry_does_not_stop_the_others_being_released (patch_midi: None, compensated: bool) -> None:
+
+	"""Note 140 fails to send and never sounds; stop() and pause() still release the valid note beside it, and record that release."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", record=True)
+	seq.recorded_events.clear()
+
+	await _sounded_at_pulse_zero(seq, [(140, 0), (64, 0)])
+	assert seq.active_notes == {(0, 0, 64)}
+
+	seq.pulse_count = 96
+	await seq._stop_all_active_notes(compensated=compensated)
+
+	recorded = [(pulse, message.type, message.note) for pulse, message in seq.recorded_events if message.type in ("note_on", "note_off")]
+
+	assert recorded == [(0.0, "note_on", 64), (96.0, "note_off", 64)]
+	assert seq.active_notes == set()
+
+
+@pytest.mark.asyncio
+async def test_unregistering_a_part_with_a_note_no_message_can_carry_releases_its_valid_notes (patch_midi: None) -> None:
+
+	"""The unregister pass skips the note that never sounded and releases the one that did."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", record=True)
+	seq.recorded_events.clear()
+
+	class Part:
+		device = 0
+		channel = 2
+		mirrors: typing.List[typing.Any] = []
+
+	await _sounded_at_pulse_zero(seq, [(200, 2), (36, 2)])
+	seq.pulse_count = 48
+	await seq._stop_pattern_notes(Part())
+
+	released = [(pulse, message.note) for pulse, message in seq.recorded_events if message.type == "note_off"]
+
+	assert released == [(48.0, 36)]
+	assert seq.active_notes == set()
+
+
+def test_a_render_holding_a_chord_voiced_past_127_still_writes_its_file (tmp_path: pathlib.Path, patch_midi: None) -> None:
+
+	"""chord(count=8) from root 110 reaches 132 and 136; held to the end of the render, it no longer costs the file or the valid notes' releases."""
+
+	timeline, length = _file(tmp_path, 1, lambda p: p.chord("C", root=110, count=8, duration=8))
+	sounded = sorted(message.note for _, message in timeline if message.type == "note_on" and message.velocity > 0)
+
+	assert sounded == [108, 112, 115, 120, 124, 127]
+	assert _sounding_at_the_end(timeline) == []
+	assert length == 1920
+
+
+def test_recording_a_release_no_message_can_carry_is_logged_not_raised (patch_midi: None, caplog: pytest.LogCaptureFixture) -> None:
+
+	"""The release pass must finish whatever it meets: a note number out of range is logged and skipped."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", record=True)
+	seq.recorded_events.clear()
+	seq.pulse_count = 24
+
+	failure: typing.Optional[BaseException] = None
+
+	try:
+		seq._record_release(0, 140)
+		seq._record_release(0, 64)
+	except Exception as caught:
+		failure = caught
+
+	assert failure is None
+	assert [(pulse, message.note) for pulse, message in seq.recorded_events] == [(24.0, 64)]
+	assert "Could not record the release of note 140" in caplog.text
+
+
+@pytest.mark.parametrize(("channel", "note", "velocity", "sounds"), [
+	pytest.param(0, 60, 100, True, id="ordinary"),
+	pytest.param(15, 127, 127, True, id="every-maximum"),
+	pytest.param(16, 60, 100, False, id="channel-17"),
+	pytest.param(0, 128, 100, False, id="note-128"),
+	pytest.param(0, 60, 128, False, id="velocity-128"),
+	pytest.param(-1, 60, 100, False, id="channel-below-0"),
+	pytest.param(0.5, 60, 100, False, id="fractional-channel"),
+	pytest.param(0, 60.0, 100, False, id="float-note"),
+	pytest.param(True, 60, 100, False, id="bool-channel"),
+])
+def test_only_a_note_on_midi_can_carry_counts_as_sounding (channel: typing.Any, note: typing.Any, velocity: typing.Any, sounds: bool) -> None:
+
+	"""A channel from 0 to 15 and a note and velocity from 0 to 127, each a whole number; anything else would fail to send."""
+
+	assert subsequence.sequencer._can_sound(channel, note, velocity) is sounds
