@@ -1,5 +1,6 @@
 """A live save applies the decorator arguments it changed, from the pattern's next cycle, except the device (#2905)."""
 
+import asyncio
 import logging
 import pathlib
 import typing
@@ -193,3 +194,53 @@ def test_unmirror_releases_a_drone_held_on_the_mirror (patch_midi: None, tmp_pat
 	releases = [(tick, channel) for tick, kind, note, channel in _render(composition, tmp_path) if note == 40 and kind == "off"]
 
 	assert (1920, 3) in releases and (1920, 1) not in releases
+
+
+def test_a_save_that_changes_a_phrase_part_applies_it_as_for_every_other_declaration (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""phrase_part() saved with a two-bar cycle and a mirror: both are heard from its next cycle, as pattern(), layer() and chords() are (#2961)."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	composition._is_live = True
+	composition.section_motifs("verse", subsequence.motif([1, 2, 3, 4, 5, 6, 7, 8]), part="lead")
+	composition.form([("verse", 16)], loop=True)
+	composition.phrase_part(channel=4, part="lead", beats=4)
+
+	def save () -> None:
+		# A save's reload starts from no declared names, so the part keeps its own.
+		composition._declared_names = set()
+		composition.phrase_part(channel=4, part="lead", beats=8, mirrors=[(0, 5)])
+
+	_saved_in_bar_zero(composition, save)
+
+	notes = _render(composition, tmp_path)
+	running = [pattern for name, pattern in composition._running_patterns.items() if name.startswith("phrase@lead")]
+
+	assert len(running) == 1 and running[0].length == 8
+	assert {channel for tick, kind, note, channel in notes if kind == "on" and tick < 1920} == {4}
+	assert {channel for tick, kind, note, channel in notes if kind == "on" and tick >= 1920} == {4, 5}
+
+
+@pytest.mark.asyncio
+async def test_a_reloaded_source_s_phrase_part_takes_its_new_length_and_mirrors (patch_midi: None) -> None:
+
+	"""Through load_patterns(), the path watch() takes: the running phrase part is re-declared, not duplicated."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	source = (
+		"composition.section_motifs('verse', subsequence.motif([1, 2, 3, 4]), part='lead')\n"
+		"composition.phrase_part(channel=4, part='lead', beats={beats}{mirrors})\n"
+	)
+
+	composition.load_patterns(source.format(beats=4, mirrors=""), source_label="song")
+	composition._sequencer._event_loop = asyncio.get_event_loop()
+	await composition._activate_new_pending_patterns()
+
+	await asyncio.to_thread(composition.load_patterns, source.format(beats=8, mirrors=", mirrors=[(0, 5)]"), "song")
+
+	running = [pattern for name, pattern in composition._running_patterns.items() if name.startswith("phrase@lead")]
+
+	assert len(running) == 1
+	assert running[0].length == 8
+	assert running[0].mirrors == [(0, 4)]
+	assert not composition._pending_patterns

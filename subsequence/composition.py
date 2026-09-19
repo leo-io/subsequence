@@ -5572,13 +5572,6 @@ class Composition:
 			primary = (device if device is not None else 0, resolved_channel)
 		resolved_mirrors = self._resolve_mirrors(mirrors, primary=primary)
 
-		if self._is_live and phrase_builder.__name__ in self._running_patterns:
-			running = self._running_patterns[phrase_builder.__name__]
-			running._builder_fn = phrase_builder
-			running._wants_chord = False
-			logger.info(f"Hot-swapped phrase part: {phrase_builder.__name__}")
-			return
-
 		pending = _PendingPattern(
 			builder_fn = phrase_builder,
 			channel = resolved_channel,
@@ -5591,6 +5584,12 @@ class Composition:
 			device = 0 if (device is None or isinstance(device, str)) else device,
 			raw_device = device,
 		)
+
+		# A live save applies what it changed, as every declaration does (#2961).
+		if self._is_live and phrase_builder.__name__ in self._running_patterns:
+			self._redeclare(self._running_patterns[phrase_builder.__name__], pending, "phrase part", False)
+			return
+
 		self._pending_patterns.append(pending)
 
 	def trigger (
