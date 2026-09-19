@@ -6506,10 +6506,12 @@ class Composition:
 				except Exception:
 					# Discard whatever the builder placed before it raised —
 					# otherwise a half-built pattern plays and the log lies.
+					# That includes the glides and tunings it had deferred.
 					self.steps = {}
 					self.cc_events = []
 					self.osc_events = []
 					self.raw_note_events = []
+					builder._abandon_build()
 					logger.exception("Error in pattern builder '%s' (cycle %d) - pattern will be silent this cycle", self._builder_fn.__name__, current_cycle)
 
 				composition_ref._apply_composition_tuning(self, builder, self._drum_note_map, part = self._builder_fn.__name__)

@@ -185,6 +185,13 @@ class Pattern:
 		self.osc_events: typing.List[OscEvent] = []
 		self.raw_note_events: typing.List[RawNoteEvent] = []
 
+		# Builds that left glides and tunings to lay once the notes are where
+		# they will finally sit (#2792).  The engine finishes its own builders
+		# as each build ends; a builder made by hand for the Direct Pattern API
+		# is finished by _finish_builds(), when the sequencer schedules the
+		# pattern (#2959).
+		self._unfinished_builds: typing.List[typing.Callable[[], None]] = []
+
 		# Drum names already warned about (absent from every destination map)
 		# so the per-cycle rebuild warns once, not every bar.  A hot-reload
 		# builds a fresh Pattern, which resets this — re-surfacing the warning.
@@ -193,6 +200,21 @@ class Pattern:
 		# Likewise warn once if a positioned chord/strum (beat != 0) uses sustain=/detached=,
 		# which size their ring from the pattern length rather than from beat.
 		self._warned_positioned_articulation: bool = False
+
+
+	def _finish_builds (self) -> None:
+
+		"""Lay whatever a builder left for the end of its build and has not laid yet.
+
+		The sequencer calls this as it schedules the pattern.  After a
+		Composition's own build there is nothing left; a pattern built by hand
+		with a ``PatternBuilder`` has its glides and tunings laid here (#2959).
+		"""
+
+		for finish in list(self._unfinished_builds):
+			finish()
+
+		self._unfinished_builds.clear()
 
 
 	def add_note (self, position: int, pitch: int, velocity: int, duration: int, origin: typing.Optional[str] = None, primary_unmapped: bool = False) -> None:

@@ -2859,7 +2859,7 @@ class PatternBuilder(
 		# Read the pool now, so a channel it cannot be is refused on this line.
 		pool = None if channels is None else subsequence.tuning.resolve_channel_pool(channels, zero_indexed=self._zero_indexed_channels)
 
-		self._pending_tunings.append(functools.partial(
+		self._defer(self._pending_tunings, functools.partial(
 			subsequence.tuning.apply_tuning_to_pattern,
 			self._pattern,
 			tuning,
@@ -2886,8 +2886,32 @@ class PatternBuilder(
 		for tune in self._pending_tunings:
 			tune()
 
+		self._abandon_build()
+
+	def _defer (self, pending: typing.List[typing.Any], lay: typing.Callable[[], object]) -> None:
+
+		"""Keep *lay* for the end of the build, and make sure the build will be finished.
+
+		The engine finishes its own builders.  A builder made by hand (the
+		Direct Pattern API) is not, so the first deferral registers the build
+		on its pattern, and the sequencer finishes it when it schedules the
+		pattern (#2959).
+		"""
+
+		if self._finish_build not in self._pattern._unfinished_builds:
+			self._pattern._unfinished_builds.append(self._finish_build)
+
+		pending.append(lay)
+
+	def _abandon_build (self) -> None:
+
+		"""Forget what this build deferred: after laying it, or after the builder raised and its pattern was emptied."""
+
 		self._pending_glides.clear()
 		self._pending_tunings.clear()
+
+		if self._finish_build in self._pattern._unfinished_builds:
+			self._pattern._unfinished_builds.remove(self._finish_build)
 
 	def reverse (self) -> "PatternBuilder":
 

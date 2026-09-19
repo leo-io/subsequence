@@ -200,3 +200,114 @@ def test_a_triggered_one_shot_slides_too (patch_midi: None, monkeypatch: pytest.
 	bends = [e.pulse for e in pattern.cc_events if e.message_type == "pitchwheel"]
 
 	assert bends and max(bends) == 24, bends
+
+
+# ---------------------------------------------------------------------------
+# The Direct Pattern API (#2959)
+# ---------------------------------------------------------------------------
+
+class _HandBuilt (subsequence.pattern.Pattern):
+
+	"""A pattern built the way examples/demo_advanced.py builds one: a PatternBuilder of its own, rebuilt each cycle."""
+
+	def __init__ (self, build: typing.Callable[[subsequence.pattern_builder.PatternBuilder], None]) -> None:
+
+		super().__init__(channel=0, length=4)
+		self._build_with = build
+		self.on_reschedule()
+
+	def on_reschedule (self) -> None:
+
+		self.steps = {}
+		self.cc_events = []
+		p = subsequence.pattern_builder.PatternBuilder(self, cycle=0)
+		p.note(60, beat=0, duration=1)
+		p.note(62, beat=1, duration=1)
+		self._build_with(p)
+
+
+async def _queued_bends (pattern: subsequence.pattern.Pattern, start_pulse: int = 0) -> typing.List[typing.Tuple[int, int]]:
+
+	"""Schedule *pattern* on a bare sequencer and return the (pulse, value) of every pitch bend it queued."""
+
+	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", initial_bpm=120)
+	await seq.schedule_pattern(pattern, start_pulse)
+
+	notes = [event for event in seq.event_queue if event.message_type == "note_on"]
+	assert len(notes) == 2, "the pattern's notes were not scheduled"
+
+	return sorted((event.pulse, event.value) for event in seq.event_queue if event.message_type == "pitchwheel")
+
+
+@pytest.mark.asyncio
+async def test_a_hand_built_pattern_glides (patch_midi: None) -> None:
+
+	"""portamento() on a builder made by hand is laid when the pattern is scheduled: it rises through the last half beat of 60 into 62."""
+
+	bends = await _queued_bends(_HandBuilt(lambda p: p.portamento(time=0.5, wrap=False)))
+	rise = [value for pulse, value in bends if 12 <= pulse < 24]
+
+	assert rise, "no glide was laid"
+	assert rise == sorted(rise) and rise[-1] > 7500
+
+
+@pytest.mark.asyncio
+async def test_a_hand_built_pattern_is_tuned (patch_midi: None) -> None:
+
+	"""apply_tuning() on a builder made by hand bends each tuned note as the pattern is scheduled."""
+
+	bends = await _queued_bends(_HandBuilt(lambda p: p.apply_tuning(subsequence.tuning.Tuning.equal(19))))
+
+	assert (24, 1078) in bends
+
+
+@pytest.mark.asyncio
+async def test_a_hand_built_pattern_glides_again_each_cycle (patch_midi: None) -> None:
+
+	"""The next cycle's builder is finished when that cycle is scheduled, as the first one was."""
+
+	pattern = _HandBuilt(lambda p: p.portamento(time=0.5, wrap=False))
+	await _queued_bends(pattern)
+	pattern.on_reschedule()
+
+	bends = await _queued_bends(pattern, start_pulse=96)
+	rise = [value for pulse, value in bends if 108 <= pulse < 120]
+
+	assert rise and rise == sorted(rise) and rise[-1] > 7500
+	assert all(pulse >= 96 for pulse, _ in bends)
+
+
+def test_the_engine_leaves_nothing_for_the_sequencer_to_finish (patch_midi: None) -> None:
+
+	"""A decorated pattern's build is finished by the engine, so its pattern holds no unfinished build."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=1, beats=4)
+	def lead (p: typing.Any) -> None:
+		p.note(60, beat=0, duration=1)
+		p.note(62, beat=1, duration=1)
+		p.portamento(time=0.5)
+
+	pattern = composition._build_pattern_from_pending(composition._pending_patterns[0])
+
+	assert any(event.message_type == "pitchwheel" for event in pattern.cc_events), "the engine laid no glide"
+	assert pattern._unfinished_builds == []
+
+
+def test_a_failed_build_leaves_nothing_to_lay (patch_midi: None) -> None:
+
+	"""A builder that raises after asking for a glide is emptied, deferred work included, so the sequencer lays nothing against it."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+
+	@composition.pattern(channel=1, beats=4)
+	def lead (p: typing.Any) -> None:
+		p.note(60, beat=0, duration=1)
+		p.portamento(time=0.5)
+		raise RuntimeError("a typo in the builder")
+
+	pattern = composition._build_pattern_from_pending(composition._pending_patterns[0])
+
+	assert pattern.steps == {} and pattern.cc_events == []
+	assert pattern._unfinished_builds == []

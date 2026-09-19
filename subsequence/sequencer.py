@@ -1182,6 +1182,13 @@ class Sequencer:
 		need it.
 		"""
 
+		# A pattern built by hand may still hold the glides and tunings its
+		# builder left for the end of the build; lay them against its final
+		# notes before reading them (#2959).  The engine's patterns hold none.
+		finish_builds = getattr(pattern, '_finish_builds', None)
+		if finish_builds is not None:
+			finish_builds()
+
 		# Primary destination first; mirrors follow.  Iteration order matters
 		# only for human readability when inspecting the queue — FIFO ordering
 		# at equal pulses is enforced by ``_push_event`` (the ``sequence``

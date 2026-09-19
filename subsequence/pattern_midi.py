@@ -53,6 +53,7 @@ class PatternMidiMixin:
 		def _resolve_cc (self, control: typing.Union[int, str]) -> int: ...
 		def _resolve_nrpn (self, parameter: typing.Union[int, str]) -> int: ...
 		def _resolve_rpn (self, parameter: typing.Union[int, str]) -> int: ...
+		def _defer (self, pending: typing.List[typing.Any], lay: typing.Callable[[], object]) -> None: ...
 
 	# ── Shared ramp helper ──────────────────────────────────────────────────
 
@@ -921,7 +922,7 @@ class PatternMidiMixin:
 		"""
 
 		self._check_glide(shape, resolution)
-		self._pending_glides.append(functools.partial(self._lay_bend, note, amount, start, end, shape, resolution))
+		self._defer(self._pending_glides, functools.partial(self._lay_bend, note, amount, start, end, shape, resolution))
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	def _lay_bend (
@@ -1039,7 +1040,7 @@ class PatternMidiMixin:
 			)
 
 		self._check_glide(shape, resolution)
-		self._pending_glides.append(functools.partial(self._lay_portamento, time, shape, resolution, bend_range, wrap))
+		self._defer(self._pending_glides, functools.partial(self._lay_portamento, time, shape, resolution, bend_range, wrap))
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	def _lay_portamento (
@@ -1187,7 +1188,7 @@ class PatternMidiMixin:
 			)
 
 		self._check_glide(shape, resolution)
-		self._pending_glides.append(functools.partial(self._lay_slide, notes, steps, time, shape, resolution, bend_range, wrap, extend))
+		self._defer(self._pending_glides, functools.partial(self._lay_slide, notes, steps, time, shape, resolution, bend_range, wrap, extend))
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
 	def _lay_slide (
