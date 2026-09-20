@@ -943,6 +943,17 @@ class Sequencer:
 			self.output_device_name = device_name
 			self._output_devices.add(device_name, midi_out)
 
+		elif self.output_device_name:
+			# The primary holds index 0 even when it does not open, so a second
+			# device is never promoted into its place and a part written for
+			# the drum machine does not arrive at the lead synth (#2997).
+			logger.warning(
+				"Output device '%s' did not open — it keeps device 0 and stays silent, "
+				"so every other device keeps its own number.",
+				self.output_device_name,
+			)
+			self._output_devices.add(self.output_device_name, None)
+
 
 	def _open_midi_inputs (self) -> None:
 

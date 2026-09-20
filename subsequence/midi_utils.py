@@ -66,6 +66,13 @@ class MidiDeviceRegistry:
 
 		*latency_ms* is the device's physical output latency (non-negative);
 		see :meth:`set_latency`.
+
+		*port* may be ``None``, which registers a **placeholder**: a device
+		that could not be opened keeps its index and its name, so every later
+		device keeps the index the composition gave it and nothing is
+		addressed by accident (#2997).  Sends to a placeholder go nowhere, and
+		iteration skips it, so a panic or a clock tick never reaches for a
+		port that is not there.
 		"""
 
 		idx = len(self._ports)
@@ -161,6 +168,8 @@ class MidiDeviceRegistry:
 		"""Close every registered port and clear the registry."""
 
 		for name, port in self._ports:
+			if port is None:
+				continue		# a placeholder for a device that never opened
 			try:
 				port.close()
 			except (OSError, RuntimeError, AttributeError):
@@ -179,8 +188,8 @@ class MidiDeviceRegistry:
 		return len(self._ports)
 
 	def __iter__ (self) -> typing.Iterator[typing.Any]:
-		"""Iterate over port objects (not names)."""
-		return (port for _, port in self._ports)
+		"""Iterate over the open port objects (not names); placeholders are skipped."""
+		return (port for _, port in self._ports if port is not None)
 
 	def __bool__ (self) -> bool:
 

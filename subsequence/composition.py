@@ -6030,7 +6030,23 @@ class Composition:
 				if out.alias is not None:
 					self._output_device_names[out.alias] = idx
 			else:
-				logger.warning(f"Could not open additional output device '{out.device}'")
+				# A device that will not open keeps its number as a silent
+				# placeholder, so `device=2` still means the third device the
+				# composition declared and no part is quietly re-routed to a
+				# neighbour or dropped for an index that no longer exists
+				# (#2997).  Its name and alias resolve here too, so a part
+				# addressed by name is silent rather than landing on device 0.
+				idx = self._sequencer.add_output_device(out.device, None, out.latency_ms)
+				self._output_device_names.setdefault(out.device, idx)
+
+				if out.alias is not None:
+					self._output_device_names[out.alias] = idx
+
+				logger.warning(
+					"Could not open additional output device '%s' — it keeps device %d and stays silent, "
+					"so every other device keeps its own number.",
+					out.device, idx,
+				)
 
 		# Warn if latency compensation adds noticeable whole-rig delay: the
 		# slowest device defines the alignment point, so every faster device is
