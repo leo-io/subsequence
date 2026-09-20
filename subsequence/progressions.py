@@ -704,12 +704,20 @@ class ChordSpan:
 
 		"""Semitone offsets of the decorated voicing (before inversion/spread/bass).
 
-		Numeric extensions deepen the chord in its own colour — a minor third
-		gets a minor seventh, a major third a major seventh, a diminished
-		triad a diminished seventh.  Diatonic degrees extended with
-		``extend(...)`` carry pre-computed scale-true intervals instead (so V
-		gets its dominant seventh).  Write ``"G7"``/``"V7"`` when you want the
-		dominant colour on a concrete major chord.
+		A numeric extension deepens the chord in its own colour — a minor third
+		gets a minor seventh, a major third a major seventh, a diminished triad
+		a diminished seventh — so ``extend(9)`` on a plain C gives Cmaj9.  The
+		chord *symbol* ``"C9"`` is a dominant, as a chart means it; write
+		``"Cmaj9"`` for the major seventh.  Diatonic degrees extended with
+		``extend(...)`` carry pre-computed scale-true intervals instead, so V
+		gets its dominant seventh.
+
+		Everything below an extension sounds with it: an 11th carries the 9, a
+		13th carries the 9 and the 11.  Two jazz rules then shape it, on both
+		paths — over a major third the natural 11 is left out of a 13th (G13 is
+		G B D F A E), and a dominant 11th drops the third the 11 sits a
+		semitone above (G11 is G D F A C).  A minor chord keeps both (Dm11 is
+		D F A C E G).
 		"""
 
 		if isinstance(self.chord, RomanChord):
@@ -722,14 +730,14 @@ class ChordSpan:
 			intervals[1] = 2 if sus[0] == "sus2" else 5
 
 		numeric = sorted(e for e in self.extensions if isinstance(e, int))
+		stacked = [e for e in numeric if e in _NUMERIC_EXTENSIONS]
+		third = intervals[1] if len(intervals) >= 2 else None
 
 		if self.extension_intervals is not None:
 			added: typing.List[int] = list(self.extension_intervals)
 		else:
 			added = []
-			third = intervals[1] if len(intervals) >= 2 else None
 			has_seventh = any(i in (9, 10, 11) for i in intervals)
-			stacked = [e for e in numeric if e in _NUMERIC_EXTENSIONS]
 
 			if stacked and not has_seventh:
 				if third == 3 and len(intervals) >= 3 and intervals[2] == 6:
@@ -742,12 +750,27 @@ class ChordSpan:
 					added.append(10)	# sus / no third: the dominant-leaning seventh
 
 			for extension in stacked:
-				if extension == 9:
+				if extension >= 9:
 					added.append(14)
-				elif extension == 11:
+				if extension >= 11:
 					added.append(17)
-				elif extension == 13:
+				if extension >= 13:
 					added.append(21)
+
+		if stacked:
+
+			seventh = next((i for i in intervals if i in (9, 10, 11)), None)
+			if seventh is None:
+				seventh = next((i for i in added if i in (9, 10, 11)), None)
+
+			# A natural 11 a semitone above a major third is the one note a
+			# 13th chord leaves out, unless it was asked for by name (#3006).
+			if 13 in stacked and 11 not in stacked and third == 4:
+				added = [i for i in added if i != 17]
+
+			# And a dominant 11th is played without the third instead.
+			elif 11 in stacked and third == 4 and seventh == 10 and len(intervals) >= 2:
+				del intervals[1]
 
 		if "add9" in self.extensions:
 			added.append(14)
@@ -1054,6 +1077,23 @@ def parse_element (element: typing.Any, beats: float = DEFAULT_SPAN_BEATS) -> Ch
 # ---------------------------------------------------------------------------
 
 
+def _dominant_where_the_symbol_says_nothing (base: str) -> str:
+
+	"""``"C"`` under a 9, 11 or 13 means C7 — ``"C9"`` is the chart's dominant.
+
+	A base that names its own quality is left as written, so ``"Cmaj9"`` keeps
+	its major seventh and ``"Cm9"`` its minor one.  Only the bare root is read
+	as a dominant, which is how every chart writes one (#3006).
+	"""
+
+	try:
+		_, quality = subsequence.chords.split_chord_name(base)
+	except ValueError:
+		return base
+
+	return base + "7" if quality == "" else base
+
+
 def _parse_chord_name (name: str, beats: float) -> ChordSpan:
 
 	"""Parse a chord-name element, splitting a trailing extension onto the span.
@@ -1062,6 +1102,9 @@ def _parse_chord_name (name: str, beats: float) -> ChordSpan:
 	qualities, and the 9/11/13 ride the span as extensions (decoration lives
 	on spans, never chords).  ``"Dm7"`` stays a plain quality (m7 is in the
 	table); the split only happens when the full name does not parse.
+
+	A bare major root under the extension is read as a dominant, so ``"C9"``
+	and ``"Cmaj9"`` are the two different chords they are on paper.
 	"""
 
 	try:
@@ -1071,7 +1114,7 @@ def _parse_chord_name (name: str, beats: float) -> ChordSpan:
 			if name.endswith(extension) and len(name) > len(extension):
 				base = name[:-len(extension)]
 				try:
-					chord = subsequence.chords.parse_chord(base)
+					chord = subsequence.chords.parse_chord(_dominant_where_the_symbol_says_nothing(base))
 				except ValueError:
 					continue
 				return ChordSpan(chord = chord, beats = beats, extensions = (int(extension),))

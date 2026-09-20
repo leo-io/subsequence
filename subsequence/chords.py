@@ -381,6 +381,30 @@ def register_chord_quality (
 		CHORD_SUFFIX.pop(name, None)
 
 
+def split_chord_name (name: str) -> typing.Tuple[str, str]:
+
+	"""Split a chord name into its root and the quality written after it.
+
+	The root is ``A``–``G`` with an optional ``#`` or ``b``; everything after
+	it is the quality, which is empty for a plain major triad.  Raises
+	``ValueError`` where the name does not start with a root, so a caller that
+	wants to read the quality itself does not have to find it first.
+	"""
+
+	stripped = name.strip()
+
+	if not stripped or stripped[0] not in "ABCDEFG":
+		raise ValueError(f"Cannot parse chord name {name!r} — expected a root like 'C', 'F#', 'Bb' then a quality, e.g. 'Cm7'")
+
+	split = 2 if (len(stripped) > 1 and stripped[1] in "#b") else 1
+	root_name = stripped[:split]
+
+	if root_name not in NOTE_NAME_TO_PC:
+		raise ValueError(f"Cannot parse chord name {name!r} — unknown root {root_name!r}")
+
+	return root_name, stripped[split:]
+
+
 def parse_chord (name: str) -> Chord:
 
 	"""Parse a chord name like ``"Cm7"`` or ``"Dbmaj7"`` into a :class:`Chord`.
@@ -402,16 +426,8 @@ def parse_chord (name: str) -> Chord:
 		```
 	"""
 
-	stripped = name.strip()
-	if not stripped or stripped[0] not in "ABCDEFG":
-		raise ValueError(f"Cannot parse chord name {name!r} — expected a root like 'C', 'F#', 'Bb' then a quality, e.g. 'Cm7'")
+	root_name, suffix = split_chord_name(name)
 
-	split = 2 if (len(stripped) > 1 and stripped[1] in "#b") else 1
-	root_name = stripped[:split]
-	suffix = stripped[split:]
-
-	if root_name not in NOTE_NAME_TO_PC:
-		raise ValueError(f"Cannot parse chord name {name!r} — unknown root {root_name!r}")
 	if suffix not in _SUFFIX_TO_QUALITY:
 		known = ", ".join(repr(key) for key in sorted(_SUFFIX_TO_QUALITY) if key)
 		raise ValueError(f"Cannot parse chord name {name!r} — unknown quality {suffix!r}. Known suffixes: {known}")
