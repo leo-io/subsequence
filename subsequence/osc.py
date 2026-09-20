@@ -23,10 +23,12 @@ Built-in Send Events
 
 import asyncio
 import logging
+import time
 import typing
 
 import pythonosc.dispatcher
-import pythonosc.osc_server
+import pythonosc.osc_message_builder
+import pythonosc.osc_packet
 import pythonosc.udp_client
 
 if typing.TYPE_CHECKING:
@@ -34,6 +36,135 @@ if typing.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+# How far ahead a bundle's timetag is honoured.  Past this, take it for a
+# mistake — two machines whose clocks disagree, or a timetag written in the
+# wrong epoch — and play it now, saying so.  A control surface that appears to
+# do nothing for an hour is worse than one that acts early and tells you.
+MAX_TIMETAG_AHEAD_SECONDS = 60.0
+
+
+class _TimetagProtocol (asyncio.DatagramProtocol):
+
+	"""Honour a bundle's timetag without stopping the music to wait for it.
+
+	python-osc reaches a bundle's timetag by calling ``time.sleep()`` — inside
+	``datagram_received``, on the event loop, which is the loop the MIDI clock
+	runs on.  A bundle dated half a second ahead stopped the piece for half a
+	second and then burst the missed notes out together; one dated an hour
+	ahead stopped it for an hour, with Ctrl+C held until the end.  It happened
+	whatever the address, handled or not, because ``handlers_for_address``
+	returns a generator and a generator is always truthy, so the guard meant to
+	skip unhandled messages never fired (#3001).
+
+	This parses the packet itself, plays what is due, and gives the rest to
+	``loop.call_later``.  Nothing waits.
+	"""
+
+	def __init__ (
+		self,
+		dispatcher: pythonosc.dispatcher.Dispatcher,
+		loop: asyncio.AbstractEventLoop,
+	) -> None:
+
+		"""Hold the dispatcher to invoke through and the loop to schedule on."""
+
+		self._dispatcher = dispatcher
+		self._loop = loop
+		self._transport: typing.Optional[asyncio.DatagramTransport] = None
+		self._pending: typing.Set[asyncio.TimerHandle] = set()
+		self._warned_about_horizon = False
+
+	def connection_made (self, transport: asyncio.BaseTransport) -> None:
+
+		"""Keep the transport, which is how a handler's reply gets back."""
+
+		self._transport = typing.cast(asyncio.DatagramTransport, transport)
+
+	def datagram_received (self, data: bytes, client_address: typing.Tuple[str, int]) -> None:
+
+		"""Split one packet into what is due now and what is due later."""
+
+		try:
+			packet = pythonosc.osc_packet.OscPacket(data)
+		except pythonosc.osc_packet.ParseError:
+			return
+
+		now = time.time()
+
+		for timed in packet.messages:
+
+			ahead = timed.time - now
+
+			if ahead > MAX_TIMETAG_AHEAD_SECONDS:
+				if not self._warned_about_horizon:
+					self._warned_about_horizon = True
+					logger.warning(
+						"An OSC message is timed %.0f seconds ahead, past the %.0f-second "
+						"limit — playing it now. Check the sending machine's clock.",
+						ahead, MAX_TIMETAG_AHEAD_SECONDS,
+					)
+				ahead = 0.0
+
+			if ahead <= 0.0:
+				self._invoke(timed.message, client_address)
+				continue
+
+			handle = self._loop.call_later(ahead, self._fire, timed.message, client_address)
+			self._pending.add(handle)
+
+	def _fire (self, message: typing.Any, client_address: typing.Tuple[str, int]) -> None:
+
+		"""A message whose timetag has come round."""
+
+		self._pending = {handle for handle in self._pending if not handle.cancelled()}
+
+		self._invoke(message, client_address)
+
+	def _invoke (self, message: typing.Any, client_address: typing.Tuple[str, int]) -> None:
+
+		"""Hand one message to every handler mapped to its address, and reply if asked."""
+
+		for handler in self._dispatcher.handlers_for_address(message.address):
+
+			try:
+				result = handler.invoke(client_address, message)
+			except Exception:
+				# One bad handler must not take the OSC server down with it, and
+				# certainly must not reach the clock.
+				logger.exception("OSC handler for %s failed", message.address)
+				continue
+
+			if result is not None:
+				self._reply(result, client_address)
+
+	def _reply (self, result: typing.Any, client_address: typing.Tuple[str, int]) -> None:
+
+		"""Send a handler's return value back, the way python-osc's own server does."""
+
+		if self._transport is None:
+			return
+
+		parts = list(result) if isinstance(result, tuple) else [result]
+		builder = pythonosc.osc_message_builder.OscMessageBuilder(address = parts[0])
+
+		for argument in parts[1:]:
+			builder.add_arg(argument)
+
+		self._transport.sendto(builder.build().dgram, client_address)
+
+	def close (self) -> None:
+
+		"""Drop every message still waiting for its timetag.
+
+		A stopped composition must not have an OSC message fire into it a
+		minute later.
+		"""
+
+		for handle in self._pending:
+			handle.cancel()
+
+		self._pending.clear()
 
 
 class OscServer:
@@ -59,7 +190,7 @@ class OscServer:
 		self._send_port = send_port
 		self._send_host = send_host
 
-		self._server: typing.Optional[typing.Any] = None
+		self._protocol: typing.Optional[_TimetagProtocol] = None
 		self._transport: typing.Optional[asyncio.BaseTransport] = None
 		self._client: typing.Optional[pythonosc.udp_client.SimpleUDPClient] = None
 		self._dispatcher = pythonosc.dispatcher.Dispatcher()
@@ -78,15 +209,18 @@ class OscServer:
 		# client for sending
 		self._client = pythonosc.udp_client.SimpleUDPClient(self._send_host, self._send_port)
 
-		# server for receiving
-		self._server = pythonosc.osc_server.AsyncIOOSCUDPServer(
-			(self._receive_host, self._receive_port),
-			self._dispatcher,
-			asyncio.get_event_loop()  # type: ignore[arg-type]
+		# Server for receiving.  Not python-osc's own AsyncIOOSCUDPServer: its
+		# protocol sleeps on the loop to honour a bundle's timetag, which stops
+		# the clock (#3001).  _TimetagProtocol schedules instead.
+		loop = asyncio.get_running_loop()
+
+		transport, protocol = await loop.create_datagram_endpoint(
+			lambda: _TimetagProtocol(self._dispatcher, loop),
+			local_addr = (self._receive_host, self._receive_port),
 		)
 
-		transport, _ = await self._server.create_serve_endpoint()
 		self._transport = transport
+		self._protocol = protocol
 
 		logger.info(f"OSC listening on :{self._receive_port}, sending to {self._send_host}:{self._send_port}")
 
@@ -94,6 +228,12 @@ class OscServer:
 	async def stop (self) -> None:
 
 		"""Stop the OSC server and close the outgoing client socket."""
+
+		if self._protocol is not None:
+			# Anything still waiting for its timetag is dropped: a stopped
+			# composition must not be played into a minute later.
+			self._protocol.close()
+			self._protocol = None
 
 		if self._transport:
 			self._transport.close()
