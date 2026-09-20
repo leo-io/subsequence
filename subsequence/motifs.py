@@ -390,11 +390,21 @@ def _expand (name: str, value: typing.Any, n: int) -> list:
 	return result
 
 
-def _computed_length (events: typing.Iterable[MotifEvent], controls: typing.Iterable[ControlEvent]) -> float:
+def _computed_length (
+	events: typing.Iterable[MotifEvent],
+	controls: typing.Iterable[ControlEvent],
+	slots: typing.Iterable[float] = (),
+) -> float:
 
-	"""Default length: the next whole beat at or after the last sounding moment."""
+	"""Default length: the next whole beat at or after the last moment the figure occupies.
 
-	ends = [e.beat + e.duration for e in events] + [c.beat + c.span for c in controls]
+	``slots`` is the end of every slot a constructor was handed, silent ones
+	included, because a rest occupies its slot exactly as a note would.
+	Without it a trailing rest vanished from the length, and a figure written
+	as one bar looped three beats long against the bar (#3009).
+	"""
+
+	ends = [e.beat + e.duration for e in events] + [c.beat + c.span for c in controls] + [float(s) for s in slots]
 	return float(math.ceil(max(ends))) if ends else 0.0
 
 
@@ -409,7 +419,13 @@ class Motif:
 	Construct via the classmethods (:meth:`degrees`, :meth:`notes`,
 	:meth:`hits`, :meth:`steps`, :meth:`euclidean`, the control-gesture
 	constructors, or :meth:`from_events`) rather than positionally.
-	``length`` is explicit — a trailing rest is meaningful.
+
+	``length`` is explicit, and a trailing rest is meaningful: left to itself
+	it runs to the next whole beat at or after the last slot the figure
+	occupies, silent slots included, so a bar-long idea ending in silence is
+	a bar long.  A length that would leave an event past the end is refused
+	rather than dropping it, while a note ringing past the end is fine — that
+	is a tie over the barline.
 	"""
 
 	events: typing.Tuple[MotifEvent, ...]
@@ -423,6 +439,18 @@ class Motif:
 
 		if self.length < 0:
 			raise ValueError(f"Motif length must be non-negative — got {self.length}")
+
+		# A note may ring past the end — that is a tie over the barline — and an
+		# event *on* the end is the boundary itself, which a discrete control
+		# write uses.  One that starts beyond it is the error: the figure has
+		# come round again before it arrives (#3009).
+		starts = [e.beat for e in self.events] + [c.beat for c in self.controls]
+
+		if starts and max(starts) > self.length + 1e-9:
+			raise ValueError(
+				f"Motif length is {self.length} beats, but it holds an event at beat {max(starts)}, "
+				"which is past the end and never sounds — give length= the whole figure, or move the event"
+			)
 
 		object.__setattr__(self, "events", tuple(sorted(self.events, key=MotifEvent._sort_key)))
 		object.__setattr__(self, "controls", tuple(sorted(self.controls, key=ControlEvent._sort_key)))
@@ -490,9 +518,14 @@ class Motif:
 			if pitches[i] is not None
 		)
 
+		# Every slot counts toward the length, a rest as much as a note: that
+		# is what "the beat slot still advances" means, and it is how a figure
+		# ending in silence keeps its written length (#3009).
+		slots = [float(onsets[i]) + float(duration_list[i]) for i in range(n)]
+
 		return cls(
 			events = events,
-			length = _computed_length(events, ()) if length is None else float(length),
+			length = _computed_length(events, (), slots) if length is None else float(length),
 		)
 
 	@classmethod
@@ -2276,6 +2309,10 @@ def motif (
 	relative pitch is the primary form.  For absolute MIDI note numbers use
 	``Motif.notes([64, 65, 64, 60])``; implausibly large ints here raise so
 	a pasted MIDI list fails loud instead of squealing octaves up.
+
+	``None`` is a rest, and it holds its slot: ``motif([1, 3, 5, None])`` is
+	four beats long, not three, so a figure that ends in silence still loops
+	on the bar it was written for.
 	"""
 
 	return Motif.degrees(
