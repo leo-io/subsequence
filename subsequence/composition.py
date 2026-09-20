@@ -233,40 +233,63 @@ class _InjectedChord:
 		Return the MIDI note for this chord's root that is closest to ``base``.
 		"""
 
+		root_note = getattr(self._chord, "root_note", None)
+
+		if root_note is None:
+			# A PitchSet has no root and no quality — a cluster or a spectral
+			# stack — so its lowest pitch is what a root-seeking caller gets.
+			# Its register was chosen with its pitches (#3007).
+			return int(min(self._chord.tones(base)))
+
 		# Delegate to the chord's own root_note() rather than reimplementing
 		# the pitch-class offset arithmetic.
-		return self._chord.root_note(base)  # type: ignore[no-any-return]
+		return int(root_note(base))
 
 	def tones (self, root: int, inversion: int = 0, count: typing.Optional[int] = None) -> typing.List[int]:
 
-		"""Return MIDI note numbers transposed to the correct chord root.
+		"""Return the chord's MIDI notes, as the chord itself voices them.
 
-		When voice leading is active, the best inversion is chosen
-		automatically and the ``inversion`` parameter is ignored.
+		The wrapped chord does the voicing, so a span's decoration arrives
+		intact: its extensions, inversion, spread and slash bass (#3007).
+		Rebuilding the voicing here from intervals and a root played a plain
+		triad under a name that said ``C/G``.
 
-		When ``count`` is set, the chord intervals cycle into higher
-		octaves until ``count`` notes are produced.
+		When voice leading is active, the smoothest rotation of that voicing
+		is chosen automatically and the ``inversion`` parameter is ignored.
+		Every voice is led, the slash bass among them, so it may move inward
+		rather than staying the lowest note.  A PitchSet is left where it is:
+		its pitches are absolute, and its register was chosen with them.
+
+		When ``count`` is set, the voicing cycles into higher octaves until
+		``count`` notes are produced.
 		"""
 
-		midi_root = self.root_midi(root)
-		intervals = self._chord.intervals()
+		underlying = getattr(self._chord, "base", self._chord)
 
-		if self._voice_leading_state is not None:
-			base = self._voice_leading_state.next(intervals, midi_root)
+		if self._voice_leading_state is not None and not isinstance(underlying, subsequence.progressions.PitchSet):
+
+			# One voice per pitch class, lowest first.  A pedal on a chord
+			# tone doubles it at the octave, and rotating a pool that holds
+			# both a note and its octave lands two voices on one pitch.
+			pool: typing.List[int] = []
+			classes: typing.Set[int] = set()
+
+			for pitch in sorted(self._chord.tones(root)):
+				if pitch % 12 not in classes:
+					classes.add(pitch % 12)
+					pool.append(pitch)
+
+			anchor = pool[0]
+			base = self._voice_leading_state.next([pitch - anchor for pitch in pool], anchor)
+
 			if count is not None:
 				n = len(base)
 				base_intervals = [p - base[0] for p in base]
 				return [base[0] + base_intervals[i % n] + 12 * (i // n) for i in range(count)]
+
 			return base
 
-		if inversion != 0:
-			intervals = subsequence.voicings.invert_chord(intervals, inversion)
-
-		if count is not None:
-			n = len(intervals)
-			return [midi_root + intervals[i % n] + 12 * (i // n) for i in range(count)]
-
-		return [midi_root + interval for interval in intervals]
+		return list(self._chord.tones(root, inversion = inversion, count = count))
 
 	def root_note (self, root_midi: int) -> int:
 
@@ -279,9 +302,20 @@ class _InjectedChord:
 
 	def bass_note (self, root_midi: int, octave_offset: int = -1) -> int:
 
-		"""Return the chord root shifted by a number of octaves."""
+		"""Return the chord's bass, shifted by a number of octaves.
 
-		return self.root_midi(root_midi) + (12 * octave_offset)
+		A span's slash bass is the bass — ``C/G`` gives G, not C — so a bass
+		line over a mix of plain and slash chords follows the changes it is
+		written under (#3007).  Without a root to shift, a PitchSet gives its
+		lowest pitch.
+		"""
+
+		bass_note = getattr(self._chord, "bass_note", None)
+
+		if bass_note is None:
+			return int(min(self._chord.tones(root_midi))) + (12 * octave_offset)
+
+		return int(bass_note(root_midi, octave_offset))
 
 	def intervals (self) -> typing.List[int]:
 
