@@ -66,7 +66,7 @@ def _tempo_events (sequencer: subsequence.sequencer.Sequencer) -> typing.List[in
 
 	return [
 		round(mido.tempo2bpm(message.tempo))
-		for _, message in sequencer.recorded_events
+		for _, message, _ in sequencer.recorded_events
 		if message.is_meta and message.type == "set_tempo"
 	]
 

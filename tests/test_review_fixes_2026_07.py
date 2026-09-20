@@ -654,7 +654,7 @@ async def test_link_tempo_change_recorded_as_set_tempo (patch_midi: None) -> Non
 
 	await sequencer._run_loop_link_clock(_FakeLinkClock(), pulses_per_bar=96)
 
-	tempos = [message for _, message in sequencer.recorded_events if message.type == "set_tempo"]
+	tempos = [message for _, message, _ in sequencer.recorded_events if message.type == "set_tempo"]
 
 	assert len(tempos) == 1
 	assert tempos[0].tempo == 600000		# mido.bpm2tempo(100)

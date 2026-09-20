@@ -38,6 +38,11 @@ logger = logging.getLogger(__name__)
 # the position moves to where the session actually is (#2993).
 _LINK_CATCH_UP_PULSES = 24
 
+# The device a recorded tempo or metre marking belongs to: none of them.  Those
+# describe the file, so they are saved on its first track whatever synths played
+# (#3067).  Not an index, so it cannot collide with one.
+CONDUCTOR = -1
+
 
 @typing.runtime_checkable
 class PatternLike (typing.Protocol):
@@ -582,7 +587,18 @@ class Sequencer:
 		# Recording state
 		self.recording = record
 		self.record_filename = record_filename
-		self.recorded_events: typing.List[typing.Tuple[float, typing.Union[mido.Message, mido.MetaMessage]]] = []
+		# (pulse, message, device).  The device is which output port the message
+		# was sent to, so a session driving several synths saves as several
+		# tracks instead of merging them all onto one (#3067).  CONDUCTOR is the
+		# device for a tempo or metre marking, which belongs to the file rather
+		# than to any one synth.
+		self.recorded_events: typing.List[typing.Tuple[float, typing.Union[mido.Message, mido.MetaMessage], int]] = []
+
+		# Device names as they were when each device first recorded something.
+		# Captured then rather than read at save time because ``stop()`` closes
+		# and clears the registry before it saves, so by then there is nothing
+		# left to ask (#3067).
+		self._recorded_device_names: typing.Dict[int, str] = {}
 
 		# Render mode: run as fast as possible and stop after render_bars or render_max_seconds.
 		# Both limits are optional — at least one must be set (enforced in Composition.render).
@@ -800,14 +816,31 @@ class Sequencer:
 		self._output_devices.set_latency(device, latency_ms)
 		self._max_device_latency_ms = self._output_devices.max_latency()
 
-	def _record_event (self, pulse: int, message: typing.Union[mido.Message, mido.MetaMessage]) -> None:
+	def _record_event (
+		self,
+		pulse: int,
+		message: typing.Union[mido.Message, mido.MetaMessage],
+		device: int = CONDUCTOR,
+	) -> None:
 
-		"""Record a MIDI message with an absolute pulse timestamp for later export."""
+		"""Record a MIDI message with an absolute pulse timestamp for later export.
+
+		*device* is the output port the message went to, and decides which track
+		it is saved on.  It defaults to :data:`CONDUCTOR` — the tempo and metre
+		markings, which belong to the file rather than to a synth.
+		"""
 
 		if not self.recording:
 			return
 
-		self.recorded_events.append((float(pulse), message))
+		# Ask for the name while the registry still has it: stop() closes the
+		# ports before it saves, so a name read at save time is always None.
+		if device != CONDUCTOR and device not in self._recorded_device_names:
+			name = self._output_devices.name_of(device)
+			if name is not None:
+				self._recorded_device_names[device] = name
+
+		self.recorded_events.append((float(pulse), message, device))
 
 	def _record_opening (self) -> None:
 
@@ -828,21 +861,37 @@ class Sequencer:
 			return
 
 		self.recorded_events = [
-			(pulse, message) for pulse, message in self.recorded_events
+			(pulse, message, device) for pulse, message, device in self.recorded_events
 			if not (pulse == 0 and message.is_meta and message.type == 'set_tempo')
 		]
 
 		beats, unit = self.time_signature
 
 		self.recorded_events[:0] = [
-			(0.0, mido.MetaMessage('time_signature', numerator=beats, denominator=unit)),
-			(0.0, mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(self.current_bpm))),
+			(0.0, mido.MetaMessage('time_signature', numerator=beats, denominator=unit), CONDUCTOR),
+			(0.0, mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(self.current_bpm)), CONDUCTOR),
 		]
 
 
 	def save_recording (self) -> None:
 
-		"""Save the recorded session to a MIDI file."""
+		"""Save the recorded session to a MIDI file, a track per output device.
+
+		Every device used to share one track, so a session driving two synths
+		saved as if it were one: two parts on channel 0 of different synths came
+		back as two overlapping note-ons on one channel, which no importer can
+		pair with the right note-offs (#3067).  A track apiece keeps them
+		separate and lets a DAW route each one back where it came from.
+
+		**The first device shares track 0 with the tempo and metre**, rather
+		than there being a conductor track of its own.  That keeps a
+		single-device recording — which is nearly all of them — exactly the
+		one-track file it has always been, so nothing downstream changes for a
+		piece that drives one synth.
+
+		Tracks are named after their devices when there is more than one, so an
+		import reads "Integra-7" rather than "Track 2".
+		"""
 
 		if not self.recording or not self.recorded_events:
 			return
@@ -855,9 +904,7 @@ class Sequencer:
 
 		logger.info(f"Saving MIDI recording ({len(self.recorded_events)} events) to {filename}...")
 
-		mid = mido.MidiFile(type=1) # Type 1 = multiple tracks (though we might just use one)
-		track = mido.MidiTrack()
-		mid.tracks.append(track)
+		mid = mido.MidiFile(type=1)
 
 		# Resolution (ticks per beat). Standard is 480.
 		# Subsequence uses 24 PPQN internal.
@@ -868,9 +915,33 @@ class Sequencer:
 		# Sort events by pulse just in case
 		self.recorded_events.sort(key=lambda x: x[0])
 
-		last_pulse = 0.0
+		# Which devices actually recorded anything, lowest first.  The lowest
+		# takes track 0 alongside the conductor's markings; the rest follow.
+		devices = sorted({
+			device for _, _, device in self.recorded_events if device != CONDUCTOR
+		})
 
-		for pulse, message in self.recorded_events:
+		first_device = devices[0] if devices else CONDUCTOR
+		later_devices = devices[1:]
+
+		track_of = {CONDUCTOR: 0, first_device: 0}
+		track_of.update({device: index + 1 for index, device in enumerate(later_devices)})
+
+		tracks = [mido.MidiTrack() for _ in range(1 + len(later_devices))]
+
+		for track in tracks:
+			mid.tracks.append(track)
+
+		if later_devices:
+			for device in [first_device] + later_devices:
+				name = self._recorded_device_names.get(device)
+				if name is not None:
+					tracks[track_of[device]].append(mido.MetaMessage('track_name', name=name, time=0))
+
+		# Each track carries its own delta times, so each needs its own clock.
+		last_pulse = dict.fromkeys(range(len(tracks)), 0.0)
+
+		for pulse, message, device in self.recorded_events:
 
 			# An event recorded before the session's start sounds at its start.
 			# Clamping the *delta* instead left `last_pulse` negative, so every
@@ -878,7 +949,9 @@ class Sequencer:
 			# moved later by as much as the stray event was early (#3005).
 			pulse = max(0.0, pulse)
 
-			delta_pulses = pulse - last_pulse
+			index = track_of.get(device, 0)
+
+			delta_pulses = pulse - last_pulse[index]
 			delta_ticks = int(delta_pulses * ticks_per_pulse)
 
 			# Ensure delta is non-negative (floating point jitter?)
@@ -886,15 +959,21 @@ class Sequencer:
 				delta_ticks = 0
 
 			message.time = delta_ticks
-			track.append(message)
+			tracks[index].append(message)
 
-			last_pulse = pulse
+			last_pulse[index] = pulse
 
 		# The file ends where playback stopped, not at its last event, so a
 		# render of N bars is N bars long in a DAW even when its last bar ends
 		# in silence.  A recording saved without playing ends at its last event.
-		end_pulse = max(last_pulse, float(self.pulse_count))
-		track.append(mido.MetaMessage('end_of_track', time=int((end_pulse - last_pulse) * ticks_per_pulse)))
+		# Every track is closed at that same point, or a DAW reads the shorter
+		# ones as the piece ending early on those synths.
+		end_pulse = max(list(last_pulse.values()) + [float(self.pulse_count)])
+
+		for index, track in enumerate(tracks):
+			track.append(mido.MetaMessage(
+				'end_of_track', time=int((end_pulse - last_pulse[index]) * ticks_per_pulse)
+			))
 
 		try:
 			mid.save(filename)
@@ -2755,7 +2834,7 @@ class Sequencer:
 
 						mido_msg = event.to_mido()
 						if mido_msg is not None:
-							self._record_event(event.pulse, mido_msg)
+							self._record_event(event.pulse, mido_msg, event.device)
 
 				except Exception:
 
@@ -2791,7 +2870,7 @@ class Sequencer:
 
 			for dev, channel, note in list(self.active_notes):
 
-				self._record_release(channel, note)
+				self._record_release(channel, note, dev)
 
 				if compensated:
 					try:
@@ -2816,9 +2895,13 @@ class Sequencer:
 			self.active_notes.clear()
 
 
-	def _record_release (self, channel: int, note: int) -> None:
+	def _record_release (self, channel: int, note: int, device: int = 0) -> None:
 
 		"""Record a note-off at the current pulse for a note silenced outside the event queue.
+
+		*device* is the port the note was sounding on, so the release lands on
+		the same track as its note-on (#3067) — both callers take it straight
+		off the ``active_notes`` entry they are releasing.
 
 		Only ``_process_pulse`` records what it dispatches, so a release sent
 		straight from ``stop()``, ``pause()`` or ``unregister()`` never reached
@@ -2833,7 +2916,7 @@ class Sequencer:
 			return
 
 		try:
-			self._record_event(self.pulse_count, mido.Message('note_off', channel=channel, note=note, velocity=0))
+			self._record_event(self.pulse_count, mido.Message('note_off', channel=channel, note=note, velocity=0), device)
 		except (ValueError, TypeError):
 			logger.exception(f"Could not record the release of note {note!r} on channel {channel!r} - continuing")
 
@@ -2891,7 +2974,7 @@ class Sequencer:
 			self._held_drones.pop(pattern, None)
 
 			for dev, channel, note in stranded:
-				self._record_release(channel, note)
+				self._record_release(channel, note, dev)
 
 				# Route through latency compensation, NOT straight to the
 				# port: a note_on for this device may still be deferred in

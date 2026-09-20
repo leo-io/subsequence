@@ -157,6 +157,20 @@ class MidiDeviceRegistry:
 			return 0.0
 		return self._latencies[idx]
 
+	def name_of (self, device: DeviceId = None) -> typing.Optional[str]:
+
+		"""Return the name *device* is registered under, or ``None`` if unknown.
+
+		A placeholder has a name like any other device (#2997) — it is the port
+		that is missing, not the identity — so a recording can still label the
+		track a failed device's parts were written to (#3067).
+		"""
+
+		idx = self.index_of(device)
+		if idx < 0 or idx >= len(self._ports):
+			return None
+		return self._ports[idx][0]
+
 	def max_latency (self) -> float:
 
 		"""Return the largest latency across all registered devices (0.0 if empty)."""

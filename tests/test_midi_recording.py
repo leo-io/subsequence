@@ -23,7 +23,7 @@ def test_record_event_appends_message (patch_midi: None) -> None:
 	seq._record_event(48, msg)
 
 	assert len(seq.recorded_events) == initial_count + 1
-	assert seq.recorded_events[-1] == (48.0, msg)
+	assert seq.recorded_events[-1] == (48.0, msg, subsequence.sequencer.CONDUCTOR)
 
 
 def test_record_event_skipped_when_not_recording (patch_midi: None) -> None:
@@ -51,7 +51,7 @@ def test_set_bpm_records_tempo_event (patch_midi: None) -> None:
 	seq.set_bpm(140)
 
 	assert len(seq.recorded_events) == 1
-	_, msg = seq.recorded_events[0]
+	_, msg, _ = seq.recorded_events[0]
 	assert isinstance(msg, mido.MetaMessage)
 	assert msg.type == 'set_tempo'
 	assert msg.tempo == mido.bpm2tempo(140)
@@ -74,7 +74,7 @@ def test_initial_bpm_is_recorded_on_construction (patch_midi: None) -> None:
 	seq = subsequence.sequencer.Sequencer(record=True, initial_bpm=110)
 
 	assert len(seq.recorded_events) >= 1
-	_, msg = seq.recorded_events[0]
+	_, msg, _ = seq.recorded_events[0]
 	assert isinstance(msg, mido.MetaMessage)
 	assert msg.type == 'set_tempo'
 	assert msg.tempo == mido.bpm2tempo(110)
@@ -149,7 +149,7 @@ def test_save_recording_skips_when_not_recording (tmp_path: pathlib.Path, patch_
 	seq = subsequence.sequencer.Sequencer(record=False, record_filename=filename)
 
 	# Bypass the _record_event guard to inject a synthetic event
-	seq.recorded_events.append((0.0, mido.Message('note_on', channel=0, note=60, velocity=100)))
+	seq.recorded_events.append((0.0, mido.Message('note_on', channel=0, note=60, velocity=100), 0))
 	seq.save_recording()
 
 	assert not os.path.exists(filename)
@@ -410,7 +410,7 @@ async def test_a_release_sent_outside_the_queue_reaches_the_recording (patch_mid
 	seq.pulse_count = 96
 	await seq._stop_all_active_notes(compensated=True)
 
-	recorded = [(pulse, message.type, message.channel, message.note) for pulse, message in seq.recorded_events]
+	recorded = [(pulse, message.type, message.channel, message.note) for pulse, message, _ in seq.recorded_events]
 
 	assert recorded == [(48.0, "note_off", 2, 36), (96.0, "note_off", 5, 72)]
 	assert seq.active_notes == set()
@@ -460,7 +460,7 @@ async def test_a_note_no_message_can_carry_does_not_stop_the_others_being_releas
 	seq.pulse_count = 96
 	await seq._stop_all_active_notes(compensated=compensated)
 
-	recorded = [(pulse, message.type, message.note) for pulse, message in seq.recorded_events if message.type in ("note_on", "note_off")]
+	recorded = [(pulse, message.type, message.note) for pulse, message, _ in seq.recorded_events if message.type in ("note_on", "note_off")]
 
 	assert recorded == [(0.0, "note_on", 64), (96.0, "note_off", 64)]
 	assert seq.active_notes == set()
@@ -483,7 +483,7 @@ async def test_unregistering_a_part_with_a_note_no_message_can_carry_releases_it
 	seq.pulse_count = 48
 	await seq._stop_pattern_notes(Part())
 
-	released = [(pulse, message.note) for pulse, message in seq.recorded_events if message.type == "note_off"]
+	released = [(pulse, message.note) for pulse, message, _ in seq.recorded_events if message.type == "note_off"]
 
 	assert released == [(48.0, 36)]
 	assert seq.active_notes == set()
@@ -540,7 +540,7 @@ def test_recording_a_release_no_message_can_carry_is_logged_not_raised (patch_mi
 		failure = caught
 
 	assert failure is None
-	assert [(pulse, message.note) for pulse, message in seq.recorded_events] == [(24.0, 64)]
+	assert [(pulse, message.note) for pulse, message, _ in seq.recorded_events] == [(24.0, 64)]
 	assert "Could not record the release of note 140" in caplog.text
 
 
