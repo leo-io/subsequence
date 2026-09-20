@@ -1284,11 +1284,50 @@ def fold (sequence: typing.Sequence[int], low: int, high: int, mode: str = "wrap
 	return folded
 
 
+def _noise_hash (*values: int) -> int:
+
+	"""Mix lattice coordinates and a seed into 32 well-spread bits.
+
+	The Perlin functions used ``(a*pos + b*seed + 12345) & 0x7FFFFFFF``, which
+	is not a hash — it is a straight line.  Every multiplier was ≡ 1 (mod 4),
+	so the bottom two bits of the result were the bottom two bits of the
+	input.  ``perlin_2d`` picks its gradient with ``h & 3``, so the whole
+	field was decided by ``seed % 4``: four fields in total, and the same
+	noise back again every four seeds.  ``perlin_1d`` came out an alternation
+	rather than a wander, with a lag-2 autocorrelation of −0.945 at
+	half-integer steps (#3011).
+
+	Each value is folded in with a multiply by an odd constant, then the whole
+	thing goes through murmur3's finaliser — shift, multiply, xor, twice.  The
+	finaliser is the part that earns its keep: a multiply only carries bits
+	*upward*, so without it the top bit of an input moves one output bit on
+	average instead of sixteen, and the bottom bits stay a copy of the input's.
+	Flipping any one input bit now moves about half the output bits.
+	"""
+
+	h = 0x9E3779B9
+
+	for value in values:
+		h = ((h ^ (value & 0xFFFFFFFF)) * 0x85EBCA6B) & 0xFFFFFFFF
+
+	h ^= h >> 16
+	h = (h * 0x85EBCA6B) & 0xFFFFFFFF
+	h ^= h >> 13
+	h = (h * 0xC2B2AE35) & 0xFFFFFFFF
+	h ^= h >> 16
+
+	return h
+
+
 def perlin_1d (x: float, seed: int = 0) -> float:
 
 	"""Generate smooth 1D noise at position *x*.
 
 	Returns a value in [0.0, 1.0] that varies smoothly as *x* changes.
+	Both ends are genuinely reached — the value is exactly 0.5 at every whole
+	*x* and swings furthest between them — and the values cluster around the
+	middle, so about one in a hundred is above 0.92.  Pick a threshold with
+	that in mind: 0.65 fires often, 0.92 rarely.
 	Same *x* and *seed* always produce the same output.  Use to drive
 	density, velocity, or probability parameters that should wander
 	organically over time — the "parameter wandering within boundaries"
@@ -1315,12 +1354,16 @@ def perlin_1d (x: float, seed: int = 0) -> float:
 	t = x - x0
 
 	def _grad (pos: int) -> float:
-		# Hash function using Linear Congruential Generator (LCG) constants.
-		# The "magic numbers" (e.g. 1103515245) distribute bits evenly and are 
-		# drawn from standard C library rand() implementations to ensure high 
-		# quality pseudo-randomness quickly.
-		h = ((pos * 1103515245 + seed * 374761393 + 12345) & 0x7FFFFFFF)
-		return (h / 0x3FFFFFFF) - 1.0
+		# Eight evenly spaced slopes from −1 to +1, the two ends included.
+		# A CONTINUOUS gradient — the old `(h / 0x3FFFFFFF) - 1.0` — is why
+		# the output never reached its documented ends: 0 and 1 need two
+		# adjacent lattice points sloping at exactly +1 and −1, which a
+		# continuous draw hits with probability zero, so the real span was
+		# [0.22, 0.77] (#3011).  Eight is chosen, not arbitrary: with two
+		# slopes the noise saturates and piles 8% of its values into the top
+		# tenth, and past sixteen the ends go rare again.  Eight both reaches
+		# 0 and 1 and keeps the bell the middle of the range deserves.
+		return (_noise_hash(pos, seed) & 7) / 3.5 - 1.0
 
 	fade = subsequence.easing.s_curve(t)
 
@@ -1329,9 +1372,9 @@ def perlin_1d (x: float, seed: int = 0) -> float:
 
 	value = d0 + fade * (d1 - d0)
 
-	# Shift and clamp into [0, 1].  In practice the output occupies only the
-	# middle of that range (roughly [0.22, 0.77]) and rarely nears the extremes,
-	# so rescale with map_value / scale_clamp if you need the full 0–1 span.
+	# The raw value spans exactly [−0.5, +0.5] — its ends are reached where
+	# adjacent lattice gradients oppose — so this covers a true [0, 1].  The
+	# clamp is belt and braces against floating-point drift at the very edge.
 	return max(0.0, min(1.0, value + 0.5))
 
 
@@ -1340,6 +1383,9 @@ def perlin_2d (x: float, y: float, seed: int = 0) -> float:
 	"""Generate smooth 2D noise at position *(x, y)*.
 
 	Returns a value in [0.0, 1.0] that varies smoothly as *x* and *y* change.
+	Both ends are genuinely reached, at a cell centre whose four corners all
+	slope away from it, and the values cluster around the middle — about one
+	in a hundred is above 0.9.
 	Same coordinates and *seed* always produce the same output. Use to drive
 	correlated parameters that should weave around each other organically over time,
 	or for spatialized parameter wandering.
@@ -1369,13 +1415,11 @@ def perlin_2d (x: float, y: float, seed: int = 0) -> float:
 	ty = y - y0
 
 	def _grad (pos_x: int, pos_y: int) -> float:
-		# Note: The math here (smootherstep fade and hash function) is deliberately 
-		# duplicated from perlin_1d rather than extracted into helper functions.
-		# This avoids Python function call overhead, maximizing execution speed for
-		# dense sequences. See perlin_1d for details on the LCG hash constants.
-		h = ((pos_x * 1103515245 + pos_y * 741103597 + seed * 374761393 + 12345) & 0x7FFFFFFF)
-		# 4 diagonal gradients
-		h4 = h & 3
+		# Note: the smootherstep fade is deliberately duplicated from perlin_1d
+		# rather than extracted, to avoid a function call per corner on dense
+		# sequences.  The hash is shared, because getting it wrong here is what
+		# left this field with four variations in total (#3011).
+		h4 = _noise_hash(pos_x, pos_y, seed) & 3
 		dx = x - pos_x
 		dy = y - pos_y
 		if h4 == 0: return  dx + dy
@@ -1398,9 +1442,9 @@ def perlin_2d (x: float, y: float, seed: int = 0) -> float:
 	# Interpolate along y
 	value = ix0 + fadey * (ix1 - ix0)
 
-	# Shift and clamp into [0, 1].  In practice the output occupies only the
-	# middle of that range (roughly [0.23, 0.82]); rescale with map_value /
-	# scale_clamp if you need the full 0–1 span.
+	# The raw value spans exactly [−1, +1] — both ends are reached at a cell
+	# centre whose four corner gradients all point away from it — so this
+	# covers a true [0, 1].  The clamp guards floating-point drift at the edge.
 	return max(0.0, min(1.0, (value + 1.0) / 2.0))
 
 
