@@ -727,12 +727,26 @@ async def test_clock_follower_ignores_other_devices (monkeypatch) -> None:
 	
 	# Send a clock message from device 1 (should be processed)
 	seq._midi_input_queue.put_nowait((1, mido.Message('clock')))
-	
-	# Send a stop message from device 1 to break the loop
-	seq._midi_input_queue.put_nowait((1, mido.Message('stop')))
-	
-	await seq._run_loop_external_clock(96)
-	
+
+	loop = asyncio.create_task(seq._run_loop_external_clock(96))
+
+	for _ in range(500):
+		if seq._midi_input_queue.empty():
+			break
+		await asyncio.sleep(0)
+
+	for _ in range(50):
+		await asyncio.sleep(0)
+
+	# A MIDI stop used to end this loop, and holds the position now (#3053), so
+	# the loop is ended here instead.  The wake-up comes from device 0, which is
+	# skipped by the check under test before anything reads it — a tick from
+	# device 1 would be counted and make the assertion below read 2.
+	seq.running = False
+	seq._midi_input_queue.put_nowait((0, mido.Message('clock')))
+
+	await loop
+
 	# Only the clock message from device 1 should have reached _estimate_bpm
 	assert len(processed_clocks) == 1
 

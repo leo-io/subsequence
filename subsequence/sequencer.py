@@ -422,6 +422,12 @@ class ScheduledCallback:
 	lookahead_pulses: int
 	next_fire_pulse: int
 
+	# The pulse this was originally scheduled against, kept so an external
+	# Start can put it back exactly where a fresh start would (#3053).  It is
+	# what tells the harmonic clock (scheduled one interval in, so it does not
+	# fire at pulse 0) from an ordinary callback scheduled at 0, which does.
+	initial_start_pulse: int = 0
+
 
 @dataclasses.dataclass
 class ScheduledCallbackSequence:
@@ -442,12 +448,16 @@ class ScheduledCallbackSequence:
 			not the fire time).
 		lookahead_pulses: How far before each boundary the callback fires.
 		next_fire_pulse: When the next fire is due.
+		initial_start_pulse: The first boundary it was scheduled against, kept
+			so an external Start can put it back where a fresh start would
+			(#3053).
 	"""
 
 	callback: typing.Callable[[int], typing.Union[typing.Optional[float], typing.Coroutine[typing.Any, typing.Any, typing.Optional[float]]]]
 	boundary_pulse: int
 	lookahead_pulses: int
 	next_fire_pulse: int
+	initial_start_pulse: int = 0
 
 
 @dataclasses.dataclass
@@ -578,7 +588,12 @@ class Sequencer:
 		self._input_loop: typing.Optional[asyncio.AbstractEventLoop] = None
 		self._event_loop: typing.Optional[asyncio.AbstractEventLoop] = None
 		self._clock_tick_times: typing.List[float] = []
-		self._waiting_for_start: bool = False
+
+		# True while an external transport is not running, so incoming clock
+		# ticks prime the BPM estimate but advance nothing.  It covers both of
+		# the moments that look the same from here: before the first Start, and
+		# after a Stop that holds the position (#3053).
+		self._transport_held: bool = False
 
 		self.event_queue: typing.List[MidiEvent] = []
 		self.task: typing.Optional[asyncio.Task] = None
@@ -605,6 +620,11 @@ class Sequencer:
 		# time for diagnostics; start_time is deliberately never shifted.
 		self._paused: bool = False
 		self._paused_seconds: float = 0.0
+
+		# When the current hold began, for the external-transport path.  The
+		# internal clock's _hold_while_paused keeps its own local instead: it
+		# blocks for the whole hold, so it has somewhere to put one.
+		self._paused_from: float = 0.0
 
 		# Device latency compensation: cached max across all output devices, and
 		# the set of in-flight deferred sends (call_later handles) awaiting their
@@ -1516,7 +1536,8 @@ class Sequencer:
 			cycle_start_pulse = initial_cycle_start,
 			interval_pulses = interval_pulses,
 			lookahead_pulses = lookahead_pulses,
-			next_fire_pulse = initial_fire_pulse
+			next_fire_pulse = initial_fire_pulse,
+			initial_start_pulse = start_pulse
 		)
 
 		async with self.callback_lock:
@@ -1563,6 +1584,7 @@ class Sequencer:
 			boundary_pulse = start_pulse,
 			lookahead_pulses = lookahead_pulses,
 			next_fire_pulse = start_pulse - lookahead_pulses,
+			initial_start_pulse = start_pulse,
 		)
 
 		async with self.callback_lock:
@@ -1634,7 +1656,7 @@ class Sequencer:
 		# Store the event loop for thread-safe scheduling (e.g., trigger() from user threads)
 		self._event_loop = asyncio.get_running_loop()
 
-		self._waiting_for_start = self.clock_follow
+		self._transport_held = self.clock_follow
 		self.running = True
 		self._stopped = False
 		self.task = asyncio.create_task(self._run_loop())
@@ -1661,6 +1683,18 @@ class Sequencer:
 		logger.info("Stopping sequencer...")
 
 		self.running = False
+
+		# Wake the external-clock loop, which is parked on its input queue for
+		# up to two seconds at a time.  It used to be a master's Stop that ended
+		# that loop; a Stop holds the position now (#3053), so Ctrl+C is the way
+		# out and it should not have to wait for a timeout that exists only to
+		# notice a silent cable.  A device index the loop does not follow is
+		# skipped before anything reads the message, so this advances nothing.
+		if self._midi_input_queue is not None:
+			try:
+				self._midi_input_queue.put_nowait((-1, mido.Message("stop")))
+			except Exception:
+				logger.exception("Failed to wake the external clock loop for shutdown")
 
 		if self.task:
 			try:
@@ -1780,7 +1814,20 @@ class Sequencer:
 		Sends MIDI Continue (0xFB) when ``clock_output`` is on — never Start
 		(0xFA), which would reset downstream hardware to the top of its own
 		pattern.  Idempotent: resuming a running sequencer does nothing.
+
+		Refused wherever ``pause()`` is refused, and for the same reason: a
+		transport that is not ours to hold is not ours to release either.  Under
+		``clock_follow`` it is the master's Continue that resumes the piece
+		(#3053).
 		"""
+
+		if self.clock_follow:
+			logger.info("Transport is controlled by external clock — resume() ignored")
+			return
+
+		if self._link_clock is not None:
+			logger.info("Transport belongs to the Ableton Link session — resume() ignored")
+			return
 
 		self._paused = False
 
@@ -1852,6 +1899,162 @@ class Sequencer:
 		await self.events.emit_async("resume")
 
 		return next_pulse_time + held_for
+
+
+	# ------------------------------------------------------------------
+	# The transport, when it belongs to somebody else
+	# ------------------------------------------------------------------
+	#
+	# Under ``clock_follow`` the master's Stop, Continue and Start drive the
+	# three methods below.  ``pause()`` and ``resume()`` refuse here on purpose:
+	# the *user* cannot hold a clock that is not theirs, but the cable can, and
+	# what it asks for is the same held state (#3053).
+
+	async def _transport_pause (self) -> None:
+
+		"""Hold the position and release what is sounding — an external Stop.
+
+		Stop used to end the session outright, so a master's Stop button tore
+		down the piece and the Continue after it had nothing to resume.  It
+		pauses now: the pulse, bar and beat stay where they are, ticks keep
+		feeding the BPM estimate, and the piece carries on from here.
+
+		The release is compensated because the rig is still live and a note_on
+		may be deferred on a device offset — the same reason ``pause()`` gives.
+		"""
+
+		if self._transport_held:
+			return
+
+		self._transport_held = True
+		self._paused = True
+		self._paused_from = time.perf_counter()
+
+		await self._stop_all_active_notes(compensated=True)
+
+		await self.events.emit_async("pause")
+
+
+	async def _transport_resume (self) -> None:
+
+		"""Carry on from the held pulse — an external Continue.
+
+		Never a restart: Continue means *from where you were*, which is the
+		whole of the difference between it and Start.
+		"""
+
+		if not self._transport_held:
+			return
+
+		self._transport_held = False
+
+		if self._paused:
+			self._paused = False
+			self._paused_seconds += time.perf_counter() - self._paused_from
+
+			# A knob turned while the transport was held queued every value it
+			# passed through; send where it now stands, not its whole journey.
+			self._coalesce_forwards()
+
+			await self.events.emit_async("resume")
+
+
+	async def _restart_from_the_top (self) -> None:
+
+		"""Put the piece back at bar 0 — an external Start.
+
+		A Start used to reset the pulse counter and nothing else, so the queues
+		kept their old numbering: a piece stopped six beats in went silent for
+		six beats and then resumed *mid-phrase*, and a note still sounding was
+		left on.  Measured before the fix, the first thing heard after a Start
+		was the pattern's seventh note, 6.04 beats later (#3053).
+
+		So: release what is sounding, drop every event the old position had
+		queued, and re-anchor every part and clock on cycle 0.
+
+		**What restarts is the transport, not the composition.**  A part is put
+		back on cycle 0 of the grid; the harmony, the form and a pattern's own
+		evolution carry on from where they had got to.  Rewinding those is a
+		musical question rather than a transport one, and it is not this.
+		"""
+
+		if self._transport_held and self.pulse_count == 0 and self.current_bar < 0:
+			# The session's first Start, with nothing yet played.  There is no
+			# position to discard, and ``Composition._run`` has already laid
+			# cycle 0 down — so this begins the piece rather than restarting it.
+			await self._transport_resume()
+			return
+
+		await self._stop_all_active_notes(compensated=True)
+
+		async with self.queue_lock:
+			self.event_queue = []
+
+		self.pulse_count = 0
+		self.current_bar = -1
+		self.current_beat = -1
+
+		await self._reanchor_on_cycle_zero()
+
+		await self._transport_resume()
+
+
+	async def _reanchor_on_cycle_zero (self) -> None:
+
+		"""Re-place every repeating pattern, callback and sequence as at pulse 0.
+
+		Each is put back exactly where the call that scheduled it would put it
+		now, so a restart and a fresh ``start()`` leave the queues in the same
+		shape.  That is why the callbacks carry ``initial_start_pulse``: the
+		harmonic clock is scheduled one interval in so it does *not* fire at
+		pulse 0 (``HarmonicState`` already holds the tonic), while an ordinary
+		callback scheduled at 0 does — and nothing else distinguishes them.
+		"""
+
+		async with self.pattern_lock:
+			scheduled_patterns = [entry[2] for entry in self.reschedule_queue]
+			self.reschedule_queue = []
+			self._reschedule_counter = itertools.count()
+
+		live = [
+			scheduled for scheduled in scheduled_patterns
+			if not getattr(scheduled.pattern, "_removed", False)
+		]
+
+		for scheduled in live:
+			scheduled.cycle_start_pulse = 0
+			scheduled.pattern._cycle_start_pulse = 0
+			scheduled.next_reschedule_pulse = scheduled.length_pulses - scheduled.lookahead_pulses
+
+			await self.schedule_pattern(scheduled.pattern, 0)
+
+		async with self.pattern_lock:
+			for scheduled in live:
+				counter = next(self._reschedule_counter)
+				heapq.heappush(self.reschedule_queue, (scheduled.next_reschedule_pulse, counter, scheduled))
+
+		async with self.callback_lock:
+
+			callbacks = [entry[2] for entry in self.callback_queue]
+			sequences = [entry[2] for entry in self.callback_sequence_queue]
+
+			self.callback_queue = []
+			self.callback_sequence_queue = []
+			self._callback_counter = itertools.count()
+
+			for scheduled_callback in callbacks:
+				scheduled_callback.cycle_start_pulse = scheduled_callback.initial_start_pulse - scheduled_callback.interval_pulses
+				scheduled_callback.next_fire_pulse = scheduled_callback.initial_start_pulse - scheduled_callback.lookahead_pulses
+
+				counter = next(self._callback_counter)
+				heapq.heappush(self.callback_queue, (scheduled_callback.next_fire_pulse, counter, scheduled_callback))
+
+			for scheduled_sequence in sequences:
+				scheduled_sequence.boundary_pulse = scheduled_sequence.initial_start_pulse
+				scheduled_sequence.next_fire_pulse = scheduled_sequence.initial_start_pulse - scheduled_sequence.lookahead_pulses
+
+				counter = next(self._callback_counter)
+				heapq.heappush(self.callback_sequence_queue, (scheduled_sequence.next_fire_pulse, counter, scheduled_sequence))
 
 
 	def _coalesce_forwards (self) -> None:
@@ -2122,9 +2325,20 @@ class Sequencer:
 		"""Playback loop driven by incoming MIDI clock messages.
 
 		Each MIDI ``clock`` tick advances exactly one pulse (24 ppqn = internal ppqn).
-		Transport messages (``start``, ``stop``, ``continue``) control sequencer state.
 		The loop waits for a ``start`` or ``continue`` before advancing pulses,
 		but still uses incoming ticks to estimate BPM for display.
+
+		**The transport is the master's** (#3053).  Following it as a slave means:
+
+		- **Stop** holds the position and releases what is sounding.  It does
+			not end the session — only Ctrl+C or :meth:`stop` does — so the
+			piece is still there when the master presses play again.
+		- **Continue** carries on from the held pulse.
+		- **Start** restarts from bar 0: it releases, drops every queued event
+			and rebuilds every part from cycle 0.
+
+		Song Position Pointer is not followed yet, so a master that locates
+		before starting is still heard from the top.
 		"""
 
 		assert self._midi_input_queue is not None, "MIDI input queue must be initialized for external clock"
@@ -2143,9 +2357,9 @@ class Sequencer:
 
 			if message.type == "clock":
 
-				# Prime BPM estimation while waiting for start/continue,
-				# but do not advance pulses or schedule events yet.
-				if self._waiting_for_start:
+				# Prime BPM estimation while the transport is held, but do not
+				# advance pulses or schedule events yet.
+				if self._transport_held:
 					self._estimate_bpm(time.perf_counter())
 					continue
 
@@ -2155,19 +2369,16 @@ class Sequencer:
 				await self._advance_pulse()
 
 			elif message.type == "start":
-				logger.info("MIDI start received")
-				self.pulse_count = 0
-				self.current_bar = -1
-				self.current_beat = -1
-				self._waiting_for_start = False
+				logger.info("MIDI start received - restarting from bar 0")
+				await self._restart_from_the_top()
 
 			elif message.type == "stop":
-				logger.info("MIDI stop received")
-				self.running = False
+				logger.info("MIDI stop received - holding position")
+				await self._transport_pause()
 
 			elif message.type == "continue":
-				logger.info("MIDI continue received")
-				self._waiting_for_start = False
+				logger.info("MIDI continue received - resuming")
+				await self._transport_resume()
 
 
 	async def _run_loop_link_clock (self, link_clock: typing.Any, pulses_per_bar: int) -> None:

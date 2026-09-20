@@ -78,6 +78,29 @@ async def test_sequencer_opens_input_port (patch_midi: None) -> None:
 # --- Clock follow  - - pulse counting ---
 
 
+async def _drain (seq: subsequence.sequencer.Sequencer) -> None:
+
+	"""Let the clock loop consume everything injected into its input queue.
+
+	These tests used to end by injecting a MIDI Stop and awaiting the loop
+	task.  A Stop holds the position now rather than ending the session
+	(#3053), so the task does not complete and that idiom hangs.  Yielding
+	until the queue is empty and then settling is the replacement: the loop and
+	the test share one thread, so there is nothing else to wait for.
+	"""
+
+	for _ in range(5000):
+		if seq._midi_input_queue.empty():
+			break
+		await asyncio.sleep(0)
+	else:
+		raise AssertionError("the clock loop never drained its input queue")
+
+	for _ in range(200):
+		await asyncio.sleep(0)
+
+
+
 @pytest.mark.asyncio
 async def test_clock_follow_advances_pulses (patch_midi: None) -> None:
 
@@ -99,10 +122,7 @@ async def test_clock_follow_advances_pulses (patch_midi: None) -> None:
 	for _ in range(24):
 		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
 
-	# Inject stop to end the loop.
-	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
-
-	await seq.task
+	await _drain(seq)
 
 	assert seq.pulse_count == 24
 
@@ -133,9 +153,7 @@ async def test_clock_follow_waits_for_start (patch_midi: None) -> None:
 	for _ in range(5):
 		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
 
-	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
-
-	await seq.task
+	await _drain(seq)
 
 	# Only the 5 ticks after start should have been counted.
 	assert seq.pulse_count == 5
@@ -172,9 +190,7 @@ async def test_transport_start_resets_position (patch_midi: None) -> None:
 	for _ in range(10):
 		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
 
-	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
-
-	await seq.task
+	await _drain(seq)
 
 	# Only 10 ticks since the last start.
 	assert seq.pulse_count == 10
@@ -183,9 +199,15 @@ async def test_transport_start_resets_position (patch_midi: None) -> None:
 
 
 @pytest.mark.asyncio
-async def test_transport_stop_halts_sequencer (patch_midi: None) -> None:
+async def test_transport_stop_holds_the_position (patch_midi: None) -> None:
 
-	"""MIDI stop should set running to False."""
+	"""MIDI stop pauses: it holds the pulse and leaves the session running.
+
+	It used to set ``running = False``, so a master's Stop button tore the
+	session down and the Continue after it had nothing left to resume
+	(decision 14 of #2991, measured on #3053).  The session now ends only with
+	Ctrl+C or ``stop()``.
+	"""
 
 	seq = subsequence.sequencer.Sequencer(
 		output_device_name="Dummy MIDI",
@@ -198,11 +220,30 @@ async def test_transport_stop_halts_sequencer (patch_midi: None) -> None:
 
 	assert seq.running is True
 
+	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+
+	for _ in range(48):
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+
+	await _drain(seq)
+
+	assert seq.pulse_count == 48, "the clock never advanced, so the hold below proves nothing"
+
 	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
 
-	await seq.task
+	await _drain(seq)
 
-	assert seq.running is False
+	assert seq.running is True, "a MIDI stop ended the session instead of pausing it"
+	assert seq.task is not None and not seq.task.done()
+	assert seq.pulse_count == 48, "the position was not held across the stop"
+
+	# Ticks keep arriving while the master is stopped; they must not advance us.
+	for _ in range(24):
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+
+	await _drain(seq)
+
+	assert seq.pulse_count == 48, "clock ticks advanced the piece while the transport was stopped"
 
 	await seq.stop()
 
@@ -238,9 +279,7 @@ async def test_transport_continue_resumes (patch_midi: None) -> None:
 	for _ in range(12):
 		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
 
-	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
-
-	await seq.task
+	await _drain(seq)
 
 	# 24 ticks before continue + 12 after: resumed from pulse 24, not 0.
 	assert seq.pulse_count == 36
