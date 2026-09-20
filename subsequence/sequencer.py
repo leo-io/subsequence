@@ -789,14 +789,20 @@ class Sequencer:
 		last_pulse = 0.0
 
 		for pulse, message in self.recorded_events:
-			
+
+			# An event recorded before the session's start sounds at its start.
+			# Clamping the *delta* instead left `last_pulse` negative, so every
+			# event after it — the tempo and the time signature among them —
+			# moved later by as much as the stray event was early (#3005).
+			pulse = max(0.0, pulse)
+
 			delta_pulses = pulse - last_pulse
 			delta_ticks = int(delta_pulses * ticks_per_pulse)
-			
+
 			# Ensure delta is non-negative (floating point jitter?)
 			if delta_ticks < 0:
 				delta_ticks = 0
-			
+
 			message.time = delta_ticks
 			track.append(message)
 

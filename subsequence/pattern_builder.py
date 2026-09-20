@@ -250,6 +250,25 @@ class PatternBuilder(
 		"""
 		return self._default_grid
 
+	def _wrapped_beat (self, beat: float) -> float:
+
+		"""A beat position inside the pattern: a negative one counts from the end.
+
+		``beat=-1`` is one beat before the end, whatever the pattern's length,
+		and any magnitude wraps.  Every verb that places something at a beat
+		goes through here, notes and controls alike — the controls used to
+		convert a negative beat straight to a negative pulse, which scheduled
+		the event before its own cycle and shifted a whole recording (#3005).
+		"""
+
+		return beat % self._pattern.length if beat < 0 else beat
+
+	def _wrapped_pulse (self, beat: float) -> int:
+
+		"""The pulse a beat position lands on, wrapping a negative beat from the end."""
+
+		return subsequence.constants.pulses.beats_to_pulses(self._wrapped_beat(beat))
+
 	def _has_pitch_at_beat (self, pitch: subsequence.declarations.Pitch, beat: subsequence.declarations.GridBeats) -> bool:
 		"""Helper to check if a pitch is already sounding at a specific beat.
 
@@ -666,9 +685,7 @@ class PatternBuilder(
 
 		resolved_velocity = self._resolve_velocity(velocity)
 
-		# Negative beat values wrap to the end of the pattern.
-		if beat < 0:
-			beat = beat % self._pattern.length	# wrap from the end (any magnitude)
+		beat = self._wrapped_beat(beat)
 
 		self._pattern.add_note_beats(
 			beat_position = beat,
@@ -703,8 +720,7 @@ class PatternBuilder(
 		if midi_pitch is None:
 			return self	# drum name this device can't voice — dropped (warned once)
 		resolved_velocity = self._resolve_velocity(velocity)
-		if beat < 0:
-			beat = beat % self._pattern.length	# wrap from the end (any magnitude)
+		beat = self._wrapped_beat(beat)
 
 		self._pattern.add_raw_note_beats(
 			message_type = 'note_on',
@@ -731,8 +747,7 @@ class PatternBuilder(
 		midi_pitch = self._resolve_pitch_lenient(pitch)
 		if midi_pitch is None:
 			return self	# nothing to silence — this device can't voice the name
-		if beat < 0:
-			beat = beat % self._pattern.length	# wrap from the end (any magnitude)
+		beat = self._wrapped_beat(beat)
 
 		self._pattern.add_raw_note_beats(
 			message_type = 'note_off',

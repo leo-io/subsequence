@@ -54,6 +54,8 @@ class PatternMidiMixin:
 		def _resolve_nrpn (self, parameter: typing.Union[int, str]) -> int: ...
 		def _resolve_rpn (self, parameter: typing.Union[int, str]) -> int: ...
 		def _defer (self, pending: typing.List[typing.Any], lay: typing.Callable[[], object]) -> None: ...
+		def _wrapped_beat (self, beat: float) -> float: ...
+		def _wrapped_pulse (self, beat: float) -> int: ...
 
 	# ── Shared ramp helper ──────────────────────────────────────────────────
 
@@ -117,7 +119,28 @@ class PatternMidiMixin:
 		The beat-based entry to :meth:`_ramp_pulse_span`, shared by
 		``cc_ramp()``, ``pitch_bend_ramp()``, ``nrpn_ramp()``/``rpn_ramp()``,
 		and ``osc_ramp()``.
+
+		A ramp starting before beat 0 wraps from the end, as a note does, and
+		keeps its length — so it crosses the cycle's end and lands each event
+		inside the pattern rather than before it (#3005).  Wrapping the start
+		alone would leave the span negative, and a negative span emits nothing
+		at all.
 		"""
+
+		if beat_start < 0:
+
+			span = beat_end - beat_start
+			beat_start = self._wrapped_beat(beat_start)
+			beat_end = beat_start + span
+
+			cycle = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
+			place = event_fn
+
+			def fold (pulse: int, value: float) -> None:
+				"""Fold a pulse past the cycle's end back to where it sounds."""
+				place(pulse % cycle, value)
+
+			event_fn = fold
 
 		pulse_start = subsequence.constants.pulses.beats_to_pulses(beat_start)
 		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
@@ -139,7 +162,7 @@ class PatternMidiMixin:
 		"""
 
 		cc_num: int = self._resolve_cc(control)
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		# Clamp to the 7-bit CC range like every sibling (cc_ramp / program_change
 		# / pitch_bend) so a computed out-of-range value is corrected here rather
@@ -217,7 +240,7 @@ class PatternMidiMixin:
 
 		# The asymmetric clamp is correct: MIDI's 14-bit bend range is -8192..+8191.
 		midi_value = max(-8192, min(8191, int(round(value * 8192))))
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		self._pattern.cc_events.append(
 			subsequence.pattern.CcEvent(
@@ -429,7 +452,7 @@ class PatternMidiMixin:
 		"""
 
 		param = self._resolve_nrpn(parameter)
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
 		self._append_data_entry(pulse, value, fine)
@@ -485,7 +508,7 @@ class PatternMidiMixin:
 		"""
 
 		param = self._resolve_rpn(parameter)
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
 		self._append_data_entry(pulse, value, fine)
@@ -554,7 +577,7 @@ class PatternMidiMixin:
 
 		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
-		self._append_param_select(subsequence.constants.pulses.beats_to_pulses(beat_start), param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
+		self._append_param_select(self._wrapped_pulse(beat_start), param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
 			# Clamp guards against custom easing callables that overshoot [0, 1].
@@ -600,7 +623,7 @@ class PatternMidiMixin:
 
 		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
-		self._append_param_select(subsequence.constants.pulses.beats_to_pulses(beat_start), param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
+		self._append_param_select(self._wrapped_pulse(beat_start), param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
 			# Clamp guards against custom easing callables that overshoot [0, 1].
@@ -662,7 +685,7 @@ class PatternMidiMixin:
 			```
 		"""
 
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		if bank_msb is not None:
 			self._pattern.cc_events.append(
@@ -726,7 +749,7 @@ class PatternMidiMixin:
 				"Mask computed values (checksums, packed parameters) with & 0x7F first."
 			)
 
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		self._pattern.cc_events.append(
 			subsequence.pattern.CcEvent(
@@ -762,7 +785,7 @@ class PatternMidiMixin:
 			```
 		"""
 
-		pulse = subsequence.constants.pulses.beats_to_pulses(beat)
+		pulse = self._wrapped_pulse(beat)
 
 		self._pattern.osc_events.append(
 			subsequence.pattern.OscEvent(
