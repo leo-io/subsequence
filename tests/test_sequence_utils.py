@@ -1478,14 +1478,21 @@ def test_self_avoiding_walk_no_immediate_repeat () -> None:
 		assert result[i] != result[i + 1]
 
 
-def test_self_avoiding_walk_step_size_one () -> None:
+def test_self_avoiding_walk_steps_by_one_or_two () -> None:
 
-	"""Each step changes the value by exactly 1."""
+	"""Each step moves by 1 or 2 — mostly 1, with the occasional small leap.
+
+	This pinned "exactly 1" until #3047. A walk that may only move by one, on
+	a line, has no choice to make after its first step: it produced two
+	distinct melodies across 500 seeds. The leap is what gives it somewhere
+	to go.
+	"""
 
 	rng = random.Random(1)
 	result = subsequence.sequence_utils.self_avoiding_walk(16, 0, 9, rng)
+
 	for i in range(len(result) - 1):
-		assert abs(result[i + 1] - result[i]) == 1
+		assert abs(result[i + 1] - result[i]) in (1, 2)
 
 
 def test_self_avoiding_walk_deterministic () -> None:
