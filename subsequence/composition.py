@@ -1534,6 +1534,9 @@ class Composition:
 		self._freeze_count: int = 0
 		self._harmony_count: int = 0
 		self._form_count: int = 0
+		# How many times each trigger function has fired, so a one-shot's
+		# stream differs from its own last one as well as from its neighbours.
+		self._trigger_counts: typing.Dict[str, int] = {}
 		self._reroll_nonces: typing.Dict[str, int] = {}
 		# Seeds given back with reroll(name, seed=), which a stream keeps until
 		# the next plain reroll(name).
@@ -3104,7 +3107,33 @@ class Composition:
 	@seed.setter
 	def seed (self, value: typing.Optional[int]) -> None:
 
-		"""Set the composition seed (``comp.seed = 42``)."""
+		"""Set the composition seed (``comp.seed = 42``).
+
+		Warns when something has already dealt its stream.  ``harmony()``,
+		``form()`` and ``freeze()`` draw at the moment they are called, so a
+		seed set after one of them never reaches it — and the piece is then
+		reproducible in some parts and not in others, which is worse than
+		either.  Nothing can be un-drawn, so the honest answer is to say so
+		rather than to appear to work.
+		"""
+
+		already_dealt = [
+			name
+			for name, count in (
+				("harmony()", self._harmony_count),
+				("form()",    self._form_count),
+				("freeze()",  self._freeze_count),
+			)
+			if count
+		]
+
+		if value is not None and already_dealt:
+			logger.warning(
+				"seed set after %s — those have already dealt their streams and will not "
+				"follow it. Pass seed= to Composition(...) for a piece that renders the "
+				"same twice.",
+				", ".join(already_dealt),
+			)
 
 		self._seed = value
 
@@ -6000,6 +6029,18 @@ class Composition:
 		resolved_device_idx = self._resolve_device_id(device)
 		resolved_mirrors = self._resolve_mirrors(mirrors, primary=(resolved_device_idx, resolved_channel))
 
+		# A one-shot's randomness follows the composition's seed, so a seeded
+		# piece renders the same file twice (decision 13 of #2991). The stream
+		# is named for the function and for how many times it has fired, so
+		# two triggers in a bar differ from each other and the tenth differs
+		# from the first — while an unseeded composition keeps fresh
+		# randomness, as it does everywhere else.
+		trigger_name = getattr(fn, "__name__", "trigger")
+		self._trigger_counts[trigger_name] = self._trigger_counts.get(trigger_name, 0) + 1
+		trigger_rng = self._stream(
+			f"trigger:{trigger_name}:{self._trigger_counts[trigger_name]}"
+		) or random.Random()
+
 		# Create a temporary Pattern
 		pattern = subsequence.pattern.Pattern(channel=resolved_channel, length=beat_length, device=resolved_device_idx, mirrors=resolved_mirrors)
 
@@ -6041,7 +6082,7 @@ class Composition:
 			section=trigger_section,
 			bar=self._builder_bar,
 			conductor=self.conductor,
-			rng=random.Random(),  # Fresh random state for each trigger
+			rng=trigger_rng,
 			tweaks={},
 			default_grid=default_grid,
 			data=self.data,
