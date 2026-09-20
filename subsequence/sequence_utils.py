@@ -1808,7 +1808,59 @@ def lsystem_expand (
 	return _lsystem_expand_reporting(axiom, rules, generations, rng, max_length)[0]
 
 
-_ca_1d_cache: typing.Dict[typing.Tuple[int, int, int], typing.Tuple[int, typing.List[int]]] = {}
+# How many distinct cellular-automaton evolutions each cache keeps.  A piece
+# uses a handful — one per CA verb, per size and rule — so this is generous for
+# anything written on purpose.  The case it exists for is a fresh seed every
+# bar, where each entry is looked up exactly once and never wanted again: the
+# caches grew one entry a bar for as long as the process ran, 1,601 entries and
+# 179,456 grid cells over a 1,200-bar evening (#3071).
+_CA_CACHE_ENTRIES = 64
+
+
+_CachedState = typing.TypeVar("_CachedState")
+
+
+class _EvolutionCache (typing.Generic[_CachedState]):
+
+	"""The latest ``(generation, state)`` per configuration, oldest evicted first.
+
+	A plain dict here was a leak rather than a cache whenever the key varied
+	per bar.  Reads move an entry to the newest end, so what a piece keeps
+	using stays and what it used once goes.
+	"""
+
+	def __init__ (self, limit: int = _CA_CACHE_ENTRIES) -> None:
+
+		self._entries: "collections.OrderedDict[typing.Any, typing.Tuple[int, _CachedState]]" = collections.OrderedDict()
+		self._limit = limit
+
+	def get (self, key: typing.Any) -> typing.Optional[typing.Tuple[int, _CachedState]]:
+
+		entry = self._entries.get(key)
+
+		if entry is not None:
+			self._entries.move_to_end(key)
+
+		return entry
+
+	def put (self, key: typing.Any, value: typing.Tuple[int, _CachedState]) -> None:
+
+		self._entries[key] = value
+		self._entries.move_to_end(key)
+
+		while len(self._entries) > self._limit:
+			self._entries.popitem(last = False)
+
+	def __len__ (self) -> int:
+
+		return len(self._entries)
+
+	def clear (self) -> None:
+
+		self._entries.clear()
+
+
+_ca_1d_cache: _EvolutionCache[typing.List[int]] = _EvolutionCache()
 
 
 def _ca_1d_initial_state (steps: int, seed: int) -> typing.List[int]:
@@ -1903,14 +1955,16 @@ def generate_cellular_automaton_1d (steps: int, rule: int = 30, generation: int 
 	cached = _ca_1d_cache.get(cache_key)
 
 	if cached is not None and cached[0] <= generation:
-		current_gen, state = cached[0], list(cached[1])
+		# Not copied here: the write below stores a copy, so the cached list is
+		# never the one returned.  See the note in the 2D version (#3071).
+		current_gen, state = cached[0], cached[1]
 	else:
 		current_gen, state = 0, _ca_1d_initial_state(steps, seed)
 
 	for _ in range(current_gen, generation):
 		state = _ca_1d_step(state, rule, steps)
 
-	_ca_1d_cache[cache_key] = (generation, list(state))
+	_ca_1d_cache.put(cache_key, (generation, list(state)))
 
 	return state
 
@@ -1955,7 +2009,7 @@ def _parse_life_rule (rule: str) -> typing.Tuple[typing.Set[int], typing.Set[int
 	return birth_set, survival_set
 
 
-_ca_2d_cache: typing.Dict[typing.Tuple[int, int, str, int, float], typing.Tuple[int, typing.List[typing.List[int]]]] = {}
+_ca_2d_cache: _EvolutionCache[typing.List[typing.List[int]]] = _EvolutionCache()
 
 
 def _ca_2d_initial_grid (rows: int, cols: int, seed: int, density: float) -> typing.List[typing.List[int]]:
@@ -2063,27 +2117,42 @@ def generate_cellular_automaton_2d (
 
 	birth_set, survival_set = _parse_life_rule(rule)
 
-	# Memoise int-seeded evolutions incrementally, like the 1D version, so a
+	# Memoise the evolution incrementally, like the 1D version, so a
 	# `generation`-per-bar idiom doesn't re-run every prior generation each call.
-	# A list seed (an explicit one-off starting grid) is not cached.
-	cache_key: typing.Optional[typing.Tuple[int, int, str, int, float]] = None
-
+	#
+	# An explicit starting grid is keyed by its CONTENTS.  It used to be left
+	# out of the cache for want of a hashable key, and so replayed every
+	# generation on every rebuild: a 4x16 grid cost 96 ms at generation 4,000,
+	# and across a 400-bar set an 8x32 one spent 7.6 seconds on the event loop
+	# against 39 ms for the same thing cached — all of it between pulses, where
+	# a pulse at 120 BPM is 20.8 ms (#3071).
 	if isinstance(seed, list):
-		current_gen = 0
 		grid = [[int(bool(seed[r][c])) for c in range(cols)] for r in range(rows)]
+		cache_key: typing.Tuple[typing.Any, ...] = (
+			rows, cols, rule, tuple(tuple(row) for row in grid), density,
+		)
 	else:
+		grid = []
 		cache_key = (rows, cols, rule, seed, density)
-		cached = _ca_2d_cache.get(cache_key)
-		if cached is not None and cached[0] <= generation:
-			current_gen, grid = cached[0], [row[:] for row in cached[1]]
-		else:
-			current_gen, grid = 0, _ca_2d_initial_grid(rows, cols, seed, density)
+
+	cached = _ca_2d_cache.get(cache_key)
+
+	if cached is not None and cached[0] <= generation:
+		# Not copied here.  What is stored below is already a copy, so the
+		# entry the cache holds is never the object handed back, and a caller
+		# is free to mutate what it is given.  Copying on the way in as well
+		# was a second copy of every grid on every cache hit, guarding nothing
+		# the write does not — found by a break that failed no test (#3071).
+		current_gen, grid = cached[0], cached[1]
+	elif isinstance(seed, list):
+		current_gen = 0		# grid already holds the starting state
+	else:
+		current_gen, grid = 0, _ca_2d_initial_grid(rows, cols, seed, density)
 
 	for _ in range(current_gen, generation):
 		grid = _ca_2d_step(grid, rows, cols, birth_set, survival_set)
 
-	if cache_key is not None:
-		_ca_2d_cache[cache_key] = (generation, [row[:] for row in grid])
+	_ca_2d_cache.put(cache_key, (generation, [row[:] for row in grid]))
 
 	return grid
 
