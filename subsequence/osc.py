@@ -177,7 +177,7 @@ class OscServer:
 		receive_port: int = 9000,
 		send_port: int = 9001,
 		send_host: str = "127.0.0.1",
-		receive_host: str = "0.0.0.0"
+		receive_host: str = "127.0.0.1"
 	) -> None:
 
 		"""
@@ -222,7 +222,15 @@ class OscServer:
 		self._transport = transport
 		self._protocol = protocol
 
-		logger.info(f"OSC listening on :{self._receive_port}, sending to {self._send_host}:{self._send_port}")
+		# Name the interface, not just the port: "this machine only" and
+		# "anything that can reach this machine" are very different things to
+		# have just switched on, and only one of them is the default.
+		reach = "this machine only" if self._receive_host in ("127.0.0.1", "localhost", "::1") else "the network"
+
+		logger.info(
+			f"OSC listening on {self._receive_host}:{self._receive_port} ({reach}), "
+			f"sending to {self._send_host}:{self._send_port}"
+		)
 
 
 	async def stop (self) -> None:

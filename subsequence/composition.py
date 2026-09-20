@@ -4301,7 +4301,7 @@ class Composition:
 			"subsequence":  subsequence,
 		}
 
-	def osc (self, receive_port: int = 9000, send_port: int = 9001, send_host: str = "127.0.0.1", receive_host: str = "0.0.0.0") -> None:
+	def osc (self, receive_port: int = 9000, send_port: int = 9001, send_host: str = "127.0.0.1", receive_host: str = "127.0.0.1") -> None:
 
 		"""
 		Enable bi-directional Open Sound Control (OSC).
@@ -4313,10 +4313,12 @@ class Composition:
 			receive_port: Port to listen for incoming OSC messages (default 9000).
 			send_port: Port to send state updates to (default 9001).
 			send_host: The IP address to send updates to (default "127.0.0.1").
-			receive_host: Interface to listen on (default "0.0.0.0" — all
-				interfaces, so external OSC controllers on the LAN can reach it).
-				The listener can change tempo, mute patterns, and write data, so on
-				an untrusted network restrict it with ``receive_host="127.0.0.1"``.
+			receive_host: Interface to listen on (default "127.0.0.1" — this
+				machine only, as for ``live()`` and ``web_ui()``).  Pass
+				``receive_host="0.0.0.0"`` to let an OSC controller elsewhere
+				on the network reach it.  A listener can change tempo, mute
+				parts and write data, so that is worth doing deliberately
+				rather than by default; the startup log says which it chose.
 		"""
 
 		self._osc_server = subsequence.osc.OscServer(
