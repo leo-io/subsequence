@@ -588,6 +588,7 @@ async def schedule_harmonic_clock (
 	resolve_cadence: typing.Optional[typing.Callable[[str], typing.List[subsequence.chords.Chord]]] = None,
 	get_section_cadence: typing.Optional[typing.Callable[[str], typing.Optional[str]]] = None,
 	reschedule_lookahead: float = 1,
+	on_stop: typing.Optional[typing.Callable[[], None]] = None,
 ) -> None:
 
 	"""Schedule the harmonic clock — a span walker over the bound harmony sources.
@@ -659,6 +660,8 @@ async def schedule_harmonic_clock (
 		"bound_exhausted": False,
 		"planned": None,			# the live engine's pre-committed next chord
 		"engine_seen": None,		# identity of the engine "planned" was drawn from
+		"last_chord": None,			# what is sounding, to hold when no source applies
+		"held_once": False,			# the hold is said once, not every bar
 		"cadence_queue": [],		# planned approach chords (None = step live at that boundary)
 	}
 
@@ -901,32 +904,53 @@ async def schedule_harmonic_clock (
 			if chord_like is None:
 
 				if hs is None:
-					return None		# nothing left to drive the clock
 
-				if initial:
-					chord_like = hs.current_chord	# the tonic sounds first; no step at beat 0
+					# A section with no chords of its own, in a piece that
+					# never called harmony().  Hold what is sounding and keep
+					# the clock running: returning None here dropped the
+					# callback for good, so the bridge silenced every verse
+					# after it too, and a later harmony() could not restart it
+					# (#2998, decision 2 of #2991).
+					if state["last_chord"] is None:
+						return None		# nothing has ever sounded; there is no clock to keep
+
+					if not state["held_once"]:
+						state["held_once"] = True
+						logger.info(
+							"No chords for this part of the form and no harmony() to generate them — "
+							"holding the last chord until a section that has some."
+						)
+
+					chord_like = state["last_chord"]
+					span_beats = _cycle_beats_now()
+					horizon.set_future(None)
+
 				else:
-					if not state["cadence_queue"]:
-						_plan_cadence_request(beat, hs)
 
-					queued: typing.Optional[typing.Any] = None
-
-					if state["cadence_queue"]:
-						queued = state["cadence_queue"].pop(0)
-
-					if queued is not None:
-						# A planned approach supersedes the pre-committed step.
-						state["planned"] = None
-						chord_like = queued
+					if initial:
+						chord_like = hs.current_chord	# the tonic sounds first; no step at beat 0
 					else:
-						if state["planned"] is None:
-							state["planned"] = hs.plan_next()
-						chord_like = state["planned"]
-						state["planned"] = None
+						if not state["cadence_queue"]:
+							_plan_cadence_request(beat, hs)
 
-				span_beats = _cycle_beats_now()
-				from_live = True
-				horizon.set_future(None)
+						queued: typing.Optional[typing.Any] = None
+
+						if state["cadence_queue"]:
+							queued = state["cadence_queue"].pop(0)
+
+						if queued is not None:
+							# A planned approach supersedes the pre-committed step.
+							state["planned"] = None
+							chord_like = queued
+						else:
+							if state["planned"] is None:
+								state["planned"] = hs.plan_next()
+							chord_like = state["planned"]
+							state["planned"] = None
+
+					span_beats = _cycle_beats_now()
+					from_live = True
+					horizon.set_future(None)
 
 			# Pins are fiat — they override whatever the source produced.
 			if get_pinned is not None:
@@ -947,6 +971,7 @@ async def schedule_harmonic_clock (
 
 			horizon.commit(beat, beat + span_beats, chord_like)
 			state["next_change"] = beat + span_beats
+			state["last_chord"] = chord_like
 
 			# Live mode pre-commits one step so the window holds [current, next].
 			# A planned cadence approach already knows its next chord — publish
@@ -972,6 +997,9 @@ async def schedule_harmonic_clock (
 
 		"""The sequencer-facing callback: pulses in, beats out."""
 
+		# Nothing to guard here: beat 0 is always a chord boundary (next_change
+		# starts at 0.0) and a boundary either declines to start at all or
+		# commits a chord, so once the clock is running it has one to hold.
 		return advance(boundary_pulse / pulses_per_beat)
 
 	# Populate the window for beat 0 synchronously, BEFORE patterns first
@@ -979,6 +1007,11 @@ async def schedule_harmonic_clock (
 	first_interval = advance(0.0)
 
 	if first_interval is None:
+		# No source, and nothing sounding to hold: this clock never starts.
+		# Say so, or the Composition goes on believing it has one and a
+		# harmony() arriving later registers nothing (#2998).
+		if on_stop is not None:
+			on_stop()
 		return
 
 	await sequencer.schedule_callback_sequence(
@@ -2188,7 +2221,56 @@ class Composition:
 			resolve_cadence = _resolve_cadence_formula,
 			get_section_cadence = self._section_cadences.get,
 			reschedule_lookahead = clock_lookahead,
+			on_stop = self._harmonic_clock_stopped,
 		)
+
+	def _warn_about_sections_with_no_chords (self) -> None:
+
+		"""Say once, at the top, which sections of the form will have no chords.
+
+		With ``section_chords()`` on some sections and no ``harmony()`` at
+		all, the sections left out have nothing to play and nothing to
+		generate.  They hold the last chord (decision 2 of #2991), which is a
+		reasonable sound and almost never the intended one — so it is worth a
+		line naming them rather than leaving somebody to wonder why the
+		bridge is a held F.
+		"""
+
+		if self._harmonic_state is not None or not self._section_progressions:
+			return
+
+		if self._form_state is None:
+			return
+
+		if self._form_state._section_bars is not None:
+			named = set(self._form_state._section_bars)			# a graph form
+		elif self._form_state._sequence is not None:
+			named = {section.name for section in self._form_state._sequence}	# a list form
+		else:
+			return		# a generator form names its sections as it goes
+
+		unbound = sorted(named - set(self._section_progressions))
+
+		if not unbound:
+			return
+
+		logger.warning(
+			"These sections have no chords of their own and there is no harmony() to "
+			"generate any, so each will hold the chord before it for its whole length: %s. "
+			"Give them a section_chords(), or call harmony() once for the piece.",
+			", ".join(unbound),
+		)
+
+	def _harmonic_clock_stopped (self) -> None:
+
+		"""The clock gave up its slot — let a later harmony() start a new one.
+
+		The sequencer drops a callback sequence that returns None, so without
+		this the flag stayed True for the rest of the performance and a
+		``harmony()`` arriving mid-piece registered nothing (#2998).
+		"""
+
+		self._harmonic_clock_started = False
 
 	def _constraint_scale (self) -> str:
 
@@ -2343,7 +2425,12 @@ class Composition:
 
 		Every time *section_name* plays, the harmonic clock walks the
 		progression's spans instead of calling the live engine.  Sections
-		without a bound progression continue generating live chords.
+		without a bound progression generate live chords — **when there is a
+		live engine to generate them**.  With no :meth:`harmony` on the piece
+		there is nothing to generate from, so a section left out holds the
+		chord before it for its whole length, and a line at startup names
+		which sections those are.  Give every section its own chords, or call
+		:meth:`harmony` once for the piece.
 
 		Accepts a :class:`Progression` value (from :meth:`freeze`, the
 		``progression()`` factory, or hand-built) or anything the factory
@@ -2449,13 +2536,26 @@ class Composition:
 				# bar's own section (sequence forms) may supply one even with no
 				# composition/form key.
 				probe_info = self._form_state.section_info_at_bar(bar) if self._form_state is not None else None
-				probe_key, _ = self._effective_key_scale(probe_info)
+				probe_key, probe_scale = self._effective_key_scale(probe_info)
 				if probe_key is None:
 					raise ValueError(
 						"pin_chord with a key-relative spec (degree/roman) needs a key — set key= on "
 						"the Composition, a form key, or a Section.key for that bar (the pin re-keys "
 						"to the section's effective key)"
 					)
+
+				# Say so here, where the musician wrote it, rather than at the
+				# bar it was written for: an unresolvable degree raised out of
+				# the clock mid-performance and took the whole harmonic clock
+				# down with it (#2998).  A pin that stops resolving later,
+				# because a section re-keyed under it, is warned and skipped.
+				try:
+					span.resolve(subsequence.chords.key_name_to_pc(probe_key), probe_scale or "ionian")
+				except (ValueError, IndexError, KeyError) as error:
+					raise ValueError(
+						f"pin_chord({bar}, {chord!r}) does not name a chord in "
+						f"{probe_key} {probe_scale or 'ionian'}: {error}"
+					) from error
 
 			self._pinned_chords[bar] = span
 
@@ -2499,7 +2599,18 @@ class Composition:
 			)
 			return None
 
-		return _span_chord(span.resolve(subsequence.chords.key_name_to_pc(key), scale or "ionian"))
+		try:
+			return _span_chord(span.resolve(subsequence.chords.key_name_to_pc(key), scale or "ionian"))
+		except (ValueError, IndexError, KeyError) as error:
+			# A pin that resolved when it was written can stop resolving when a
+			# section re-keys under it.  Warn and fall through — letting this
+			# escape killed the harmonic clock for the rest of the piece, and
+			# silenced the pinned bar and the one before it (#2998).
+			logger.warning(
+				"pin_chord(%d, ...) does not resolve in %s %s — ignoring the pin: %s",
+				bar, key, scale or "ionian", error,
+			)
+			return None
 
 	def request_cadence (self, cadence: str = "strong", bar: typing.Optional[int] = None) -> None:
 
@@ -6382,6 +6493,7 @@ class Composition:
 		self._harmonic_clock_started = False
 
 		if self._harmonic_state is not None or self._bound_progression is not None or self._section_progressions:
+			self._warn_about_sections_with_no_chords()
 			await self._start_harmonic_clock(bar_beats, clock_lookahead)
 
 		# Bar counter - always active so p.bar is available to all builders.
