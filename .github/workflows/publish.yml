@@ -5,6 +5,13 @@ name: Publish to PyPI
 # whole release flow. Uses PyPI Trusted Publishing (OIDC) — no API token is
 # stored. Action versions matter: older majors run on a retired Node runtime
 # and GitHub fails the job (same fix as PyMidiDefs' publish workflow).
+#
+# The tag is the whole release flow, so the tag has to prove what a merge
+# proves. This used to run build and twine check alone — no tests, no mypy, no
+# cheat-sheet check — while tests.yml ran only on main and on pull requests, so
+# a tag placed on an untested or red commit went to PyPI unimpeded. There is no
+# token to fumble and no second pair of hands in the loop; the gate is all
+# there is.
 
 on:
   push:
@@ -12,8 +19,13 @@ on:
       - "v*"
 
 jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/tests.yml
+
   build:
     name: Build distributions
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

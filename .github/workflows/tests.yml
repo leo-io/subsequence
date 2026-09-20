@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Callable from publish.yml, so a tag proves exactly what a merge proves.
+  # Publishing used to run build and twine check and nothing else, so a tag on
+  # an untested — or red — commit shipped to PyPI regardless.
+  workflow_call:
 
 jobs:
   pytest:
@@ -40,13 +44,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
+          pip install -e ".[test,dev]"
 
       - name: Check docstring markup
         run: python scripts/check_docstring_markup.py subsequence
 
       - name: Check the cheat sheet matches the code
         run: python scripts/generate_cheatsheet.py --check
+
+      # The fourth of the four gates run before every commit here, and the
+      # only one CI did not have — so a type error reached main and waited for
+      # somebody to run mypy by hand. Same shape as the cheat-sheet check that
+      # was CI-only and went red three times (#2593): a gate that does not run
+      # where the problem happens is not a gate.
+      - name: Type-check
+        run: python -m mypy subsequence
 
       - name: Run tests
         run: python -m pytest tests/ -q
