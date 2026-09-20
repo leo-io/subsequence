@@ -32,6 +32,12 @@ import subsequence.midi_utils
 
 logger = logging.getLogger(__name__)
 
+# How far behind the Link session the loop may fall and still play through it,
+# pulse by pulse, the way the internal clock's inner loop does.  One beat: past
+# that, working through the backlog is a burst of noise rather than music, so
+# the position moves to where the session actually is (#2993).
+_LINK_CATCH_UP_PULSES = 24
+
 
 @typing.runtime_checkable
 class PatternLike (typing.Protocol):
@@ -2168,13 +2174,23 @@ class Sequencer:
 
 		"""Playback loop driven by Ableton Link beat clock.
 
-		Uses ``link_clock.sync(beat)`` as the timing primitive: for each pulse N
-		we wait until the Link session beat reaches ``beat_origin + N / PPQN``.
-		This gives accurate, phase-locked timing at 24 PPQN with typical jitter
-		of ~0.3–0.5 ms (dominated by asyncio/OS scheduling overhead).
+		``link_clock.sync(period)`` is the timing gate, and what it takes is a
+		**period**: aalink resumes at the next *multiple* of it.  This used to
+		pass an absolute beat — ``beat_origin + pulse / PPQN`` — so every pulse
+		waited for a multiple of itself.  Pulse 0 waited for two bars, and every
+		pulse after it landed on a lattice twice as coarse as intended, so the
+		piece played at exactly **half tempo** while the display showed the
+		right BPM (#2993).  It stepped with ``sync(1 / PPQN)`` — the next pulse
+		lattice point — and reads the beat it is handed.
 
-		Starts on the next quantum boundary so that bar 0 aligns with all other
-		Link participants in the session.
+		A stall is caught up pulse by pulse, exactly as the internal clock's
+		inner loop does, up to a beat's worth.  Past that, playing every missed
+		pulse would be a burst of noise, so the position moves to where Link
+		actually is and says so.
+
+		Typical jitter at 24 PPQN is ~0.3–0.5 ms, dominated by asyncio and OS
+		scheduling.  Playback starts on the next bar boundary so bar 0 aligns
+		with every other participant in the session.
 		"""
 
 		logger.info("Ableton Link clock mode: waiting for bar boundary…")
@@ -2189,13 +2205,19 @@ class Sequencer:
 		self.current_bar = -1
 		self.current_beat = -1
 
+		pulse_period = 1.0 / self.pulses_per_beat
+		sounded_beat = beat_origin		# pulse 0 belongs to the bar line itself
+
+		def play_one_pulse () -> None:
+			"""Bar and beat bookkeeping, and a clock tick if one is due."""
+
+			self._check_bar_change(self.pulse_count, pulses_per_bar)
+			self._check_beat_change(self.pulse_count, self._pulses_per_unit)
+
+			if self.clock_output:
+				self._send_clock_message("clock")
+
 		while self.running:
-
-			# Compute the Link beat corresponding to the current pulse.
-			target_beat = beat_origin + self.pulse_count / self.pulses_per_beat
-
-			# Wait for Link to reach that beat (this is the timing gate).
-			await link_clock.sync(target_beat)
 
 			# Update local tempo from the Link session — propagates network BPM changes.
 			link_bpm = link_clock.tempo
@@ -2209,11 +2231,11 @@ class Sequencer:
 				self.seconds_per_pulse = self.seconds_per_beat / self.pulses_per_beat
 				logger.debug(f"Link tempo update: {link_bpm:.2f} BPM")
 
-			self._check_bar_change(self.pulse_count, pulses_per_bar)
-			self._check_beat_change(self.pulse_count, self._pulses_per_unit)
+			play_one_pulse()
 
-			if self.clock_output:
-				self._send_clock_message("clock")
+			if not self.running:
+				# A render bar-limit trips inside _check_bar_change.
+				break  # type: ignore[unreachable]
 
 			await self._advance_pulse()
 
@@ -2225,6 +2247,39 @@ class Sequencer:
 					logger.info("Sequence complete (no more events or active notes).")
 					self.running = False
 					break
+
+			# The next point on the pulse lattice, wherever the session has got
+			# to.  A PERIOD, not a position — that is the whole of #2993.
+			beat = await link_clock.sync(pulse_period)
+
+			# How far the session moved while we were away.  One pulse is the
+			# ordinary case; anything more was missed while we were busy.
+			missed = int(round((beat - sounded_beat) * self.pulses_per_beat)) - 1
+			sounded_beat = beat
+
+			if missed > _LINK_CATCH_UP_PULSES:
+				# Too far behind to play through.  Working the backlog off is a
+				# burst of noise and then a piece running at a fraction of the
+				# session's tempo, which is what a 42 ms stall used to cause —
+				# so the position moves to where Link actually is.
+				logger.warning(
+					"Ableton Link: %d pulses behind (%.2f beats) — moving to the session's "
+					"position instead of playing the backlog.",
+					missed, missed / self.pulses_per_beat,
+				)
+				self.pulse_count += missed
+
+			elif missed > 0:
+				# A short stall: play through it, as the internal clock's inner
+				# loop does when the wall clock has run ahead of it.
+				for _ in range(missed):
+
+					play_one_pulse()
+
+					if not self.running:
+						break  # type: ignore[unreachable]
+
+					await self._advance_pulse()
 
 
 	async def _maybe_reschedule_patterns (self, pulse: int) -> None:

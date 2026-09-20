@@ -10,8 +10,11 @@ Usage::
 
     link_clock = LinkClock(bpm=120, quantum=4.0, loop=asyncio.get_running_loop())
     beat_origin = await link_clock.wait_for_bar()
-    # ... in the pulse loop:
-    await link_clock.sync(beat_origin + pulse_count / PPQN)
+    # ... in the pulse loop, stepping one pulse at a time:
+    beat = await link_clock.sync(1 / PPQN)
+
+``sync`` takes a **period**, not a position: aalink resumes at the next
+multiple of what it is given.  Requires aalink 0.2 or later.
 """
 
 from __future__ import annotations
@@ -88,31 +91,33 @@ class LinkClock:
 	# Sync / control
 	# ------------------------------------------------------------------
 
-	async def sync (self, beat: float) -> float:
-		"""Wait until the Link session beat reaches *beat*, then return *beat*.
+	async def sync (self, period: float) -> float:
+		"""Wait for the next Link beat that is a multiple of *period*, and return it.
 
-		This is the primary timing primitive used by the sequencer loop.
-		Calling ``await link_clock.sync(beat_origin + pulse / PPQN)`` for each
-		successive pulse gives accurate, Link-synchronised timing.
+		**A period, not a position.**  aalink resumes at the next *multiple* of
+		its argument — aalink's own documentation gives ``sync(2)`` at beat 11.5
+		resuming at 12 — and this was called with an absolute beat instead, so every pulse
+		waited for a multiple of itself.  Pulse 0 waited for beat ``2 × quantum``,
+		a bar late, and every pulse after it landed on a lattice twice as coarse
+		as the one intended: the piece played at exactly half tempo, while the
+		display went on showing the right BPM (#2993).
+
+		So the sequencer steps with ``await sync(1 / PPQN)`` — the next pulse
+		lattice point, wherever the session has got to — and reads the beat it
+		is handed rather than assuming which one it asked for.
 		"""
-		return float(await self._link.sync(beat))
+		return float(await self._link.sync(period))
 
 	async def wait_for_bar (self) -> float:
-		"""Wait for the next quantum boundary (bar start) and return it.
+		"""Wait for the next bar boundary and return the beat it fell on.
 
-		Use this to start the sequencer at a musically clean position that is
-		phase-aligned with all other Link participants.
-
-		Returns the beat value at which playback should begin (``beat_origin``).
+		``sync(quantum)`` IS "the next multiple of a bar", which is what this
+		wants — no arithmetic of our own, and no boundary to get wrong.  The
+		hand-computed one raised on aalink 0.2.3 for a zero or negative
+		boundary, and on 0.2.2 and earlier hung with the GIL held; aalink
+		returns 0.0 for it safely.
 		"""
-		current = self._link.beat
-		# Next quantum boundary strictly after the current beat
-		# math.floor, not int(): Link beats can be negative before transport
-		# zero, and int() truncates toward zero - skipping the boundary at 0.0
-		# and delaying the start by a full extra quantum.
-		next_boundary = (math.floor(current / self._link.quantum) + 1) * self._link.quantum
-		result = await self._link.sync(next_boundary)
-		return float(result)
+		return float(await self._link.sync(self._link.quantum))
 
 	def request_tempo (self, bpm: float) -> None:
 		"""Propose a new tempo to the Link session.

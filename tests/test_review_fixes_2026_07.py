@@ -6,6 +6,7 @@ grouped by the module the fix landed in.
 """
 
 import asyncio
+import math
 import heapq
 import inspect
 import logging
@@ -611,10 +612,18 @@ async def test_stop_pattern_notes_defers_note_off_on_fast_device (patch_midi: No
 
 class _FakeLinkClock:
 
-	"""Minimal Link session stand-in: one tempo, instant syncs."""
+	"""Minimal Link session stand-in, with aalink's own next-multiple semantics.
+
+	`sync(period)` resumes at the next multiple of *period* and returns the
+	beat it resumed at — which is the whole point of #2993, and an instant
+	`sync()` returning None could not have shown it.
+	"""
 
 	tempo: float = 100.0
 	num_peers: int = 0
+
+	def __init__ (self) -> None:
+		self.beat = 0.0
 
 	async def wait_for_bar (self) -> float:
 
@@ -622,11 +631,16 @@ class _FakeLinkClock:
 
 		return 0.0
 
-	async def sync (self, beat: float) -> None:
+	async def sync (self, period: float) -> float:
 
-		"""Never block — the loop stops itself when the queue is empty."""
+		"""The next multiple of *period* strictly after the current beat."""
 
-		return None
+		# The epsilon matters: floor(4.0416666 / 0.0416666) is 96, not 97, so
+		# without it the fake never advances and every assertion over it is
+		# vacuously true.
+		self.beat = (math.floor(self.beat / period + 1e-9) + 1) * period
+
+		return self.beat
 
 
 @pytest.mark.asyncio
