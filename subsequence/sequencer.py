@@ -145,6 +145,11 @@ class MidiEvent:
 	priority: int = 0
 	sequence: int = 0
 
+	# Which pattern placed this, so a teardown can tell its own notes from
+	# everybody else's on the same channel (#2996).  Never compared, and never
+	# printed: a pattern's repr is long and this is bookkeeping.
+	owner: typing.Any = dataclasses.field(compare=False, default=None, repr=False)
+
 
 	def __post_init__ (self) -> None:
 
@@ -576,6 +581,10 @@ class Sequencer:
 		self.current_bar: int = -1
 		self.current_beat: int = -1
 		self.active_notes: typing.Set[typing.Tuple[int, int, int]] = set()  # (device, channel, note)
+
+		# Who struck each sounding note.  A weak map, so a torn-down pattern
+		# that left a note hanging is still collectable (#2996).
+		self._note_owner: "weakref.WeakValueDictionary[typing.Tuple[int, int, int], typing.Any]" = weakref.WeakValueDictionary()
 
 		# The drones each pattern has scheduled on and not yet off, per
 		# destination, so one left on a destination the pattern stops playing
@@ -1164,7 +1173,7 @@ class Sequencer:
 		return self._get_schedule_timing(pattern.length, pattern.reschedule_lookahead)
 
 
-	def _push_event (self, event: MidiEvent) -> None:
+	def _push_event (self, event: MidiEvent, owner: typing.Any = None) -> None:
 
 		"""Push a MidiEvent onto the queue, stamping a FIFO tie-breaker.
 
@@ -1172,11 +1181,37 @@ class Sequencer:
 		``pulse`` dispatch in insertion order — required for NRPN/RPN bursts
 		and Bank Select before Program Change.  The rank is re-read here, so an
 		event altered after it was built still sorts by what it now is.
+
+		*owner*, when given, is the pattern this event belongs to — what lets
+		``unregister()`` release its notes without cutting a neighbour's on the
+		same channel (#2996).
 		"""
+
+		if owner is not None:
+			event.owner = owner
 
 		event.rank = _dispatch_rank(event.message_type, event.velocity)
 		event.sequence = next(self._event_counter)
 		heapq.heappush(self.event_queue, event)
+
+
+	def _remember_owner (self, event: MidiEvent) -> None:
+
+		"""Record which pattern a sounding note belongs to, where one is known.
+
+		A note struck by ``trigger()`` or sent straight to a port has no owner;
+		it simply is not in the map, and a teardown leaves it alone.
+		"""
+
+		if event.owner is None:
+			return
+
+		try:
+			self._note_owner[(event.device, event.channel, event.note)] = event.owner
+		except TypeError:
+			# Something not weak-referenceable placed it.  Not knowing the owner
+			# is the old behaviour, and better than refusing to play the note.
+			pass
 
 
 	def _spawn (self, coro: typing.Coroutine) -> None:
@@ -1248,11 +1283,21 @@ class Sequencer:
 			# only where it plays now.  One it holds on a destination it has
 			# left would ring for ever, so it is released as this cycle starts,
 			# before anything plays where the pattern went.
+			#
+			# A part that has been SILENCED — muted by hand, closed by the
+			# energy gate, or held quiet through a transition — lets go of all
+			# of them, wherever they are.  Its builder is not running, so the
+			# `drone_off` it had planned never comes, and the note rang until
+			# the performance stopped: one struck at beat 0 and muted at cycle 2
+			# was released when the render ended, at beat 48.  Unmuting does not
+			# strike it again; the builder decides what sounds (decision 3 of
+			# #2991).
 			held = self._held_drones.setdefault(pattern, set())
+			silenced = bool(getattr(pattern, "is_silenced", False))
 			playing_to = {(target.device, target.channel) for target in destinations}
 
 			for device, channel, note in sorted(held):
-				if (device, channel) not in playing_to:
+				if silenced or (device, channel) not in playing_to:
 					held.discard((device, channel, note))
 					self._push_event(MidiEvent(
 						pulse = start_pulse,
@@ -1261,7 +1306,7 @@ class Sequencer:
 						note = note,
 						velocity = 0,
 						device = device,
-					))
+					), owner = pattern)
 
 			for position, step in pattern.steps.items():
 
@@ -1304,7 +1349,7 @@ class Sequencer:
 							velocity = note.velocity,
 							device = note_device,
 						)
-						self._push_event(on_event)
+						self._push_event(on_event, owner = pattern)
 
 						# At least a pulse after its note-on: note-offs lead their
 						# pulse, so a zero-length note would otherwise be released
@@ -1317,7 +1362,7 @@ class Sequencer:
 							velocity = 0,
 							device = note_device,
 						)
-						self._push_event(off_event)
+						self._push_event(off_event, owner = pattern)
 
 			# CC / pitch bend / program change / SysEx events
 			for cc_event in getattr(pattern, 'cc_events', []):
@@ -1347,7 +1392,7 @@ class Sequencer:
 						device = event_device,
 						priority = getattr(cc_event, 'priority', 0),
 					)
-					self._push_event(midi_event)
+					self._push_event(midi_event, owner = pattern)
 
 			# Raw Note On/Off events (drones)
 			for note_ev in getattr(pattern, 'raw_note_events', []):
@@ -1377,7 +1422,7 @@ class Sequencer:
 						velocity = note_ev.velocity,
 						device = target.device,
 					)
-					self._push_event(midi_event)
+					self._push_event(midi_event, owner = pattern)
 
 					if midi_event.rank == 2:
 						held.add((target.device, target.channel, note_value))
@@ -1399,7 +1444,7 @@ class Sequencer:
 					data = (osc_event.address, osc_event.args)
 				)
 
-				self._push_event(osc_midi_event)
+				self._push_event(osc_midi_event, owner = pattern)
 
 		logger.debug(f"Scheduled pattern at {start_pulse}, queue size: {len(self.event_queue)}")
 
@@ -2360,9 +2405,11 @@ class Sequencer:
 					if event.message_type == 'note_on' and event.velocity > 0:
 						if _can_sound(event.channel, event.note, event.velocity):
 							self.active_notes.add((event.device, event.channel, event.note))
+							self._remember_owner(event)
 					elif event.message_type == 'note_off' or (event.message_type == 'note_on' and event.velocity == 0):
 						if (event.device, event.channel, event.note) in self.active_notes:
 							self.active_notes.remove((event.device, event.channel, event.note))
+							self._note_owner.pop((event.device, event.channel, event.note), None)
 
 					# Send events at or before the current pulse (late events are sent
 					# immediately).  Latency compensation may defer the actual send by
@@ -2466,6 +2513,21 @@ class Sequencer:
 		stopped on every output port they fan out to.  Used by
 		``Composition.unregister()`` to flush drones and any sustaining
 		notes when a pattern is being torn down.
+
+		**Another pattern's notes are left alone.**  This used to release
+		everything sounding on the pattern's ``(device, channel)``, so
+		unregistering an arp cut the pad beside it: a four-beat pad note went
+		off 0.08 of a beat in (#2996).
+
+		A note nobody owns is still released.  That is deliberate: a one-shot
+		from ``trigger()``, or anything sent straight to a port, has no builder
+		coming back to turn it off, so a teardown of its channel is the last
+		chance it gets.  Only a note another *live pattern* struck is spared,
+		because that pattern will end it itself.
+
+		It also drops the pattern's own note-ons still waiting in the queue.
+		A drone struck inside the reschedule lookahead played *after* the
+		release pass, and nothing ever released it.
 		"""
 
 		mirrors = getattr(pattern, 'mirrors', [])
@@ -2475,7 +2537,23 @@ class Sequencer:
 
 		async with self.queue_lock:
 
-			stranded = [t for t in self.active_notes if (t[0], t[1]) in targets]
+			dropped = {
+				id(event) for event in self.event_queue
+				if event.owner is pattern and event.message_type == 'note_on' and event.velocity > 0
+			}
+
+			if dropped:
+				# By identity: two events of one rank on one pulse differ only
+				# in their sequence number, and equality does not look at what
+				# they are.
+				self.event_queue = [event for event in self.event_queue if id(event) not in dropped]
+				heapq.heapify(self.event_queue)
+
+			stranded = [
+				t for t in self.active_notes
+				if (t[0], t[1]) in targets and self._note_owner.get(t, pattern) is pattern
+			]
+
 			self._held_drones.pop(pattern, None)
 
 			for dev, channel, note in stranded:
@@ -2499,6 +2577,7 @@ class Sequencer:
 				except Exception:
 					logger.exception(f"Failed to send note_off during unregister (dev={dev}, ch={channel}, note={note})")
 				self.active_notes.discard((dev, channel, note))
+				self._note_owner.pop((dev, channel, note), None)
 
 
 	def _send_offset_seconds (self, device: int) -> float:

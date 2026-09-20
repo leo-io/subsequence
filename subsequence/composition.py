@@ -4416,9 +4416,17 @@ class Composition:
 
 		"""
 		Mute a running pattern by name.
-		
-		The pattern continues to 'run' and increment its cycle count in 
+
+		The pattern continues to 'run' and increment its cycle count in
 		the background, but it will not produce any MIDI notes until unmuted.
+
+		**A drone it is holding is released** at the start of its first silent
+		cycle, on every destination it plays to.  It has to be: its builder is
+		what would have turned the drone off, and a muted builder does not run,
+		so the note used to ring until the performance stopped.  Unmuting does
+		not strike it again — what sounds is the builder's decision, and it
+		will place a fresh one if it wants one.  The same goes for a part the
+		energy gate closes or a transition holds quiet.
 
 		Parameters:
 			name: The function name of the pattern to mute.
@@ -4458,18 +4466,26 @@ class Composition:
 		Unlike ``mute()`` (which keeps the pattern alive but silent),
 		``unregister()`` tears the pattern down entirely.  It sets
 		``pattern._removed = True`` so the sequencer's reschedule loop
-		skips re-adding it on the next pulse; sends ``note_off`` for any
-		of the pattern's currently-sounding notes on the primary
+		skips re-adding it on the next pulse; sends ``note_off`` for
+		**this pattern's** currently-sounding notes on the primary
 		destination AND on every mirror destination (so drones and
 		sustaining notes stop immediately); and removes the entry from
 		``_running_patterns`` so it no longer appears in ``live_info()``,
 		the terminal grid, or any other consumer that enumerates running
 		patterns.
 
-		Already-queued events in the sequencer's event queue play out —
-		note_offs are paired with their note_ons at queue time, so notes
-		end at their natural duration; only drones rely on the targeted
-		``_stop_pattern_notes`` pass.
+		Another pattern sharing the channel keeps playing.  Its notes are
+		its own to end, and cutting them is what used to happen — a pad's
+		four-beat note stopped 0.08 of a beat in when an arp beside it was
+		unregistered (#2996).  A note with no pattern behind it, from
+		``trigger()`` or sent straight to a port, is still released: nothing
+		else is coming to end it.
+
+		Its own note-ons still waiting in the queue are dropped, so a drone
+		struck inside the reschedule lookahead does not play after the
+		release pass and ring for the rest of the piece.  Everything else
+		queued plays out — note_offs are paired with their note_ons at queue
+		time, so ordinary notes end at their natural duration.
 
 		Idempotent: silently logs a ``debug`` and returns if the pattern
 		is already absent.  Useful from both the live REPL
@@ -6865,6 +6881,19 @@ class Composition:
 					logger.exception("Error in pattern builder '%s' (cycle %d) - pattern will be silent this cycle", self._builder_fn.__name__, current_cycle)
 
 				composition_ref._apply_composition_tuning(self, builder, self._drum_note_map, part = self._builder_fn.__name__)
+
+			@property
+			def is_silenced (self) -> bool:
+
+				"""True while something is holding this part quiet.
+
+				A performer mute, a transition mute (which sets the same flag)
+				or a closed energy gate.  The sequencer reads it to let go of
+				any drone the part is holding, because its builder is not
+				running to turn one off (#2996).
+				"""
+
+				return self._muted or self._energy_gated
 
 			def on_reschedule (self) -> None:
 
