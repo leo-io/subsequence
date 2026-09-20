@@ -170,6 +170,14 @@ class PatternAlgorithmicMixin:
 			if low > high:
 				raise ValueError(f"velocity range must be (low, high) with low <= high, got {velocity!r}")
 
+			# Both ends, not just the draw: `hit_steps(velocity=(100, 160))`
+			# dropped five notes of eight in one run, because every draw above
+			# 127 was rejected at the send and the composer saw an intermittent
+			# pattern rather than an error (#3004).  1 at the bottom, because a
+			# velocity of 0 is a note-off and not a quiet note.
+			subsequence.pattern.check_midi_range(low, "velocity range low", "velocity=", low = 1)
+			subsequence.pattern.check_midi_range(high, "velocity range high", "velocity=", low = 1)
+
 			if rng is None:
 				rng = self.rng
 

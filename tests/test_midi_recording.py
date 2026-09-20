@@ -489,11 +489,33 @@ async def test_unregistering_a_part_with_a_note_no_message_can_carry_releases_it
 	assert seq.active_notes == set()
 
 
+def _hold_a_note_past_the_ceiling (p: typing.Any, pitches: typing.Sequence[int]) -> None:
+
+	"""Put notes MIDI cannot carry straight onto the pattern, below every check.
+
+	`chord("C", root=110, count=8)` used to produce 132 and 136 and this is
+	what it produced them for.  It folds them into range now, and a builder
+	verb refuses one written by hand (#3004) — so the only way to set up what
+	#2958 guards against is to place the Note itself.
+	"""
+
+	step = p._pattern.steps.setdefault(0, subsequence.pattern.Step())
+
+	for pitch in pitches:
+		step.notes.append(subsequence.pattern.Note(
+			pitch = pitch, velocity = 100, duration = 8 * 24, channel = p._pattern.channel,
+		))
+
+
 def test_a_render_holding_a_chord_voiced_past_127_still_writes_its_file (tmp_path: pathlib.Path, patch_midi: None) -> None:
 
-	"""chord(count=8) from root 110 reaches 132 and 136; held to the end of the render, it no longer costs the file or the valid notes' releases."""
+	"""A note past 127 held to the end of the render costs neither the file nor the valid notes' releases."""
 
-	timeline, length = _file(tmp_path, 1, lambda p: p.chord("C", root=110, count=8, duration=8))
+	def build (p: typing.Any) -> None:
+		p.chord("C", root=110, count=6, duration=8)
+		_hold_a_note_past_the_ceiling(p, (132, 136))
+
+	timeline, length = _file(tmp_path, 1, build)
 	sounded = sorted(message.note for _, message in timeline if message.type == "note_on" and message.velocity > 0)
 
 	assert sounded == [108, 112, 115, 120, 124, 127]

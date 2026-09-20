@@ -22,7 +22,8 @@ T = typing.TypeVar("T")
 __all__ = [
 	"Sieve", "branch_sequence", "build_metric_weights", "choke", "clamp", "combine_densities",
 	"constrained_walk", "cseg", "csim", "de_bruijn", "density_spread", "density_to_steps",
-	"density_warp", "displace", "fibonacci", "flip", "fold", "generate_bresenham_sequence",
+	"density_warp", "displace", "fibonacci", "flip", "fold", "fold_to_midi_range",
+	"generate_bresenham_sequence",
 	"generate_bresenham_sequence_weighted", "generate_cellular_automaton_1d",
 	"generate_cellular_automaton_2d", "generate_euclidean_sequence", "generate_legato_durations",
 	"generate_van_der_corput_sequence", "golden_rhythm", "logistic_map", "lorenz_attractor",
@@ -1282,6 +1283,31 @@ def fold (sequence: typing.Sequence[int], low: int, high: int, mode: str = "wrap
 		folded.append(low + offset if offset <= span else low + period - offset)
 
 	return folded
+
+
+def fold_to_midi_range (pitch: int, low: int = 0, high: int = 127) -> int:
+
+	"""Bring a pitch inside 0–127 by octaves, keeping its pitch class.
+
+	A generator that computes pitches can run off either end — ``branch_sequence``
+	transposing a trunk upward, a chord stacked past the top of the keyboard —
+	and a pitch MIDI cannot carry is dropped at every send, logged as a device
+	fault (#3004).  Moving it by octaves keeps the note it is and puts it where
+	it can sound; the alternative, clamping, turns a melody into a wall at 127.
+
+	A range narrower than an octave cannot always hold a pitch class, so the
+	result is clamped as a last resort.
+	"""
+
+	folded = int(pitch)
+
+	while folded < low:
+		folded += 12
+
+	while folded > high:
+		folded -= 12
+
+	return max(low, min(high, folded))
 
 
 def _noise_hash (*values: int) -> int:
@@ -2789,7 +2815,11 @@ def branch_sequence (
 			if rng.random() < mutation:
 				sequence[i] = rng.choice(pitches)
 
-	return sequence
+	# Transposing the trunk runs it off the keyboard — `branch_sequence([78,
+	# 40, 69], 2, 1)` reached 154 — and a pitch MIDI cannot carry is dropped at
+	# every send.  Folded by octaves, so the variation keeps its shape and
+	# still sounds (#3004).
+	return [fold_to_midi_range(pitch) for pitch in sequence]
 
 
 def build_metric_weights (time_signature: typing.Tuple[int, int] = (4, 4), grid: int = 16) -> typing.List[float]:

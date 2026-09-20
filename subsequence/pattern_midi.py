@@ -156,8 +156,12 @@ class PatternMidiMixin:
 
 		Parameters:
 			control: MIDI CC number (0–127), or a string name resolved
-				via the pattern's ``cc_name_map``.
-			value: CC value (0–127); out-of-range values are clamped.
+				via the pattern's ``cc_name_map``.  A number outside 0–127
+				raises, naming it: MIDI cannot carry it, so it would have
+				been dropped at every send (#3004).
+			value: CC value (0–127); out-of-range values are clamped, as on
+				every sibling verb — a computed value running past an end is
+				a controller reaching its limit, not a mistake.
 			beat: Beat position within the pattern.
 		"""
 

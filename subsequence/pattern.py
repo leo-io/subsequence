@@ -27,6 +27,35 @@ MirrorSpec = typing.Union[
 ]
 
 
+def check_midi_range (value: typing.Any, what: str, where: str, low: int = 0, high: int = 127) -> int:
+
+	"""Refuse a number MIDI cannot carry, and say which number it was.
+
+	A pitch of 140, a velocity of 300 or a CC number of 200 used to be stored
+	happily and then rejected by mido on every single cycle, logged as "MIDI
+	send failed (device may be disconnected)" — so the composer looked at
+	their cables (#3004).  One run of ``hit_steps(velocity=(100, 160))`` dropped
+	five notes of eight that way.
+
+	It is refused where it is written instead, naming the value and the thing
+	it was meant to be.  A library generator folds its own output into range
+	rather than reaching here — see ``sequence_utils.fold_to_midi_range``.
+	"""
+
+	try:
+		number = int(value)
+	except (TypeError, ValueError):
+		raise ValueError(f"{where}: {what} must be a whole number, got {value!r}") from None
+
+	if not low <= number <= high:
+		raise ValueError(
+			f"{where}: {what} must be {low}–{high}, got {number}. "
+			f"MIDI cannot carry it, so it would be dropped at every send."
+		)
+
+	return number
+
+
 def spaced_onsets (start: float, end: float, spacing: float, pulses_per_beat: int = subsequence.constants.MIDI_QUARTER_NOTE) -> typing.List[float]:
 
 	"""Every onset from *start* at *spacing* beats that plays before *end*.
@@ -259,6 +288,11 @@ class Pattern:
 		primary device can't voice it, so it stays silent and only the mapping
 		mirror(s) sound it.
 		"""
+
+		# Every note placed by any verb comes through here, which is why the
+		# check lives here and not at a dozen entry points (#3004).
+		pitch = check_midi_range(pitch, "pitch", "note")
+		velocity = check_midi_range(velocity, "velocity", "note")
 
 		if position not in self.steps:
 			self.steps[position] = Step()

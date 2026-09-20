@@ -560,6 +560,7 @@ Functions for generating and transforming sequences.
 | `fibonacci(count, a, b, modulus) -> List[int]` | Generate Fibonacci numbers, optionally folded into a repeating pitch cycle. |
 | `flip(value, low, high) -> Union[float, List[float]]` | Reflect a value within a range - its complement about the mid-point. |
 | `fold(sequence, low, high, mode) -> List[int]` | Bring out-of-range whole numbers back into a range, keeping their movement. |
+| `fold_to_midi_range(pitch, low, high) -> int` | Bring a pitch inside 0–127 by octaves, keeping its pitch class. |
 | `generate_bresenham_sequence(steps, pulses) -> List[int]` | Generate a rhythm using Bresenham's line algorithm. |
 | `generate_bresenham_sequence_weighted(steps, weights) -> List[int]` | Generate a sequence that distributes weighted indices across steps. |
 | `generate_cellular_automaton_1d(steps, rule, generation, seed) -> List[int]` | Generate a binary sequence using an elementary cellular automaton. |

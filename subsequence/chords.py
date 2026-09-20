@@ -23,6 +23,7 @@ Chord qualities: ``"major"``, ``"minor"``, ``"diminished"``, ``"augmented"``, ``
 import dataclasses
 import typing
 
+import subsequence.sequence_utils
 import subsequence.voicings
 
 
@@ -184,11 +185,21 @@ class Chord:
 		if inversion != 0:
 			intervals = subsequence.voicings.invert_chord(intervals, inversion)
 
+		# Stacking into higher octaves runs off the top of the keyboard: from
+		# root 110, count=8 reached 132 and 136, which MIDI cannot carry and
+		# which were dropped at every send (#3004).  Each tone is folded back
+		# by octaves, so it keeps the note it is and lands where it can sound.
 		if count is not None:
 			n = len(intervals)
-			return [effective_root + intervals[i % n] + 12 * (i // n) for i in range(count)]
+			return [
+				subsequence.sequence_utils.fold_to_midi_range(effective_root + intervals[i % n] + 12 * (i // n))
+				for i in range(count)
+			]
 
-		return [effective_root + interval for interval in intervals]
+		return [
+			subsequence.sequence_utils.fold_to_midi_range(effective_root + interval)
+			for interval in intervals
+		]
 
 
 	def root_note (self, root_midi: int) -> int:

@@ -2691,7 +2691,27 @@ class Sequencer:
 				self._locked_send(port, msg)
 
 			except Exception:
-				logger.exception("MIDI send failed (device may be disconnected)")
+				# Say which number MIDI would not take.  Blaming the cable sent
+				# people looking at their hardware for a pitch of 140 (#3004).
+				out_of_range = [
+					f"{name} {value}"
+					for name, value in (
+						("note", getattr(event, "note", None)),
+						("velocity", getattr(event, "velocity", None)),
+						("CC", getattr(event, "control", None)),
+						("value", getattr(event, "value", None)),
+						("channel", getattr(event, "channel", None)),
+					)
+					if isinstance(value, int) and not 0 <= value <= 127
+				]
+
+				if out_of_range:
+					logger.exception(
+						"A %s cannot be sent: %s is outside 0–127. The device is fine; the number is not.",
+						event.message_type, ", ".join(out_of_range),
+					)
+				else:
+					logger.exception("MIDI send failed (device may be disconnected)")
 
 
 	async def panic (self) -> None:

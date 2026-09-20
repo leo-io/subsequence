@@ -593,7 +593,10 @@ class PatternBuilder(
 		"""Resolve a CC name or number to a MIDI CC number."""
 
 		if isinstance(control, int):
-			return control
+			# NRPN and RPN numbers were range-checked and CC numbers were not,
+			# although cc()'s own docstring says 0–127.  `p.cc(200, 64)` was
+			# stored and then rejected by mido on every cycle (#3004).
+			return subsequence.pattern.check_midi_range(control, "CC number", "cc")
 
 		if self._cc_name_map is None:
 			raise ValueError(f"String CC name '{control}' requires a cc_name_map, but none was provided")
@@ -601,7 +604,9 @@ class PatternBuilder(
 		if control not in self._cc_name_map:
 			raise ValueError(f"Unknown CC name '{control}' - not found in cc_name_map")
 
-		return self._cc_name_map[control]
+		return subsequence.pattern.check_midi_range(
+			self._cc_name_map[control], "CC number", f"cc_name_map[{control!r}]",
+		)
 
 	def _resolve_nrpn (self, parameter: typing.Union[int, str]) -> int:
 

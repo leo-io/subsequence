@@ -291,7 +291,11 @@ def quantize_pitch (pitch: int, scale_pcs: typing.Sequence[int]) -> int:
 		           the output of :func:`scale_pitch_classes`.
 
 	Returns:
-		A MIDI note number that lies within the scale.
+		A MIDI note number that lies within the scale, and within 0–127.
+		At the very top or bottom of the range the search only goes the way
+		there is room to go: ``quantize_pitch(127, ...)`` used to answer 128
+		in a scale whose next note up is a semitone above the ceiling, and 128
+		is not a note MIDI can send (#3004).
 
 	Example:
 		```python
@@ -306,10 +310,14 @@ def quantize_pitch (pitch: int, scale_pcs: typing.Sequence[int]) -> int:
 	if pc in scale_pcs:
 		return pitch
 
+	# Upward first when both are equidistant, as documented — but only where
+	# there is room to go.  At the top of the range `quantize_pitch(127, ...)`
+	# answered 128, which is not a note MIDI can send and which was dropped at
+	# every attempt (#3004).  The same at the bottom.
 	for offset in range(1, 7):
-		if (pc + offset) % 12 in scale_pcs:
+		if (pc + offset) % 12 in scale_pcs and pitch + offset <= 127:
 			return pitch + offset
-		if (pc - offset) % 12 in scale_pcs:
+		if (pc - offset) % 12 in scale_pcs and pitch - offset >= 0:
 			return pitch - offset
 
 	# The search radius of ±6 semitones covers every gap in every scale with
