@@ -116,11 +116,11 @@ async def test_clock_follow_advances_pulses (patch_midi: None) -> None:
 	await seq.start()
 
 	# Inject a start message to begin counting.
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	# Inject 24 clock ticks (= 1 beat).
 	for _ in range(24):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 
@@ -145,13 +145,13 @@ async def test_clock_follow_waits_for_start (patch_midi: None) -> None:
 
 	# Send clock ticks without a start - should be ignored.
 	for _ in range(10):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	# Now send start + 5 more ticks.
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	for _ in range(5):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 
@@ -179,16 +179,16 @@ async def test_transport_start_resets_position (patch_midi: None) -> None:
 	await seq.start()
 
 	# Start, count some ticks, then start again (resets).
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	for _ in range(48):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	# Second start - resets pulse_count.
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	for _ in range(10):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 
@@ -220,16 +220,16 @@ async def test_transport_stop_holds_the_position (patch_midi: None) -> None:
 
 	assert seq.running is True
 
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	for _ in range(48):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 
 	assert seq.pulse_count == 48, "the clock never advanced, so the hold below proves nothing"
 
-	seq._midi_input_queue.put_nowait((0, mido.Message("stop")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("stop"), time.perf_counter()))
 
 	await _drain(seq)
 
@@ -239,7 +239,7 @@ async def test_transport_stop_holds_the_position (patch_midi: None) -> None:
 
 	# Ticks keep arriving while the master is stopped; they must not advance us.
 	for _ in range(24):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 
@@ -264,20 +264,20 @@ async def test_transport_continue_resumes (patch_midi: None) -> None:
 
 	# Clocks before any start/continue are ignored (position stays 0).
 	for _ in range(8):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	# Drive the sequencer to a non-zero position.
-	seq._midi_input_queue.put_nowait((0, mido.Message("start")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("start"), time.perf_counter()))
 
 	for _ in range(24):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	# Continue must preserve the position (start resets it — see
 	# test_transport_start_resets_position above).
-	seq._midi_input_queue.put_nowait((0, mido.Message("continue")))
+	seq._midi_input_queue.put_nowait((0, mido.Message("continue"), time.perf_counter()))
 
 	for _ in range(12):
-		seq._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		seq._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(seq)
 

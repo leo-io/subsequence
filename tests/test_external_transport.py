@@ -72,14 +72,14 @@ async def _drain (sequencer: subsequence.sequencer.Sequencer) -> None:
 
 async def _send (sequencer: subsequence.sequencer.Sequencer, kind: str) -> None:
 
-	sequencer._midi_input_queue.put_nowait((0, mido.Message(kind)))
+	sequencer._midi_input_queue.put_nowait((0, mido.Message(kind), time.perf_counter()))
 	await _drain(sequencer)
 
 
 async def _tick (sequencer: subsequence.sequencer.Sequencer, count: int) -> None:
 
 	for _ in range(count):
-		sequencer._midi_input_queue.put_nowait((0, mido.Message("clock")))
+		sequencer._midi_input_queue.put_nowait((0, mido.Message("clock"), time.perf_counter()))
 
 	await _drain(sequencer)
 
@@ -476,3 +476,36 @@ async def test_stopping_does_not_wait_for_the_cable (patch_midi_multi: typing.Di
 	took = time.perf_counter() - began
 
 	assert took < 0.5, f"stopping a clock-following session took {took:.2f}s waiting on the cable"
+
+
+@pytest.mark.asyncio
+async def test_the_clock_loop_ends_without_an_exception (patch_midi_multi: typing.Dict[str, typing.Any]) -> None:
+
+	"""Shutting down must not leave the loop dying on its way out.
+
+	``stop()`` logs and swallows an exception from the loop task, so that a
+	crashed loop cannot abort the cleanup that a dying session needs most —
+	which also means **a loop that dies on shutdown looks exactly like one
+	that ended cleanly**, from the outside and from the suite.
+
+	It cost nothing to catch here once. The wake-up message ``stop()`` pushes
+	has to be the same shape as one the input callback pushes, and when the
+	callback started stamping an arrival time (#3066) the wake-up did not —
+	so every shutdown raised ``ValueError: not enough values to unpack`` into
+	that swallow, while the timing test above went on passing.
+	"""
+
+	sequencer = _follower()
+	await sequencer.start()
+
+	await _send(sequencer, "start")
+	await _tick(sequencer, PPQN)
+
+	assert sequencer.pulse_count == PPQN, "the clock never ran, so the shutdown below proves nothing"
+
+	task = sequencer.task
+	await sequencer.stop()
+
+	assert task is not None and task.done()
+	assert not task.cancelled(), "the loop was cancelled rather than ending on its own"
+	assert task.exception() is None, f"the clock loop died on shutdown: {task.exception()!r}"

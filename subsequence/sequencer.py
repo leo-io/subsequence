@@ -519,6 +519,12 @@ class Sequencer:
 	# on the same pulse it would have without the polling.
 	_PAUSE_POLL_SECONDS: float = 0.005
 
+	# A silence longer than this between clock ticks is the master stopping,
+	# not slowing down, so the tempo window starts again rather than averaging
+	# across it.  Half a second a tick is 5 BPM at 24 PPQN — an order of
+	# magnitude below anything anybody plays, so no real tempo trips it.
+	_CLOCK_GAP_SECONDS: float = 0.5
+
 	def __init__ (
 		self,
 		output_device_name: typing.Optional[str] = None,
@@ -1092,8 +1098,14 @@ class Sequencer:
 		# following: with the internal clock nothing ever drains it, and a
 		# synced device's 24-ticks-per-beat clock would grow it forever.
 		if self.clock_follow:
+			# Stamp the arrival HERE, on the port's own callback thread, which
+			# is the only place that knows when the message actually came off
+			# the cable.  The loop used to take the time when it got round to
+			# reading the message, so every delay between the two — a rebuild,
+			# a busy callback, an ordinary scheduling hiccup — was measured as
+			# a tempo change and written into the recording (#3066).
 			self._input_loop.call_soon_threadsafe(
-				self._midi_input_queue.put_nowait, (device_idx, message)
+				self._midi_input_queue.put_nowait, (device_idx, message, time.perf_counter())
 			)
 
 		# Apply CC input mappings: map incoming CC values to composition.data.
@@ -1166,7 +1178,23 @@ class Sequencer:
 
 	def _estimate_bpm (self, tick_time: float) -> None:
 
-		"""Estimate BPM from recent MIDI clock tick timestamps for display and recording."""
+		"""Estimate BPM from recent MIDI clock tick arrival times, for display and recording.
+
+		*tick_time* is when the tick came off the cable, stamped on the input
+		port's callback thread — not when this loop got round to it (#3066).
+
+		A silence is not a slow tempo.  The averaging window is a beat wide, so
+		a master that stops sending and starts again leaves a window straddling
+		the gap: a two-second silence had a steady 120 BPM master reading
+		**23 BPM for 23 ticks**, and a longer one reads 0.  A gap therefore
+		starts the window again rather than being averaged into it.
+		"""
+
+		if self._clock_tick_times and tick_time - self._clock_tick_times[-1] > self._CLOCK_GAP_SECONDS:
+			# The cable went quiet.  Whatever comes next is a fresh measurement,
+			# and the tempo stands where it was until there is enough of one.
+			self._clock_tick_times = [tick_time]
+			return
 
 		self._clock_tick_times.append(tick_time)
 
@@ -1181,6 +1209,14 @@ class Sequencer:
 
 			if interval > 0:
 				new_bpm = int(round(60.0 / (interval * self.pulses_per_beat)))
+
+				# The review's "current_bpm reads 0 after a gap" is fixed by the
+				# reset above rather than by a guard here, and that is why there
+				# is none: every interval left in the window is at most
+				# _CLOCK_GAP_SECONDS, so the mean is too, and the slowest tempo
+				# this can now produce is 5 BPM.  Zero is unreachable.  A guard
+				# for it was written and then removed when a break for it failed
+				# nothing (#3066).
 
 				# Record tempo changes so a clock-following session's .mid
 				# plays back at the external tempo, not the constructor BPM.
@@ -1724,7 +1760,7 @@ class Sequencer:
 		# skipped before anything reads the message, so this advances nothing.
 		if self._midi_input_queue is not None:
 			try:
-				self._midi_input_queue.put_nowait((-1, mido.Message("stop")))
+				self._midi_input_queue.put_nowait((-1, mido.Message("stop"), time.perf_counter()))
 			except Exception:
 				logger.exception("Failed to wake the external clock loop for shutdown")
 
@@ -2378,7 +2414,7 @@ class Sequencer:
 		while self.running:
 
 			try:
-				device_idx, message = await asyncio.wait_for(
+				device_idx, message, arrived_at = await asyncio.wait_for(
 					self._midi_input_queue.get(), timeout=2.0
 				)
 			except asyncio.TimeoutError:
@@ -2392,10 +2428,10 @@ class Sequencer:
 				# Prime BPM estimation while the transport is held, but do not
 				# advance pulses or schedule events yet.
 				if self._transport_held:
-					self._estimate_bpm(time.perf_counter())
+					self._estimate_bpm(arrived_at)
 					continue
 
-				self._estimate_bpm(time.perf_counter())
+				self._estimate_bpm(arrived_at)
 				self._check_bar_change(self.pulse_count, pulses_per_bar)
 				self._check_beat_change(self.pulse_count, self._pulses_per_unit)
 				await self._advance_pulse()

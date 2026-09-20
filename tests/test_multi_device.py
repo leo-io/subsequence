@@ -6,6 +6,7 @@ Multi-device tests follow.
 """
 
 import asyncio
+import time
 import pathlib
 
 import mido
@@ -723,10 +724,10 @@ async def test_clock_follower_ignores_other_devices (monkeypatch) -> None:
 	monkeypatch.setattr(seq, "_advance_pulse", lambda: asyncio.sleep(0))
 	
 	# Send a clock message from device 0 (should be ignored)
-	seq._midi_input_queue.put_nowait((0, mido.Message('clock')))
+	seq._midi_input_queue.put_nowait((0, mido.Message('clock'), time.perf_counter()))
 	
 	# Send a clock message from device 1 (should be processed)
-	seq._midi_input_queue.put_nowait((1, mido.Message('clock')))
+	seq._midi_input_queue.put_nowait((1, mido.Message('clock'), time.perf_counter()))
 
 	loop = asyncio.create_task(seq._run_loop_external_clock(96))
 
@@ -743,7 +744,7 @@ async def test_clock_follower_ignores_other_devices (monkeypatch) -> None:
 	# skipped by the check under test before anything reads it — a tick from
 	# device 1 would be counted and make the assertion below read 2.
 	seq.running = False
-	seq._midi_input_queue.put_nowait((0, mido.Message('clock')))
+	seq._midi_input_queue.put_nowait((0, mido.Message('clock'), time.perf_counter()))
 
 	await loop
 
