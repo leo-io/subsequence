@@ -635,6 +635,11 @@ class Sequencer:
 		self.seconds_per_beat = 0.0
 		self.seconds_per_pulse = 0.0
 		self.running = False
+		# Whether stop() has already done its cleanup.  It is the flag, not the
+		# port registry, that makes stop() idempotent: a render that opened no
+		# port still has a file to write, inputs to close and a stop event to
+		# fire (#2994).
+		self._stopped = False
 		self._bpm_transition: typing.Optional[BpmTransition] = None
 		self._spin_wait: bool = spin_wait
 		# Spin threshold: sleep all the way to this many seconds before the target,
@@ -1566,6 +1571,7 @@ class Sequencer:
 
 		self._waiting_for_start = self.clock_follow
 		self.running = True
+		self._stopped = False
 		self.task = asyncio.create_task(self._run_loop())
 
 		if self.clock_output:
@@ -1582,8 +1588,10 @@ class Sequencer:
 		Stop the sequencer playback and cleanup resources.
 		"""
 
-		if not self.running and not self._output_devices:
+		if self._stopped:
 			return
+
+		self._stopped = True
 
 		logger.info("Stopping sequencer...")
 

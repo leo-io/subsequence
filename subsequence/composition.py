@@ -1511,6 +1511,9 @@ class Composition:
 		# What the primary output was asked for by, which a wildcard or partial
 		# name loses once the port opens under its own full name (#2964).
 		self._requested_output_device: typing.Optional[str] = output_device
+		# One take per Composition: play() and render() both refuse a second
+		# run rather than quietly producing nothing (#2994).
+		self._has_run: bool = False
 		self._clock_follow: bool = False
 		self._clock_output: bool = False
 		self._cc_mappings: typing.List[typing.Dict[str, typing.Any]] = []
@@ -5873,6 +5876,13 @@ class Composition:
 		This call blocks until the program is interrupted (e.g., via Ctrl+C).
 		It initializes the MIDI hardware, launches the background sequencer,
 		and begins playback.
+
+		A Composition runs once: the performance closes its ports and takes
+		its patterns with it, so a second ``play()`` or ``render()`` raises.
+		Build a new Composition per take — see :meth:`render` for the shape.
+
+		Raises:
+			RuntimeError: If this Composition has already played or rendered.
 		"""
 
 		try:
@@ -5928,6 +5938,23 @@ class Composition:
 			# Remove the time cap — must supply bars instead.
 			composition.render(bars=128, max_minutes=None, filename="long.mid")
 			```
+
+			A Composition renders once.  For several takes, build one each
+			time — a function that returns a fresh Composition is the whole
+			trick, and it keeps each take's seed honest:
+
+			```python
+			def take (seed):
+				composition = subsequence.Composition(bpm=120, key="A", scale="minor", seed=seed)
+				# … patterns, harmony, form …
+				return composition
+
+			for seed in (1, 2, 3):
+				take(seed).render(bars=32, filename=f"take_{seed}.mid")
+			```
+
+		Raises:
+			RuntimeError: If this Composition has already played or rendered.
 		"""
 
 		if bars is None and max_minutes is None:
@@ -5968,6 +5995,21 @@ class Composition:
 		"""
 		Async entry point that schedules all patterns and runs the sequencer.
 		"""
+
+		# A Composition is a take, not a machine you can restart: the first run
+		# closes and clears the port registry, empties _pending_patterns and
+		# leaves the render flags set, so a second one used to do nothing at
+		# all — and once stop() was fixed it would have written the first
+		# take's notes again, because recorded_events are never cleared.
+		# Say so instead (#2994, decision 5 of #2991).
+		if self._has_run:
+			raise RuntimeError(
+				"this Composition has already played or rendered — a Composition runs once. "
+				"Build a new one per take: put the setup in a function and call it again "
+				"(the render() docstring shows one)."
+			)
+
+		self._has_run = True
 
 		# 1. Pre-calculate MIDI input indices and configure sequencer clock follow.
 		if self._input_device is not None:
