@@ -328,7 +328,13 @@ def test_adding_non_music_raises () -> None:
 
 def test_slice_is_a_window () -> None:
 
-	"""Events outside drop; straddlers truncate at the cut; beats shift to zero."""
+	"""Events outside drop; beats shift to zero; a note keeps its whole duration.
+
+	The note used to be cut at the window's edge, which made the same phrase
+	play differently under patterns of different lengths (#3010).  The
+	sequencer lets a note ring into the next cycle, so there is nothing to cut
+	it for.
+	"""
 
 	m = M.notes([60, 62, 64, 65], durations=[1.0, 1.0, 1.0, 2.0])
 	window = m.slice(1, 4)
@@ -336,19 +342,55 @@ def test_slice_is_a_window () -> None:
 	assert _pitches(window) == [62, 64, 65]
 	assert _beats(window) == [0.0, 1.0, 2.0]
 	assert window.length == 3.0
-	assert window.events[-1].duration == 1.0  # the held final note is cut at the edge
+	assert window.events[-1].duration == 2.0  # it rings past the edge, as written
 
 
-def test_slice_truncates_ramps_at_interpolated_value () -> None:
+def test_slice_keeps_a_straddling_ramp_whole_and_says_which_part_it_holds () -> None:
 
-	"""A straddling ramp ends at its interpolated cut value."""
+	"""A window takes a piece of the gesture, and carries the gesture with it.
+
+	It used to end the ramp at its interpolated cut value and forget the rest
+	— so the next window started a fresh ramp, or none at all (#3010).  The
+	piece keeps the whole ramp's start, end and shape, and records where in
+	that curve it sits.
+	"""
 
 	m = M.cc_ramp(74, 0, 100, beat_end=4)
-	window = m.slice(0, 2)
-	ramp = window.controls[0]
+	ramp = m.slice(0, 2).controls[0]
 
 	assert ramp.span == 2.0
-	assert ramp.end == 50.0
+	assert (ramp.start, ramp.end) == (0.0, 100.0), "the piece lost the whole gesture"
+	assert (ramp.shape_from, ramp.shape_to) == (0.0, 0.5)
+	assert ramp.is_partial
+
+	assert ramp._value_at(0.0) == 0.0
+	assert ramp._value_at(1.0) == 50.0, "the piece does not end where the cut falls"
+
+
+def test_a_window_past_a_ramps_start_resumes_it () -> None:
+
+	"""The half that used to vanish."""
+
+	m = M.cc_ramp(74, 0, 100, beat_end=4)
+	ramp = m.slice(2, 4).controls[0]
+
+	assert ramp.beat == 0.0, "the resumed piece starts at the top of its window"
+	assert ramp.span == 2.0
+	assert (ramp.shape_from, ramp.shape_to) == (0.5, 1.0)
+	assert ramp._value_at(0.0) == 50.0
+	assert ramp._value_at(1.0) == 100.0
+
+
+def test_slicing_a_piece_again_narrows_it_further () -> None:
+
+	"""A phrase window is sliced twice — by the Phrase and then by the Motif."""
+
+	m = M.cc_ramp(74, 0, 100, beat_end=8)
+	ramp = m.slice(0, 4).slice(2, 4).controls[0]
+
+	assert (ramp.shape_from, ramp.shape_to) == (0.25, 0.5)
+	assert ramp._value_at(0.0) == 25.0
+	assert ramp._value_at(1.0) == 50.0
 
 
 # ── transform laws (the test-suite backbone) ────────────────────────────────

@@ -24,7 +24,8 @@ The combination algebra:
 - ``a.then(b)`` / ``Motif.join([...])`` — closed sequential concat (one longer Motif).
 - ``a & b`` / ``a.stack(b)`` — parallel merge (event union; length = max).
 - ``m * n`` — repetition: a Phrase of n segments (``m * 1`` is ``m``).
-- ``m.slice(start, end)`` — a window; durations and ramps truncate at the cut.
+- ``m.slice(start, end)`` — a window; a note keeps its whole duration and a ramp
+  keeps the piece of itself that falls inside, so windows of one gesture join up.
 
 Transforms are pure and return new values.  Time transforms (``reverse``,
 ``rotate``, ``stretch``, ``slice``) carry control gestures with them — a
@@ -346,6 +347,15 @@ class ControlEvent:
 	shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear"
 	probability: float = 1.0
 
+	# Which part of the whole gesture this is, as fractions of it.  A ramp a
+	# window has caught the middle of keeps the WHOLE ramp's `start`, `end` and
+	# `shape`, and says here where the piece sits — so it plays its own stretch
+	# of the real curve rather than a fresh ramp between two sampled values
+	# (#3010).  Both are plain floats, so a Motif carrying one is still
+	# hashable and still compares.
+	shape_from: float = 0.0
+	shape_to: float = 1.0
+
 	def __post_init__ (self) -> None:
 
 		"""Validate the discrete/ramp invariants."""
@@ -354,6 +364,11 @@ class ControlEvent:
 			raise ValueError("A ramp needs both end= and span= (a discrete write has neither)")
 		if self.span < 0:
 			raise ValueError(f"Ramp span must be non-negative — got {self.span}")
+		if not 0.0 <= self.shape_from <= self.shape_to <= 1.0:
+			raise ValueError(
+				f"A partial ramp runs forwards inside 0–1 — got "
+				f"shape_from={self.shape_from}, shape_to={self.shape_to}"
+			)
 		if not 0.0 <= self.probability <= 1.0:
 			raise ValueError(f"Event probability must be 0.0–1.0 — got {self.probability}")
 
@@ -362,17 +377,72 @@ class ControlEvent:
 		"""Canonical ordering key — makes parallel merge order-independent."""
 
 		end = self.start if self.end is None else self.end
-		return (self.beat, _signal_sort_key(self.signal), self.start, end, self.span, self.probability)
+		return (
+			self.beat, _signal_sort_key(self.signal), self.start, end, self.span,
+			self.probability, self.shape_from, self.shape_to,
+		)
+
+	def _easing (self) -> typing.Callable[[float], float]:
+
+		"""The whole gesture's curve, whether it was named or handed over."""
+
+		return self.shape if callable(self.shape) else subsequence.easing.get_easing(self.shape)
 
 	def _value_at (self, fraction: float) -> float:
 
-		"""The interpolated value at a 0–1 fraction through the ramp."""
+		"""The value at a 0–1 fraction through THIS event.
+
+		For a whole ramp that is a fraction of the whole curve.  For a piece of
+		one it is a fraction of the piece, read off the part of the curve the
+		piece covers — so a window catching the second half of an eight-beat
+		sweep plays the second half of the sweep, and not a fresh ramp between
+		the two values at its ends (#3010).
+		"""
 
 		if self.end is None:
 			return self.start
 
-		easing_fn = self.shape if callable(self.shape) else subsequence.easing.get_easing(self.shape)
-		return self.start + (self.end - self.start) * easing_fn(max(0.0, min(1.0, fraction)))
+		within = max(0.0, min(1.0, fraction))
+		whole = self.shape_from + (self.shape_to - self.shape_from) * within
+
+		return self.start + (self.end - self.start) * self._easing()(whole)
+
+	@property
+	def is_partial (self) -> bool:
+
+		"""True when this is a piece of a longer gesture rather than all of one."""
+
+		return self.shape_from != 0.0 or self.shape_to != 1.0
+
+	def _emission_shape (self) -> typing.Any:
+
+		"""The curve to play over this event's own span, against the whole gesture's ends.
+
+		A whole ramp keeps its shape by name, so a named curve stays named all
+		the way to the builder verb.  A piece of one gets a function that walks
+		the piece's stretch of the real curve — and it is emitted between the
+		WHOLE gesture's start and end, not between the piece's own values.
+
+		That distinction is worth a sentence, because it is the difference
+		between the windows joining up and nearly joining up.  A builder verb
+		takes its endpoints as ints, so handing it a piece's own endpoints
+		rounds a value like 31.75 to 32 and bends everything after it by up to
+		a whole step; handing it 0 and 127 with a curve that covers a quarter
+		of the sweep is exact.
+		"""
+
+		if not self.is_partial:
+			return self.shape
+
+		easing = self._easing()
+		low, high = self.shape_from, self.shape_to
+
+		def piece (fraction: float) -> float:
+			"""Where this piece has got to, as a fraction of the WHOLE curve."""
+			within = max(0.0, min(1.0, fraction))
+			return easing(low + (high - low) * within)
+
+		return piece
 
 
 def _expand (name: str, value: typing.Any, n: int) -> list:
@@ -1188,16 +1258,27 @@ class Motif:
 
 		"""
 		A window onto the motif, on its own authority: events starting outside
-		are dropped; durations and ramp spans truncate at the cut (a truncated
-		ramp ends at its interpolated cut value).  Beats shift so the window
-		starts at 0.
+		are dropped.  Beats shift so the window starts at 0.
+
+		**A note keeps its whole duration** even where that runs past the end
+		of the window.  The sequencer already lets a note ring into the next
+		cycle, and cutting it here made a two-beat note at beat 3 last one beat
+		under a four-beat pattern and two under an eight-beat one — the same
+		phrase, played differently for no musical reason (#3010).
+
+		**A ramp that began before the window is resumed**, not dropped.  It
+		comes back as the piece of itself that falls inside, carrying where in
+		the whole curve that piece sits, so it plays its own stretch of the
+		real sweep.  An eight-beat ``cc_ramp(74, 0, 127)`` walked four beats at
+		a time used to send the first half and then nothing, and the filter sat
+		at 64 for the rest of the piece.
 		"""
 
 		if end <= start:
 			raise ValueError(f"slice end ({end}) must be after start ({start})")
 
 		events = tuple(
-			dataclasses.replace(e, beat=e.beat - start, duration=min(e.duration, end - e.beat))
+			dataclasses.replace(e, beat=e.beat - start)
 			for e in self.events
 			if start <= e.beat < end
 		)
@@ -1205,15 +1286,32 @@ class Motif:
 		controls = []
 
 		for c in self.controls:
-			if not (start <= c.beat < end):
+
+			if c.end is None:
+				# A discrete write happens at a moment, so it is in or it is out.
+				if start <= c.beat < end:
+					controls.append(dataclasses.replace(c, beat=c.beat - start))
 				continue
-			if c.end is not None and c.beat + c.span > end:
-				kept = end - c.beat
-				controls.append(dataclasses.replace(
-					c, beat=c.beat - start, span=kept, end=c._value_at(kept / c.span),
-				))
-			else:
-				controls.append(dataclasses.replace(c, beat=c.beat - start))
+
+			gesture_start, gesture_end = c.beat, c.beat + c.span
+			low, high = max(start, gesture_start), min(end, gesture_end)
+
+			if high <= low:
+				# A zero-span ramp sitting exactly on the window's start still
+				# has a value to write, and is the one case `low < high` misses.
+				if c.span == 0.0 and start <= c.beat < end:
+					controls.append(dataclasses.replace(c, beat=c.beat - start))
+				continue
+
+			whole = c.shape_to - c.shape_from
+
+			controls.append(dataclasses.replace(
+				c,
+				beat = low - start,
+				span = high - low,
+				shape_from = c.shape_from + whole * ((low - gesture_start) / c.span),
+				shape_to = c.shape_from + whole * ((high - gesture_start) / c.span),
+			))
 
 		return Motif(events=events, length=end - start, controls=tuple(controls), fit=self.fit)
 
@@ -2156,17 +2254,62 @@ class Phrase:
 
 	def slice (self, start: float, end: float) -> "Phrase":
 
-		"""A window; re-segments at the cut points (partial segments are sliced)."""
+		"""A window, re-segmented at whichever original boundaries fall inside it.
 
-		segments = []
+		The window is taken from the whole timeline and then divided up, rather
+		than each segment being sliced against its own bounds.  The difference
+		is what happens to something that crosses an internal boundary: a note
+		ringing over it, or a ramp sweeping across it, used to lose everything
+		past the edge of the segment it started in — which undid
+		:meth:`rotate`'s promise that a note may ring past its segment, and
+		meant ``phrase.slice(0, phrase.length)`` was not the phrase (#3010).
+
+		Each event belongs to the segment its **onset** falls in, and goes
+		there whole.
+		"""
+
+		window = self.flatten().slice(start, end)
+
+		# Where the original boundaries land inside this window, and which
+		# original segment each resulting piece came from (for its `fit`).
+		bounds: typing.List[float] = [0.0]
+		sources: typing.List[int] = []
 		offset = 0.0
 
-		for segment in self.segments:
-			seg_start, seg_end = offset, offset + segment.length
-			lo, hi = max(start, seg_start), min(end, seg_end)
-			if lo < hi:
-				segments.append(segment.slice(lo - seg_start, hi - seg_start))
-			offset = seg_end
+		for index, segment in enumerate(self.segments):
+
+			if offset >= end - 1e-9:
+				break
+
+			if offset + segment.length > start + 1e-9:
+				sources.append(index)
+				edge = offset + segment.length
+				if start + 1e-9 < edge < end - 1e-9:
+					bounds.append(edge - start)
+
+			offset += segment.length
+
+		bounds.append(window.length)
+
+		segments = []
+
+		for piece, (low, high) in enumerate(zip(bounds, bounds[1:])):
+
+			if high <= low:
+				continue
+
+			segments.append(Motif(
+				events = tuple(
+					dataclasses.replace(e, beat = e.beat - low)
+					for e in window.events if low - 1e-9 <= e.beat < high - 1e-9
+				),
+				length = high - low,
+				controls = tuple(
+					dataclasses.replace(c, beat = c.beat - low)
+					for c in window.controls if low - 1e-9 <= c.beat < high - 1e-9
+				),
+				fit = self.segments[sources[piece]].fit if piece < len(sources) else window.fit,
+			))
 
 		return Phrase(segments)
 

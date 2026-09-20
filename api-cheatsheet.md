@@ -257,7 +257,7 @@ An immutable musical figure: timed note events + control gestures + a length in 
 | `rotate(beats) -> Motif` | Shift every onset by *beats*, wrapping modulo the length (spans ride along). |
 | `rpn(parameter, values, beats, fine, null_reset, length, probabilities) -> Motif` | Discrete RPN parameter writes at beat positions - mirrors ``p.rpn()``. |
 | `rpn_ramp(parameter, start, end, beat_start, beat_end, shape, fine, null_reset, length, probability) -> Motif` | An RPN value swept over a beat range - mirrors ``p.rpn_ramp()``. |
-| `slice(start, end) -> Motif` | A window onto the motif, on its own authority: events starting outside are dropped; durations and ramp spans truncate at the cut (a truncated ramp ends at its interpolated cut value). Beats shift so the window starts at 0. |
+| `slice(start, end) -> Motif` | A window onto the motif, on its own authority: events starting outside are dropped. Beats shift so the window starts at 0. |
 | `stack(other) -> Motif` | Parallel merge (the spelled form of ``&``): event union, length = max. |
 | `steps(steps, pitches, velocities, durations, probabilities, step_duration, length) -> Motif` | Grid placement - the ``sequence()`` convention: ``steps`` are 0-based grid indices (sixteenths by default), ``pitches`` a scalar or parallel list of MIDI ints or drum names. |
 | `stretch(factor) -> Motif` | Scale time by *factor* (2.0 = half-time feel): beats, durations, spans, and length. |
@@ -286,7 +286,7 @@ A sequence of Motifs with segmentation preserved.
 | `reverse() -> Phrase` | Reverse the whole timeline: segments reverse order AND each reverses internally. |
 | `rhythm() -> Phrase` | Strip pitches segment-wise: a phrase-shaped skeleton. |
 | `rotate(beats) -> Phrase` | Rotate the whole timeline modulo the total length, then re-segment at the original boundaries. |
-| `slice(start, end) -> Phrase` | A window; re-segments at the cut points (partial segments are sliced). |
+| `slice(start, end) -> Phrase` | A window, re-segmented at whichever original boundaries fall inside it. |
 | `stack(other) -> subsequence.motifs.Motif` | The spelled form of ``&`` - flattens, then merges. |
 | `stretch(factor) -> Phrase` | Scale time in every segment (lengths scale with them). |
 | `transpose(steps, semitones) -> Phrase` | Transpose every segment (see :meth:`Motif.transpose`). |
@@ -367,7 +367,8 @@ One timed control gesture inside a Motif: a discrete write or a shaped ramp.
 
 | Method | Description |
 |---|---|
-| `__init__(beat, signal, start, end, span, shape, probability) -> None` |  |
+| `__init__(beat, signal, start, end, span, shape, probability, shape_from, shape_to) -> None` |  |
+| `is_partial *(property)*` | True when this is a piece of a longer gesture rather than all of one. |
 
 
 ## `Progression`

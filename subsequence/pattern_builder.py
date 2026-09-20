@@ -1183,35 +1183,42 @@ class PatternBuilder(
 		onset = beat + control.beat
 		extra: typing.Dict[str, typing.Any] = {} if resolution is None else {"resolution": resolution}
 
+		# A ramp a window caught part of keeps the WHOLE gesture's start and
+		# end, and plays the piece of the curve it actually covers — so the
+		# endpoints below are the gesture's own and only the shape changes.
+		# Handing the verb the piece's own endpoints instead would round them
+		# to ints and bend everything after by up to a whole step (#3010).
+		curve = control._emission_shape()
+
 		if isinstance(signal, subsequence.motifs.CC):
 			if control.end is None:
 				self.cc(signal.control, int(round(control.start)), beat=onset)
 			else:
-				self.cc_ramp(signal.control, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=control.shape, **extra)
+				self.cc_ramp(signal.control, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=curve, **extra)
 
 		elif isinstance(signal, subsequence.motifs.PitchBend):
 			if control.end is None:
 				self.pitch_bend(control.start, beat=onset)
 			else:
-				self.pitch_bend_ramp(control.start, control.end, beat_start=onset, beat_end=onset + control.span, shape=control.shape, **extra)
+				self.pitch_bend_ramp(control.start, control.end, beat_start=onset, beat_end=onset + control.span, shape=curve, **extra)
 
 		elif isinstance(signal, subsequence.motifs.NRPN):
 			if control.end is None:
 				self.nrpn(signal.parameter, int(round(control.start)), beat=onset, fine=signal.fine, null_reset=signal.null_reset)
 			else:
-				self.nrpn_ramp(signal.parameter, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=control.shape, fine=signal.fine, null_reset=signal.null_reset, **extra)
+				self.nrpn_ramp(signal.parameter, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=curve, fine=signal.fine, null_reset=signal.null_reset, **extra)
 
 		elif isinstance(signal, subsequence.motifs.RPN):
 			if control.end is None:
 				self.rpn(signal.parameter, int(round(control.start)), beat=onset, fine=signal.fine, null_reset=signal.null_reset)
 			else:
-				self.rpn_ramp(signal.parameter, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=control.shape, fine=signal.fine, null_reset=signal.null_reset, **extra)
+				self.rpn_ramp(signal.parameter, int(round(control.start)), int(round(control.end)), beat_start=onset, beat_end=onset + control.span, shape=curve, fine=signal.fine, null_reset=signal.null_reset, **extra)
 
 		elif isinstance(signal, subsequence.motifs.OSC):
 			if control.end is None:
 				self.osc(signal.address, control.start, beat=onset)
 			else:
-				self.osc_ramp(signal.address, control.start, control.end, beat_start=onset, beat_end=onset + control.span, shape=control.shape, **extra)
+				self.osc_ramp(signal.address, control.start, control.end, beat_start=onset, beat_end=onset + control.span, shape=curve, **extra)
 
 		else:
 			raise TypeError(f"Unknown control signal: {type(signal).__name__}")
