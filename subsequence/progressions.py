@@ -22,6 +22,7 @@ voicing layer.
 """
 
 import dataclasses
+import logging
 import random
 import re
 import typing
@@ -34,6 +35,9 @@ import subsequence.harmonic_state
 import subsequence.intervals
 import subsequence.sequence_utils
 import subsequence.voicings
+
+
+logger = logging.getLogger(__name__)
 
 
 # A progression source is either a built-in chord-graph style name (generated)
@@ -171,6 +175,28 @@ class PitchSet:
 		return "PitchSet(" + ", ".join(str(p) for p in self.pitches) + ")"
 
 
+def _parallel_mode (scale: str) -> str:
+
+	"""The mode a borrowed degree resolves against — the other side of the third.
+
+	``borrow()`` is modal interchange, and what it interchanges with is the
+	parallel mode: same tonic, opposite third.  This used to be decided by
+	comparing the scale's NAME with ``"minor"``, so ``scale="aeolian"`` — a
+	literal alias of minor — borrowed *from* minor and changed nothing at all,
+	and dorian and phrygian borrowed from natural minor, which they already
+	nearly are (#3008).
+
+	A scale with a minor third borrows from ionian; one with a major third
+	borrows from aeolian.  A scale with no third to speak of — a pentatonic,
+	a two-note scale — has no parallel, and keeps the major-side default.
+	"""
+
+	pitch_classes = subsequence.intervals.scale_pitch_classes(0, scale)
+	third = pitch_classes[2] % 12 if len(pitch_classes) > 2 else 4
+
+	return "ionian" if third == 3 else "aeolian"
+
+
 @dataclasses.dataclass(frozen=True)
 class RomanChord:
 
@@ -234,11 +260,11 @@ class RomanChord:
 				chord qualities registered.
 		"""
 
-		mode = "minor" if self.borrowed and scale != "minor" else ("ionian" if self.borrowed else scale)
-
-		if mode not in subsequence.intervals.SCALE_MODE_MAP:
+		if scale not in subsequence.intervals.SCALE_MODE_MAP:
 			available = ", ".join(sorted(subsequence.intervals.SCALE_MODE_MAP.keys()))
-			raise ValueError(f"Unknown scale: {mode!r}. Available: {available}")
+			raise ValueError(f"Unknown scale: {scale!r}. Available: {available}")
+
+		mode = _parallel_mode(scale) if self.borrowed else scale
 
 		if self.of is not None:
 			# Secondary function: resolve the target degree's root, then read
@@ -249,13 +275,19 @@ class RomanChord:
 
 		pcs = subsequence.intervals.scale_pitch_classes(key_pc, mode)
 
-		if self.accidental != 0 or self.major_relative:
+		if self.accidental != 0 or (self.major_relative and not self.borrowed):
 			# Accidental-prefixed degrees read against the major scale — the
 			# universal roman convention (bVII is the whole step below tonic
 			# in every key, major or minor).  Generated spans set
 			# major_relative so their spelling is scale-proof — which is why
 			# the current scale's degree count must NOT be enforced here
 			# (bVII is a valid degree even under a five-note scale).
+			#
+			# A BORROWED major-relative degree is the one exception: it is a
+			# plain diatonic degree wearing scale-proof spelling, so it has a
+			# parallel to borrow from and reads the borrowed mode below.  A
+			# borrowed *accidental* degree does not — it is already chromatic
+			# — and Progression.borrow() refuses it with a warning.
 			major_pcs = subsequence.intervals.scale_pitch_classes(key_pc, "ionian")
 			root_pc = (major_pcs[(self.degree - 1) % len(major_pcs)] + self.accidental) % 12
 		else:
@@ -267,9 +299,13 @@ class RomanChord:
 
 			root_pc = pcs[self.degree - 1] % 12
 
-		if self.quality is not None:
+		if self.quality is not None and not self.borrowed:
 			return subsequence.chords.Chord(root_pc=root_pc, quality=self.quality)
 
+		# A borrowed degree takes the quality the borrowed mode gives it, not
+		# the one its own numeral was written with.  Keeping the roman's case
+		# built a chord from neither key: `vi` borrowed came out `G#m` in C,
+		# where the parallel minor's sixth is `G#` major (#3008).
 		_, qualities = subsequence.intervals.SCALE_MODE_MAP[mode]
 
 		if qualities is None:
@@ -1521,8 +1557,20 @@ class Progression:
 		"""Borrow the chord(s) at the given 1-based slot(s) from the parallel scale.
 
 		Modal interchange for key-relative content: the degree re-resolves
-		against the parallel mode (minor under a major scale and vice
-		versa).  Concrete chords raise — there is nothing relative to borrow.
+		against the parallel mode — the one sharing the tonic and differing in
+		its third, so a minor-third scale borrows from ionian and a
+		major-third scale from aeolian.  The borrowed degree takes the
+		borrowed mode's own quality, whatever its numeral was written with, so
+		``vi`` in C comes back as ``G#`` — the parallel minor's sixth — and not
+		as a ``G#m`` belonging to neither key.
+
+		Concrete chords raise — there is nothing relative to borrow.
+
+		Two kinds of numeral have no parallel to borrow from, and are left
+		alone with a warning rather than silently doing nothing: an
+		**accidental** degree (``bVII``), which is already chromatic and means
+		the same thing in either mode, and a **secondary** one (``V/V``),
+		which resolves against its own target's key.
 		"""
 
 		slots = {_check_slot(s, len(self.spans)) for s in ([slot] if isinstance(slot, int) else slot)}
@@ -1531,11 +1579,25 @@ class Progression:
 
 		for index in slots:
 			chord = spans[index].chord
+
 			if not isinstance(chord, RomanChord):
 				raise ValueError(
 					f"slot {index + 1} holds a concrete chord ({spans[index].label()}) — "
 					"borrow() needs key-relative content (an int degree or roman)"
 				)
+
+			if chord.accidental != 0 or chord.of is not None:
+				reason = (
+					"it is already a chromatic degree and reads the same in either mode"
+					if chord.accidental != 0
+					else "a secondary numeral resolves against its own target's key"
+				)
+				logger.warning(
+					"borrow(): slot %d (%s) cannot be borrowed — %s. Leaving it as it is.",
+					index + 1, spans[index].label(), reason,
+				)
+				continue
+
 			spans[index] = dataclasses.replace(spans[index], chord = dataclasses.replace(chord, borrowed = not chord.borrowed))
 
 		return dataclasses.replace(self, spans=tuple(spans))
