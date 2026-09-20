@@ -20,7 +20,12 @@ dependencies = [
     "mido>=1.3",
     "python-rtmidi>=1.5",
     "python-osc>=1.8",
-    "websockets>=12.0",
+    # 14.0, not 12: web_ui.py uses websockets.asyncio.server, which does not
+    # exist before 13 — and top-level websockets.broadcast is the LEGACY one
+    # until 14, which cannot broadcast to the ServerConnection objects the new
+    # server yields. web_ui is imported on every `import subsequence`, so a
+    # resolve to 12.x breaks the package outright.
+    "websockets>=14.0",
     "pyyaml>=6.0",
     "pymididefs>=0.5,<0.6",
 ]

@@ -46,6 +46,49 @@ _LABEL_WIDTH = 16
 _MIN_TERMINAL_WIDTH = 40
 _SUSTAIN = -1
 
+#: How the status line is cut when it will not fit.  A single character, so a
+#: reader can tell a truncated line from one that happened to end there.
+_TRUNCATION = "…"
+
+
+def _fit_to_terminal (parts: typing.List[str]) -> str:
+
+	"""Join the status parts and make them fit the terminal's width.
+
+	Nothing used to cut this. A piece with a key, a form, a chord and three
+	conductor signals produced 132 characters in an 80-column terminal, and
+	because the redraw assumes ONE line, every refresh left a stale copy
+	behind and the display walked down the screen.
+
+	Whole parts are dropped from the RIGHT before anything is truncated, so a
+	line that does not fit loses a conductor signal rather than half of the
+	chord. The parts are ordered tempo, key, bar, section, chord, signals —
+	so what goes first is what a musician can most afford to lose, and the
+	chord survives a narrow terminal. Only when even the first part is too
+	wide is the text itself cut.
+	"""
+
+	width = shutil.get_terminal_size(fallback = (80, 24)).columns
+
+	if width <= 0:
+		return "  ".join(parts)
+
+	kept = list(parts)
+
+	while len(kept) > 1 and len("  ".join(kept)) > width:
+		kept.pop()
+
+	line = "  ".join(kept)
+
+	if len(line) <= width:
+		return line
+
+	if width <= len(_TRUNCATION):
+		return line[:width]
+
+	return line[:width - len(_TRUNCATION)] + _TRUNCATION
+
+
 
 class GridDisplay:
 
@@ -616,4 +659,4 @@ class Display:
 				value = conductor.get(name, bar_start)
 				parts.append(f"{name.title()}: {value:.2f}")
 
-		return "  ".join(parts)
+		return _fit_to_terminal(parts)

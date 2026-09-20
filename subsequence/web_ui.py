@@ -236,8 +236,17 @@ class WebUI:
 				state["section_bars"] = section_info.bars
 				state["next_section"] = section_info.next_section
 				
-		if comp.harmonic_state and comp.harmonic_state.current_chord:
-			state["chord"] = comp.harmonic_state.current_chord.name()
+		# current_chord() and not harmonic_state.current_chord: the engine's
+		# flips `lookahead` beats EARLY, and is absent entirely when a
+		# progression is bound with no graph engine behind it. Measured over an
+		# 8-bar render sampling every beat: 8 of 32 beats disagreed under a
+		# graph style, and 32 of 32 under a bound progression, where the
+		# dashboard showed no chord at all while the terminal showed C Am F G.
+		# The terminal display and OSC have always read this one.
+		sounding = comp.current_chord()
+
+		if sounding is not None:
+			state["chord"] = sounding.name()
 			
 		# Refresh pattern grid only when the bar changes, so the visual update
 		# is synced to when the pattern *starts playing*, not when it's rebuilt
