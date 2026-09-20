@@ -23,7 +23,7 @@ composition.form({
 	"section_2":	(8, [("section_2", 1), ("section_1", 2)]),
 }, start="intro")
 
-composition.harmony(style="phrygian_minor", cycle_beats=16, gravity=0.75)
+composition.harmony(style="phrygian_minor", cycle_beats=16, key_pull=0.25)
 
 @composition.pattern(channel=DRUM_CHANNEL, beats=4, drum_note_map=gm_drums.GM_DRUM_MAP)
 def drums (p):

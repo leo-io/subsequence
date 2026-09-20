@@ -44,7 +44,7 @@ import subsequence.constants.instruments.gm_drums as gm_drums
 if __name__ == "__main__":
 
 	composition = subsequence.Composition(bpm=120, key="E")
-	composition.harmony(style="aeolian_minor", cycle_beats=4, gravity=0.8)
+	composition.harmony(style="aeolian_minor", cycle_beats=4, key_pull=0.2)
 
 	# Self-watch — ``__file__`` is this file's path when run as a script.
 	composition.watch(__file__)

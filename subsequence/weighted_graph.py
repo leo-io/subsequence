@@ -111,9 +111,11 @@ class WeightedGraph (typing.Generic[NodeType]):
 		"""
 		Choose the next node from a source using weighted randomness.
 
-		Returns *source* unchanged if the node has no outgoing transitions,
-		or if every outgoing transition has been suppressed by a weight
-		modifier that returned zero or a negative value.
+		Returns *source* unchanged only when the node has no outgoing
+		transitions at all.  When a weight modifier suppresses every one of
+		them, the draw falls back to the graph's own weights: a modifier that
+		rejects everything has expressed no preference, and repeating the
+		current node is the one answer it certainly did not ask for.
 		"""
 
 		options = self.get_transitions(source)
@@ -142,8 +144,31 @@ class WeightedGraph (typing.Generic[NodeType]):
 			total_weight += adjusted_weight
 
 		if total_weight <= 0:
-			# Decision path: if every transition is suppressed, stay on the current node.
-			return source
+
+			# Every transition was suppressed, so the modifier has told us
+			# nothing about which to prefer — fall back to the raw weights,
+			# as Progression.generate already did for the same situation.
+			#
+			# Staying on the current node was the worst available answer:
+			# under root_diversity=0.0, which is documented as MAXIMUM
+			# diversity, any root heard in the last four chords is suppressed
+			# outright, so a style with few roots suppressed everything and
+			# repeated itself. Measured at 0.0: 29 self-repeats in 39 steps
+			# in "suspended", 15 in "phrygian_minor", 10 in "aeolian_minor".
+			raw = [(target, float(weight)) for target, weight in options if weight > 0]
+
+			if not raw:
+				return source
+
+			raw_roll = rng.uniform(0, sum(raw_weight for _, raw_weight in raw))
+			raw_accum = 0.0
+
+			for raw_target, raw_weight in raw:
+				raw_accum += raw_weight
+				if raw_roll <= raw_accum:
+					return raw_target
+
+			return raw[-1][0]
 
 		roll = rng.uniform(0, total_weight)
 		accum = 0.0

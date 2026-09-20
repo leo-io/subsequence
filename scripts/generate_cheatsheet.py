@@ -170,6 +170,15 @@ def format_signature (sig: inspect.Signature) -> str:
 			params.append(f"*{name}")
 
 		elif param.kind == inspect.Parameter.VAR_KEYWORD:
+
+			# `**retired` is a reserved name, not API: a method that has had a
+			# parameter renamed catches the old spelling so the error can give
+			# the conversion, where a plain TypeError would name the parameter
+			# and stop. `tweak(**kwargs)` and `replace(**changes)` really do
+			# take arbitrary keywords, so the rule is the name, not the kind.
+			if name == "retired":
+				continue
+
 			params.append(f"**{name}")
 
 		else:

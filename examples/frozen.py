@@ -42,20 +42,20 @@ composition = subsequence.Composition(bpm=120, key="C")
 # like a single continuous harmonic journey.
 # ---------------------------------------------------------------------------
 
-# Verse: high gravity keeps chords close to the tonic; low NIR = settled feel.
+# Verse: a light key_pull leaves the style's own weights leading; low NIR = settled feel.
 composition.harmony(
 	style="functional_major",
 	cycle_beats=4,
-	gravity=0.85,
+	key_pull=0.15,
 	nir_strength=0.2,
 )
 verse = composition.freeze(8)   # 8 chord changes (one per bar)
 
-# Chorus: looser gravity lets the engine wander; high NIR pushes motion forward.
+# Chorus: more key_pull leans on I, ii and V; high NIR pushes motion forward.
 composition.harmony(
 	style="functional_major",
 	cycle_beats=4,
-	gravity=0.35,
+	key_pull=0.65,
 	nir_strength=0.8,
 )
 chorus = composition.freeze(4)  # 4 chord changes

@@ -15,7 +15,7 @@ BASS_CHANNEL  = 6
 SYNTH_CHANNEL = 1
 
 composition = subsequence.Composition(bpm=120, key="E")
-composition.harmony(style="aeolian_minor", cycle_beats=4, gravity=0.8)
+composition.harmony(style="aeolian_minor", cycle_beats=4, key_pull=0.2)
 
 @composition.pattern(channel=DRUMS_CHANNEL, beats=4, drum_note_map=gm_drums.GM_DRUM_MAP)
 def drums (p):

@@ -35,7 +35,7 @@ def test_composition_harmony_creates_state (patch_midi: None) -> None:
 		style = "turnaround_global",
 		cycle_beats = 4,
 		dominant_7th = True,
-		gravity = 0.8,
+		key_pull = 0.2,
 		minor_turnaround_weight = 0.25
 	)
 
@@ -59,7 +59,7 @@ def test_harmony_preserves_history_across_calls (patch_midi: None) -> None:
 	"""Calling harmony() again should preserve chord history from the previous state."""
 
 	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
-	composition.harmony(style="functional_major", gravity=0.5)
+	composition.harmony(style="functional_major", key_pull=0.5)
 
 	# Build up history by stepping through several chords.
 	for _ in range(4):
@@ -71,7 +71,7 @@ def test_harmony_preserves_history_across_calls (patch_midi: None) -> None:
 	assert len(history_before) == 4
 
 	# Reconfigure harmony with different parameters.
-	composition.harmony(style="functional_major", gravity=0.8)
+	composition.harmony(style="functional_major", key_pull=0.2)
 
 	assert composition._harmonic_state.history == history_before
 	assert composition._harmonic_state.current_chord == current_before
@@ -82,7 +82,7 @@ def test_harmony_drops_current_chord_on_graph_switch (patch_midi: None) -> None:
 	"""Switching graph style should not preserve a chord that doesn't exist in the new graph."""
 
 	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
-	composition.harmony(style="functional_major", gravity=0.5)
+	composition.harmony(style="functional_major", key_pull=0.5)
 
 	# Step a few times to build history and move away from tonic.
 	for _ in range(4):
@@ -91,7 +91,7 @@ def test_harmony_drops_current_chord_on_graph_switch (patch_midi: None) -> None:
 	old_current = composition._harmonic_state.current_chord
 
 	# Switch to a completely different graph style.
-	composition.harmony(style="suspended", gravity=0.5)
+	composition.harmony(style="suspended", key_pull=0.5)
 
 	new_current = composition._harmonic_state.current_chord
 

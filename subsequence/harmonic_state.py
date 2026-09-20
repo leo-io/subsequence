@@ -234,7 +234,12 @@ class HarmonicState:
 		Combine three forces that shape chord transition probabilities:
 
 		1. **Key gravity** — blends functional pull (tonic, dominant) with
-		   full diatonic pull, controlled by ``key_gravity_blend``.
+		   full diatonic pull, controlled by ``key_gravity_blend``.  The
+		   public spelling is ``harmony(key_pull=)``, which runs the other
+		   way: ``key_gravity_blend = 1 - key_pull``.  At a blend of 1.0 the
+		   boost is simply "is this chord diatonic?", which is true of every
+		   chord in a single-key style — so 1.0 is *no* pull, and that was
+		   the old default.
 		2. **Melodic inertia (NIR)** — Narmour's cognitive expectation
 		   model favoring continuation after small steps and reversal
 		   after large leaps, controlled by ``nir_strength``.

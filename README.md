@@ -15,7 +15,7 @@ Use your own gear. Subsequence provides the logic; your Eurorack, Elektron boxes
 ## Why Subsequence?
 
 - **Between traditional and generative.** Most sequencers repeat a fixed loop; most live-coding environments are stateless. Subsequence rebuilds every pattern fresh each cycle with full context - current chord, section, history, shared data. Patterns that evolve, remember, and react.
-- **Built-in harmonic intelligence.** An optional chord graph defines weighted chord and key transitions with adjustable gravity and automatic voice leading. Layer on cognitive harmony for Narmour-based melodic inertia - big leaps tend to reverse, small steps tend to continue.
+- **Built-in harmonic intelligence.** An optional chord graph defines weighted chord and key transitions with adjustable pull toward the key and automatic voice leading. Layer on cognitive harmony for Narmour-based melodic inertia - big leaps tend to reverse, small steps tend to continue.
 - **Implicit compositional structure.** Predefined sections bring overarching musical form to a piece without getting stuck in infinite loops - music that grows and develops across defined movements.
 - **Patterns that talk to each other.** Shared state (`composition.data`) lets autonomous generators cooperate without coupling. A drum pattern broadcasts its density; a bass pattern reads it to place complementary gaps. No callbacks, no wiring.
 - **Precision and efficiency.** A hybrid timing strategy holds pulse jitter at a typical **1 μs** on Linux, with no pulse more than 0.1 ms out at any tempo and zero long-term drift - built for live performance and serious studio use.

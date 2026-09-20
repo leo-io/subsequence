@@ -20,7 +20,7 @@ import subsequence.sequencer
 
 def test_parameter_only_harmony_recall_keeps_style (patch_midi: None) -> None:
 
-	"""harmony(gravity=...) after harmony(style=...) keeps the configured style.
+	"""harmony(key_pull=...) after harmony(style=...) keeps the configured style.
 
 	A parameter-only re-call used to fall back to functional_major,
 	silently replacing the configured graph.
@@ -29,7 +29,7 @@ def test_parameter_only_harmony_recall_keeps_style (patch_midi: None) -> None:
 	comp = subsequence.Composition(bpm=120, key="A")
 	comp.harmony(style="aeolian_minor")
 
-	comp.harmony(gravity=0.2)
+	comp.harmony(key_pull=0.8)
 
 	assert comp._harmony_style == "aeolian_minor"
 
@@ -39,7 +39,7 @@ def test_first_harmony_call_still_defaults_to_functional_major (patch_midi: None
 	"""With no style ever configured, a bare harmony() call keeps today's default."""
 
 	comp = subsequence.Composition(bpm=120, key="C")
-	comp.harmony(gravity=0.5)
+	comp.harmony(key_pull=0.5)
 
 	assert comp._harmony_style == "functional_major"
 

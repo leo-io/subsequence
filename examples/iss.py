@@ -103,7 +103,7 @@ composition.data["iss_sol_lon"] = iss_sol_lon
 FETCH_BARS = 16
 
 # Safety default: gives patterns a working chord source if the first fetch fails.
-composition.harmony(style=CHORD_GRAPH_DAYLIGHT, cycle_beats=32, gravity=0.5)
+composition.harmony(style=CHORD_GRAPH_DAYLIGHT, cycle_beats=32, key_pull=0.5)
 
 
 def fetch_iss (p) -> None:
@@ -158,17 +158,16 @@ def fetch_iss (p) -> None:
 		else:
 			composition.target_bpm(target_bpm, bars=4, shape="ease_in_out")
 
-		# Chord-graph gravity: near the equator, transitions make bolder leaps
-		# (low gravity). Near the poles they prefer strong resolution (high gravity).
-		gravity = 0.3 + (0.5 * pole_proximity)     # 0.3 equator : 0.8 poles
+		# Chord-graph key_pull: how hard the walk is drawn to I, ii and V.
+		key_pull = 0.7 - (0.5 * pole_proximity)    # 0.7 equator : 0.2 poles
 
 		# The harmony engine picks a new chord every 32 beats (8 bars), completely
 		# independent of the fetch cycle. ISS data only steers the *style* and
 		# *character*.
 		if vis == "daylight":
-			composition.harmony(style=CHORD_GRAPH_DAYLIGHT, cycle_beats=32, gravity=gravity)
+			composition.harmony(style=CHORD_GRAPH_DAYLIGHT, cycle_beats=32, key_pull=key_pull)
 		else:
-			composition.harmony(style=CHORD_GRAPH_ECLIPSED, cycle_beats=32, gravity=gravity)
+			composition.harmony(style=CHORD_GRAPH_ECLIPSED, cycle_beats=32, key_pull=key_pull)
 
 	except Exception as exc:
 		logging.warning(f"ISS fetch failed (keeping last values): {exc}")

@@ -133,6 +133,34 @@ def _derive_label (action: typing.Callable[[], None]) -> str:
 	return "<action>"
 
 
+# Parameters harmony() used to take, and what replaced them.  A rename is a
+# hard break here with no alias (#1460) — but a bare TypeError names the
+# parameter and not the conversion, and the whole point of retiring `gravity`
+# was that its numbers ran the other way round.
+_RETIRED_HARMONY_PARAMETERS: typing.Dict[str, str] = {
+	"gravity": (
+		"gravity= has been retired for key_pull=, which reads the natural way "
+		"round: key_pull=0.0 is no pull toward the key's centres (and is what "
+		"gravity=1.0, the old default, actually did), key_pull=1.0 is the "
+		"strongest. Convert with key_pull = 1 - gravity."
+	),
+}
+
+
+def _refuse_retired_harmony_parameters (given: typing.Dict[str, typing.Any]) -> None:
+
+	"""Raise for a harmony() keyword that has been retired, or is simply unknown."""
+
+	for name in given:
+
+		if name in _RETIRED_HARMONY_PARAMETERS:
+			raise TypeError(f"harmony(): {_RETIRED_HARMONY_PARAMETERS[name]}")
+
+	raise TypeError(
+		f"harmony() got an unexpected keyword argument {sorted(given)[0]!r}"
+	)
+
+
 def _fn_has_parameter (fn: typing.Callable, name: str) -> bool:
 
 	"""Check whether a callable accepts a parameter with the given name."""
@@ -2043,12 +2071,13 @@ class Composition:
 		style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None,
 		cycle_beats: typing.Optional[float] = None,
 		dominant_7th: bool = True,
-		gravity: float = 1.0,
+		key_pull: float = 0.0,
 		nir_strength: float = 0.5,
 		minor_turnaround_weight: float = 0.0,
 		root_diversity: float = subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
 		reschedule_lookahead: float = 1,
 		progression: typing.Optional[typing.Any] = None,
+		**retired: typing.Any,
 	) -> None:
 
 		"""
@@ -2088,7 +2117,12 @@ class Composition:
 				during playback takes effect from the next chord boundary;
 				a FIRST harmony() call mid-playback starts the clock itself.
 			dominant_7th: Whether to include V7 chords (default True).
-			gravity: Key gravity (0.0 to 1.0). High values stay closer to the root chord.
+			key_pull: How strongly the walk is drawn to the key's own centres —
+				I, ii and V (0.0 to 1.0).  ``0.0`` (the default) leaves the
+				style's own weights alone, which is what every piece written
+				so far sounds like; ``1.0`` is the strongest pull.  Replaces
+				``gravity=``, which ran the other way round and did nothing at
+				its own default: ``key_pull = 1 - gravity``.
 			nir_strength: Melodic inertia (0.0 to 1.0). Influences chord movement
 				expectations.
 			minor_turnaround_weight: For "turnaround" style, influences major vs minor feel.
@@ -2104,15 +2138,21 @@ class Composition:
 		Example:
 			```python
 			# A moody minor progression that changes every 8 beats
-			comp.harmony(style="aeolian_minor", cycle_beats=8, gravity=0.4)
+			comp.harmony(style="aeolian_minor", cycle_beats=8, key_pull=0.6)
 
 			# Manual harmony driving everything — loops forever
 			comp.harmony(progression=subsequence.progression([1, 6, 3, 7]))
 			```
 		"""
 
+		if retired:
+			_refuse_retired_harmony_parameters(retired)
+
+		if not 0.0 <= key_pull <= 1.0:
+			raise ValueError(f"harmony(key_pull={key_pull!r}) takes 0.0 to 1.0")
+
 		if style is None and progression is None:
-			# A parameter-only re-call (gravity=, cycle_beats=, ...) keeps the
+			# A parameter-only re-call (key_pull=, cycle_beats=, ...) keeps the
 			# configured style — defaulting unconditionally here would silently
 			# replace e.g. aeolian_minor with functional_major.
 			style = self._last_harmony_style if self._last_harmony_style is not None else "functional_major"
@@ -2139,7 +2179,9 @@ class Composition:
 				key_name = self.key,
 				graph_style = style,
 				include_dominant_7th = dominant_7th,
-				key_gravity_blend = gravity,
+				# The engine still blends from the other end: 1.0 means
+				# "every diatonic chord equally", which is no pull at all.
+				key_gravity_blend = 1.0 - key_pull,
 				nir_strength = nir_strength,
 				minor_turnaround_weight = minor_turnaround_weight,
 				root_diversity = root_diversity,

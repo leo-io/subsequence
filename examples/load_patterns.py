@@ -45,7 +45,7 @@ def drums (p):
 
 
 composition = subsequence.Composition(bpm=120, key="E")
-composition.harmony(style="aeolian_minor", cycle_beats=4, gravity=0.8)
+composition.harmony(style="aeolian_minor", cycle_beats=4, key_pull=0.2)
 
 composition.load_patterns(SOURCE, source_label="initial_patterns")
 

@@ -74,7 +74,7 @@ The top-level controller for a musical piece.
 | `freeze(bars, end, pins, avoid, cadence) -> Progression` | Capture a chord progression from the live harmony engine. |
 | `get_tweaks(name) -> Dict[str, Any]` | Return a copy of the current tweaks for a running pattern. |
 | `harmonic_state *(property)*` | The active ``HarmonicState``, or ``None`` if ``harmony()`` has not been called. |
-| `harmony(style, cycle_beats, dominant_7th, gravity, nir_strength, minor_turnaround_weight, root_diversity, reschedule_lookahead, progression) -> None` | Configure the harmonic logic and chord change intervals. |
+| `harmony(style, cycle_beats, dominant_7th, key_pull, nir_strength, minor_turnaround_weight, root_diversity, reschedule_lookahead, progression) -> None` | Configure the harmonic logic and chord change intervals. |
 | `hotkey(key, action, quantize, label) -> None` | Register a single-key shortcut that fires during playback. |
 | `hotkeys(enabled) -> None` | Enable or disable the global hotkey listener. |
 | `is_clock_following *(property)*` | True if either the primary or any additional device is following external clock. |
