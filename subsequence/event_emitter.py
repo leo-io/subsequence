@@ -15,6 +15,15 @@ class EventEmitter:
 	A simple event emitter supporting sync and async callbacks.
 	"""
 
+	#: Events delivered with :meth:`emit_sync`, on the clock itself, rather
+	#: than with :meth:`emit_async`.
+	#:
+	#: A listener for one of these must be an ordinary function, because the
+	#: caller is mid-pulse and cannot wait for a coroutine.  Registering an
+	#: ``async def`` for one is refused in :meth:`on`, where the author can
+	#: see it — not at the first boundary, halfway through a performance.
+	SYNCHRONOUS_EVENTS = frozenset({"section"})
+
 	def __init__ (self) -> None:
 
 		"""
@@ -28,7 +37,18 @@ class EventEmitter:
 
 		"""
 		Register a callback for an event name.
+
+		Raises ``ValueError`` when an ``async def`` is registered for one of
+		:data:`SYNCHRONOUS_EVENTS`, which are delivered on the clock.
 		"""
+
+		if event_name in self.SYNCHRONOUS_EVENTS and inspect.iscoroutinefunction(callback):
+			name = getattr(callback, "__name__", repr(callback))
+			raise ValueError(
+				f"{name}() is an async function, and {event_name!r} is announced from the "
+				f"clock, which cannot wait for one. Make it an ordinary 'def'. To start "
+				f"async work from it, hand it to asyncio.get_running_loop().create_task()."
+			)
 
 		if event_name not in self._listeners:
 			self._listeners[event_name] = []
@@ -53,6 +73,11 @@ class EventEmitter:
 
 		"""
 		Emit an event and call non-async listeners immediately.
+
+		One raising listener never silences the others, as in
+		:meth:`emit_async`: the failure is logged and the remaining listeners
+		still run.  A listener that stops the music is worse than a listener
+		that does not run, and the piece is playing.
 		"""
 
 		if event_name not in self._listeners:
@@ -60,16 +85,22 @@ class EventEmitter:
 
 		for callback in self._listeners[event_name]:
 
-			if inspect.iscoroutinefunction(callback):
-				raise ValueError("Async callback encountered in emit_sync")
+			try:
+				result = callback(*args, **kwargs)
+			except Exception:
+				logger.exception("Listener for %r raised - continuing with remaining listeners", event_name)
+				continue
 
-			result = callback(*args, **kwargs)
-
-			# Catch async-callable objects too (async __call__ fails the
-			# iscoroutinefunction check but still returns an awaitable).
+			# An async-callable object (async ``__call__``) passes the
+			# iscoroutinefunction check that :meth:`on` makes, so it can only
+			# be caught here, by what it returned.  Nothing can await it.
 			if inspect.isawaitable(result):
 				typing.cast(typing.Coroutine, result).close()
-				raise ValueError("Async callback encountered in emit_sync")
+				logger.error(
+					"Listener for %r returned an awaitable, which cannot be awaited from "
+					"the clock - it did not run. Make it an ordinary callable.",
+					event_name,
+				)
 
 
 	async def emit_async (self, event_name: str, *args: typing.Any, **kwargs: typing.Any) -> None:

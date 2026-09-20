@@ -4992,6 +4992,16 @@ class Composition:
 		first patterns — once at play start for the opening section, and when
 		``form_jump()`` moves to a section.
 
+		Because it fires *from* the clock, it must be an ordinary ``def``: an
+		``async def`` is refused here, when you write it.  To start async work
+		from a section change, hand it to the running loop::
+
+			def on_section (info):
+			    asyncio.get_running_loop().create_task(tell_the_lighting_desk(info))
+
+		A callback that raises is logged and the others still run — one broken
+		listener never stops the music.
+
 		Example::
 
 			composition.on_section(lambda info: print(f"now: {info.name if info else 'end'}"))
