@@ -114,6 +114,14 @@ class CcEvent:
 	device: typing.Optional[int] = None	# If set, overrides pattern.device for this event
 	priority: int = 0					# Same-pulse dispatch order vs notes: negative fires BEFORE note_on (tuning onset bends), 0 keeps FIFO order
 
+	# For a Data Entry CC (6 or 38): the ("nrpn"|"rpn", number) this value was
+	# written FOR.  A ramp selects its parameter once and then sends only Data
+	# Entry, so anything else selecting a parameter in the window would silently
+	# redirect the rest of it; the build's closing pass re-selects where this
+	# says the selection has drifted (#3070).  None on a plain p.cc(6, …), which
+	# is the user addressing whatever they last selected themselves.
+	parameter: typing.Optional[typing.Tuple[str, int]] = None
+
 
 @dataclasses.dataclass
 class RawNoteEvent:

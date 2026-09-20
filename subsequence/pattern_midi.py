@@ -54,6 +54,7 @@ class PatternMidiMixin:
 		def _resolve_nrpn (self, parameter: typing.Union[int, str]) -> int: ...
 		def _resolve_rpn (self, parameter: typing.Union[int, str]) -> int: ...
 		def _defer (self, pending: typing.List[typing.Any], lay: typing.Callable[[], object]) -> None: ...
+		def _will_need_finishing (self) -> None: ...
 		def _wrapped_beat (self, beat: float) -> float: ...
 		def _wrapped_pulse (self, beat: float) -> int: ...
 
@@ -336,9 +337,20 @@ class PatternMidiMixin:
 			)
 		)
 
-	def _append_data_entry (self, pulse: int, value: int, fine: bool) -> None:
+	def _append_data_entry (
+		self,
+		pulse: int,
+		value: int,
+		fine: bool,
+		parameter: typing.Optional[typing.Tuple[str, int]] = None,
+	) -> None:
 
-		"""Emit Data Entry MSB (and LSB if fine=True) for a parameter value."""
+		"""Emit Data Entry MSB (and LSB if fine=True) for a parameter value.
+
+		*parameter* is the ``("nrpn"|"rpn", number)`` this value is written for,
+		carried on the event so the build's closing pass can re-select it if
+		something else has taken the channel's selection since (#3070).
+		"""
 
 		if fine:
 			value_msb, value_lsb = pymididefs.cc.pack_14bit(value)
@@ -354,6 +366,7 @@ class PatternMidiMixin:
 				message_type = 'control_change',
 				control = pymididefs.cc.DATA_ENTRY_MSB,
 				value = value_msb,
+				parameter = parameter,
 			)
 		)
 
@@ -364,6 +377,7 @@ class PatternMidiMixin:
 					message_type = 'control_change',
 					control = pymididefs.cc.DATA_ENTRY_LSB,
 					value = value_lsb,
+					parameter = parameter,
 				)
 			)
 
@@ -459,7 +473,7 @@ class PatternMidiMixin:
 		pulse = self._wrapped_pulse(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
-		self._append_data_entry(pulse, value, fine)
+		self._append_data_entry(pulse, value, fine, ("nrpn", param))
 
 		if null_reset:
 			self._append_null_reset(pulse)
@@ -515,7 +529,7 @@ class PatternMidiMixin:
 		pulse = self._wrapped_pulse(beat)
 
 		self._append_param_select(pulse, param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
-		self._append_data_entry(pulse, value, fine)
+		self._append_data_entry(pulse, value, fine, ("rpn", param))
 
 		if null_reset:
 			self._append_null_reset(pulse)
@@ -544,11 +558,18 @@ class PatternMidiMixin:
 		waste bandwidth.  If ``null_reset=True`` the RPN null sentinel is
 		appended once at ``beat_end``.
 
-		**Mid-ramp parameter persistence:** between ``beat_start`` and
-		``beat_end`` the synth still has this NRPN selected.  Avoid issuing
-		``p.cc(6, …)`` or ``p.cc(38, …)`` on the same channel during the
-		ramp window — they would land on the ramped parameter rather than
-		acting as plain data-entry CCs.
+		**Another ramp or one-shot in the window is safe** (#3070).  A second
+		``nrpn_ramp``, an ``rpn_ramp``, or a one-shot ``nrpn()``/``rpn()``
+		takes the channel's selection, which used to redirect every later step
+		of this ramp — a one-shot's default ``null_reset`` sent them to the NULL
+		parameter, where they did nothing at all.  The end of the build now
+		re-selects wherever the selection has drifted, and only there, so a ramp
+		on its own still emits exactly the messages described above.
+
+		**What it cannot see:** a plain ``p.cc(6, …)`` or ``p.cc(38, …)`` on
+		this channel, which is you addressing whatever was last selected and is
+		left alone deliberately; and another *pattern* writing NRPN to the same
+		channel, which is outside this builder entirely.
 
 		Bandwidth note: with ``fine=True`` (default) every step emits two
 		CCs.  Default ``resolution=4`` is one update every four pulses
@@ -581,6 +602,13 @@ class PatternMidiMixin:
 
 		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
+		kind = "nrpn"
+
+		# Make sure the build's closing pass runs: it is what keeps this ramp
+		# pointed at its own parameter if anything else selects one in the
+		# window (#3070).  A hand-built pattern has no engine to finish it.
+		self._will_need_finishing()
+
 		self._append_param_select(self._wrapped_pulse(beat_start), param, pymididefs.cc.NRPN_MSB, pymididefs.cc.NRPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
@@ -589,7 +617,7 @@ class PatternMidiMixin:
 				value = max(0, min(16383, int(round(val))))
 			else:
 				value = max(0, min(127, int(round(val))))
-			self._append_data_entry(pulse, value, fine)
+			self._append_data_entry(pulse, value, fine, (kind, param))
 
 		self._ramp_pulses(beat_start, beat_end, float(start), float(end), shape, resolution, _event)
 
@@ -615,8 +643,9 @@ class PatternMidiMixin:
 
 		Identical to :meth:`nrpn_ramp` but uses CC 101 / 100 for parameter
 		selection.  String names resolve via ``pymididefs.rpn.RPN_MAP``.
-		The same mid-ramp persistence note applies: avoid plain ``p.cc(6, …)``
-		on this channel during the ramp window.
+		Another ramp or one-shot in the window is safe for the same reason
+		(#3070); a plain ``p.cc(6, …)`` on this channel is still yours to keep
+		track of.
 		"""
 
 		param = self._resolve_rpn(parameter)
@@ -627,6 +656,13 @@ class PatternMidiMixin:
 
 		pulse_end = subsequence.constants.pulses.beats_to_pulses(beat_end)
 
+		kind = "rpn"
+
+		# Make sure the build's closing pass runs: it is what keeps this ramp
+		# pointed at its own parameter if anything else selects one in the
+		# window (#3070).  A hand-built pattern has no engine to finish it.
+		self._will_need_finishing()
+
 		self._append_param_select(self._wrapped_pulse(beat_start), param, pymididefs.cc.RPN_MSB, pymididefs.cc.RPN_LSB)
 
 		def _event (pulse: int, val: float) -> None:
@@ -635,7 +671,7 @@ class PatternMidiMixin:
 				value = max(0, min(16383, int(round(val))))
 			else:
 				value = max(0, min(127, int(round(val))))
-			self._append_data_entry(pulse, value, fine)
+			self._append_data_entry(pulse, value, fine, (kind, param))
 
 		self._ramp_pulses(beat_start, beat_end, float(start), float(end), shape, resolution, _event)
 

@@ -15,6 +15,7 @@ import time
 import typing
 import zlib
 
+import pymididefs.cc
 import pymididefs.rpn
 import subsequence.chords
 import subsequence.declarations
@@ -2974,7 +2975,109 @@ class PatternBuilder(
 		for tune in self._pending_tunings:
 			tune()
 
+		self._keep_parameter_selections_honest()
+
 		self._abandon_build()
+
+	def _keep_parameter_selections_honest (self) -> None:
+
+		"""Re-select an NRPN/RPN parameter wherever something else has taken it.
+
+		A ramp selects its parameter once and then sends only Data Entry, which
+		is correct MIDI and cheap — a synth holds the last parameter selected on
+		a channel.  Nothing defended it, though, so any other NRPN or RPN write
+		inside the ramp's window silently redirected the rest of it.  Measured
+		before this (#3070): with two ramps over one window, the first reached
+		its own parameter on **1 of 5** steps; with a one-shot ``p.nrpn()``
+		inside the window, whose default ``null_reset`` deselects, **three of
+		five** steps went to the NULL parameter and did nothing at all.
+
+		This walks the events in the order the engine will send them and
+		re-selects only where the selection has drifted, so a ramp on its own
+		still emits exactly what it always did.
+
+		A plain ``p.cc(6, …)`` carries no parameter and is left alone: that is
+		the user addressing whatever they selected themselves, which the
+		docstrings have always said is theirs to keep track of.  Nor can this
+		see another *pattern* writing to the same channel.
+		"""
+
+		events = self._pattern.cc_events
+
+		if not any(event.parameter is not None for event in events):
+			return
+
+		selects = {
+			pymididefs.cc.NRPN_MSB: ("nrpn", "msb"),
+			pymididefs.cc.NRPN_LSB: ("nrpn", "lsb"),
+			pymididefs.cc.RPN_MSB: ("rpn", "msb"),
+			pymididefs.cc.RPN_LSB: ("rpn", "lsb"),
+		}
+
+		# The engine sends same-pulse events in the order they were appended
+		# (_push_event stamps a rising sequence), so the index is the tie-break.
+		order = sorted(range(len(events)), key = lambda index: (events[index].pulse, index))
+
+		half: typing.Dict[str, typing.Dict[str, int]] = {"nrpn": {}, "rpn": {}}
+		selected: typing.Optional[typing.Tuple[str, int]] = None
+
+		repaired: typing.List[subsequence.pattern.CcEvent] = []
+
+		for index in order:
+
+			event = events[index]
+
+			if event.message_type == 'control_change' and event.control in selects:
+
+				kind, part = selects[event.control]
+				half[kind][part] = event.value
+
+				if "msb" in half[kind] and "lsb" in half[kind]:
+					selected = (kind, (half[kind]["msb"] << 7) | half[kind]["lsb"])
+
+				repaired.append(event)
+				continue
+
+			if (
+				event.message_type == 'control_change'
+				and event.control == pymididefs.cc.DATA_ENTRY_MSB
+				and event.parameter is not None
+				and event.parameter != selected
+			):
+				kind, number = event.parameter
+				msb_cc = pymididefs.cc.NRPN_MSB if kind == "nrpn" else pymididefs.cc.RPN_MSB
+				lsb_cc = pymididefs.cc.NRPN_LSB if kind == "nrpn" else pymididefs.cc.RPN_LSB
+				param_msb, param_lsb = pymididefs.cc.pack_14bit(number)
+
+				for control, value in ((msb_cc, param_msb), (lsb_cc, param_lsb)):
+					repaired.append(subsequence.pattern.CcEvent(
+						pulse = event.pulse,
+						message_type = 'control_change',
+						control = control,
+						value = value,
+						channel = event.channel,
+						device = event.device,
+						priority = event.priority,
+					))
+
+				half[kind] = {"msb": param_msb, "lsb": param_lsb}
+				selected = event.parameter
+
+			repaired.append(event)
+
+		self._pattern.cc_events[:] = repaired
+
+	def _will_need_finishing (self) -> None:
+
+		"""Register this build so :meth:`_finish_build` runs, deferring nothing.
+
+		For closing work that reads what the build laid rather than adding to
+		it — the NRPN/RPN re-select pass (#3070).  :meth:`_defer` does the same
+		registration for work that *does* have something to lay later.
+		"""
+
+		if self._finish_build not in self._pattern._unfinished_builds:
+			self._pattern._unfinished_builds.append(self._finish_build)
 
 	def _defer (self, pending: typing.List[typing.Any], lay: typing.Callable[[], object]) -> None:
 
@@ -2986,8 +3089,7 @@ class PatternBuilder(
 		pattern (#2959).
 		"""
 
-		if self._finish_build not in self._pattern._unfinished_builds:
-			self._pattern._unfinished_builds.append(self._finish_build)
+		self._will_need_finishing()
 
 		pending.append(lay)
 
