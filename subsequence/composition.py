@@ -658,6 +658,7 @@ async def schedule_harmonic_clock (
 		"bound_seen": None,			# identity of the bound progression last walked
 		"bound_exhausted": False,
 		"planned": None,			# the live engine's pre-committed next chord
+		"engine_seen": None,		# identity of the engine "planned" was drawn from
 		"cadence_queue": [],		# planned approach chords (None = step live at that boundary)
 	}
 
@@ -782,6 +783,13 @@ async def schedule_harmonic_clock (
 
 		hs = get_harmonic_state()
 		initial = beat == 0.0 and horizon.is_empty
+
+		# A mid-song style switch replaces the engine.  A chord the old one had
+		# already drawn is not the new style's to play — it came out of a graph
+		# that is gone, and it outlived the switch (#2992).
+		if hs is not state["engine_seen"]:
+			state["engine_seen"] = hs
+			state["planned"] = None
 
 		# --- Section bookkeeping (every fire is bar-aligned or a span boundary,
 		# and the form clock fired first at this pulse, so the info is current).
@@ -2402,6 +2410,12 @@ class Composition:
 		Whatever the harmonic source (live walk, bound progression, section
 		progression) produces for *bar*, the pinned chord overrides it.
 		Pass ``None`` to remove a pin.
+
+		Pin a chord the style would never reach and the walk carries on from
+		the style's own chord on that root — ``E7`` continues the way ``Em``
+		does.  Where the style has nothing on that root at all, the bar after
+		the pin is the tonic.  Either way the pin sounds, and one bar later
+		the piece is walking again.
 
 		Parameters:
 			bar: 1-based bar number (the musician count).

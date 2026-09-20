@@ -147,6 +147,7 @@ class HarmonicState:
 
 		self.rng = rng or random.Random()
 		self.current_chord = tonic
+		self.home_chord = tonic		# where a chord the style cannot continue goes
 		self.history: typing.List[subsequence.chords.Chord] = []
 
 
@@ -280,6 +281,34 @@ class HarmonicState:
 		if len(self.history) > 4:
 			self.history.pop(0)
 
+	def _choose_next_chord (self) -> subsequence.chords.Chord:
+
+		"""Draw the chord that follows the current one, wherever the current one came from.
+
+		A pin, a cadence landed by fiat, a bound progression's span or a
+		borrowed chord can put the harmony somewhere the style never goes.
+		That chord sounds where it was placed — what it must not do is stop
+		the piece, and it did: a node with no edges was walked to itself for
+		ever, so ``pin_chord(8, "E7")`` played E7 to the end of the song, and
+		``section_cadence("verse", "open")`` left dorian sitting on G (#2992).
+
+		Decision 1 of #2991 — same root, else home.  A foreign chord carries
+		on as the style's own chord on that root would: E7 continues like Em,
+		Fm like F.  Where the style has nothing on that root at all — A#7 in
+		C major — the next chord is home, with no draw to make.
+		"""
+
+		current = self.current_chord
+
+		if self.graph.get_transitions(current):
+			return self.graph.choose_next(current, self.rng, weight_modifier=self._transition_weight)
+
+		for node in self.graph.nodes():
+			if node.root_pc == current.root_pc and self.graph.get_transitions(node):
+				return self.graph.choose_next(node, self.rng, weight_modifier=self._transition_weight)
+
+		return self.home_chord
+
 	def step (self) -> subsequence.chords.Chord:
 
 		"""Advance to the next chord based on the transition graph."""
@@ -288,7 +317,7 @@ class HarmonicState:
 		self._record_transition_source(self.current_chord)
 
 		# Decision path: chord changes occur here; key changes are not automatic.
-		self.current_chord = self.graph.choose_next(self.current_chord, self.rng, weight_modifier=self._transition_weight)
+		self.current_chord = self._choose_next_chord()
 
 		return self.current_chord
 
@@ -308,7 +337,7 @@ class HarmonicState:
 		self._record_transition_source(self.current_chord)
 
 		try:
-			return self.graph.choose_next(self.current_chord, self.rng, weight_modifier=self._transition_weight)
+			return self._choose_next_chord()
 		finally:
 			self.history = saved_history
 
