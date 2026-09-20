@@ -198,6 +198,25 @@ class MidiEvent:
 				program = self.value
 			)
 
+		# Channel pressure and per-note pressure.  A forwarded one used to fall
+		# past every branch here and come back None, which `_send_midi` reads as
+		# "an internal type, skip it" — so a keyboard's pressure was dropped on
+		# the way to the synth with nothing said (#3068).
+		if self.message_type == 'aftertouch':
+			return mido.Message(
+				'aftertouch',
+				channel = self.channel,
+				value = self.value
+			)
+
+		if self.message_type == 'polytouch':
+			return mido.Message(
+				'polytouch',
+				channel = self.channel,
+				note = self.note,
+				value = self.value
+			)
+
 		if self.message_type == 'sysex':
 			return mido.Message(
 				'sysex',
@@ -228,6 +247,19 @@ class MidiEvent:
 				channel = msg.channel,
 				control = msg.control,
 				value = msg.value,
+				device = device,
+			)
+
+		# A program change carries its number as `program`, not `value`, so the
+		# fallback below read 0 from it and `to_mido` wrote program 0 back out:
+		# forwarding a patch change from a controller silently selected patch 0
+		# on the synth (#3068).
+		if msg.type == 'program_change':
+			return cls(
+				pulse = pulse,
+				message_type = 'program_change',
+				channel = msg.channel,
+				value = msg.program,
 				device = device,
 			)
 
@@ -2952,6 +2984,15 @@ class Sequencer:
 
 				msg = event.to_mido()
 				if msg is None:
+					# OSC returned above, so anything still unconvertible here
+					# is a message we meant to send and cannot.  Say which:
+					# aftertouch and polytouch went this way for months, and a
+					# silent drop looks exactly like a synth ignoring them
+					# (#3068).
+					logger.warning(
+						f"Dropped a {event.message_type} message: nothing knows how to put it on the wire. "
+						f"Please report this."
+					)
 					return
 
 				self._locked_send(port, msg)
