@@ -18,6 +18,7 @@ when hotkeys are enabled via ``composition.hotkeys()``.  You do not need to
 import it directly.
 """
 
+import atexit
 import logging
 import queue
 import select
@@ -175,6 +176,13 @@ class KeystrokeListener:
 		)
 		self._thread.start()
 
+		# Last resort.  stop() is the ordinary route back to a usable
+		# terminal, but it is reached only if the composition gets as far as
+		# its teardown — and a musician left without echo cannot even read
+		# what they type to fix it.  This costs nothing and runs whatever
+		# happened.
+		atexit.register(self._restore_terminal)
+
 	def stop (self) -> None:
 
 		"""Signal the listener to stop and restore the terminal.
@@ -194,9 +202,31 @@ class KeystrokeListener:
 
 		# Belt and braces: if the thread is somehow still alive (blocked
 		# read), restore the terminal from here - tcsetattr is idempotent.
-		if self._thread is not None and self._thread.is_alive() and self._old_settings is not None:
+		self._restore_terminal()
+
+		atexit.unregister(self._restore_terminal)
+
+
+	def _restore_terminal (self) -> None:
+
+		"""Put the terminal back the way it was found.  Idempotent.
+
+		Called by :meth:`stop`, and registered with ``atexit`` by
+		:meth:`start` for the exits that never reach a teardown at all.
+		"""
+
+		settings = self._old_settings
+
+		if settings is None:
+			return
+
+		try:
 			import termios  # noqa: PLC0415
-			termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._old_settings)
+			termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, settings)
+		except Exception:
+			# At interpreter exit there may be no stdin left to restore.  A
+			# failure here must never become the last thing a musician sees.
+			logger.debug("Could not restore the terminal settings", exc_info = True)
 
 	def drain (self) -> typing.List[str]:
 

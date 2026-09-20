@@ -1593,6 +1593,8 @@ class Composition:
 		self._web_ui_enabled: bool = False
 		self._web_ui_http_host: str = "127.0.0.1"
 		self._web_ui_ws_host: str = "127.0.0.1"
+		self._web_ui_http_port: int = 8080
+		self._web_ui_ws_port: int = 8765
 		self._web_ui_server: typing.Optional[subsequence.web_ui.WebUI] = None
 		self._link_quantum: typing.Optional[float] = None
 
@@ -3396,7 +3398,13 @@ class Composition:
 		else:
 			self._display = None
 
-	def web_ui (self, http_host: str = "127.0.0.1", ws_host: str = "127.0.0.1") -> None:
+	def web_ui (
+		self,
+		http_host: str = "127.0.0.1",
+		ws_host:   str = "127.0.0.1",
+		http_port: int = 8080,
+		ws_port:   int = 8765,
+	) -> None:
 
 		"""
 		Enable the realtime Web UI Dashboard.
@@ -3408,11 +3416,18 @@ class Composition:
 		Both servers bind to localhost by default.  Pass ``http_host`` / ``ws_host``
 		(e.g. "0.0.0.0") to opt into LAN exposure — the dashboard is read-only but
 		broadcasts full composition state, so only do so on a trusted network.
+
+		``http_port`` and ``ws_port`` move the dashboard when something else
+		already holds 8080 or 8765 — another Subsequence piece, most often::
+
+			composition.web_ui(http_port=8090, ws_port=8775)
 		"""
 
 		self._web_ui_enabled = True
 		self._web_ui_http_host = http_host
 		self._web_ui_ws_host = ws_host
+		self._web_ui_http_port = http_port
+		self._web_ui_ws_port = ws_port
 
 	def midi_input (self, device: str, clock_follow: bool = False, name: typing.Optional[str] = None) -> None:
 
@@ -6652,39 +6667,50 @@ class Composition:
 		# live reload cannot graduate stale copies.
 		self._pending_patterns = []
 
-		if self._display is not None and not self._sequencer.render_mode:
-			self._display.start()
-			self._sequencer.on_event("bar",  self._display.update)
-			self._sequencer.on_event("beat", self._display.update)
-
-		# Neither server belongs in a render: a render writes a file and ends,
-		# and opening a socket for it invites a control surface to drive
-		# something that is not playing (#2995).
-		if self._live_server is not None and not self._sequencer.render_mode:
-			await self._live_server.start()
-
-		if self._osc_server is not None and not self._sequencer.render_mode:
-			await self._osc_server.start()
-			self._sequencer.osc_server = self._osc_server
-			self._sequencer.on_event("bar", self._broadcast_osc_status)
-
-		# Start keystroke listener if hotkeys are enabled and not in render mode.
-		if self._hotkeys_enabled and not self._sequencer.render_mode:
-			self._keystroke_listener = subsequence.keystroke.KeystrokeListener()
-			self._keystroke_listener.start()
-
-			if self._keystroke_listener.active:
-				# Listener started successfully — register the bar handler
-				# and show all bindings so the user knows what's available.
-				self._sequencer.on_event("bar", self._process_hotkeys)
-				self._list_hotkeys()
-			# If not active, KeystrokeListener.start() already logged a warning.
-
-		if self._web_ui_enabled and not self._sequencer.render_mode:
-			self._web_ui_server = subsequence.web_ui.WebUI(self, http_host=self._web_ui_http_host, ws_host=self._web_ui_ws_host)
-			self._web_ui_server.start()
-
+		# Every service starts INSIDE this try, so one that fails to start
+		# still tears down the ones already up.  They used to start before it,
+		# and a single busy port — the web UI's, most often — skipped the
+		# whole teardown below and handed the musician back a terminal with
+		# no echo and no line editing (#3035).
 		try:
+			if self._display is not None and not self._sequencer.render_mode:
+				self._display.start()
+				self._sequencer.on_event("bar",  self._display.update)
+				self._sequencer.on_event("beat", self._display.update)
+
+			# Neither server belongs in a render: a render writes a file and
+			# ends, and opening a socket for it invites a control surface to
+			# drive something that is not playing (#2995).
+			if self._live_server is not None and not self._sequencer.render_mode:
+				await self._live_server.start()
+
+			if self._osc_server is not None and not self._sequencer.render_mode:
+				await self._osc_server.start()
+				self._sequencer.osc_server = self._osc_server
+				self._sequencer.on_event("bar", self._broadcast_osc_status)
+
+			# Start keystroke listener if hotkeys are enabled and not in render mode.
+			if self._hotkeys_enabled and not self._sequencer.render_mode:
+				self._keystroke_listener = subsequence.keystroke.KeystrokeListener()
+				self._keystroke_listener.start()
+
+				if self._keystroke_listener.active:
+					# Listener started successfully — register the bar handler
+					# and show all bindings so the user knows what's available.
+					self._sequencer.on_event("bar", self._process_hotkeys)
+					self._list_hotkeys()
+				# If not active, KeystrokeListener.start() already logged a warning.
+
+			if self._web_ui_enabled and not self._sequencer.render_mode:
+				self._web_ui_server = subsequence.web_ui.WebUI(
+					self,
+					http_host = self._web_ui_http_host,
+					ws_host   = self._web_ui_ws_host,
+					http_port = self._web_ui_http_port,
+					ws_port   = self._web_ui_ws_port,
+				)
+				self._web_ui_server.start()
+
 			await run_until_stopped(self._sequencer)
 		finally:
 			# Tear down every service even if run_until_stopped (or an earlier
