@@ -109,15 +109,39 @@ def _fake_open_input (name: str, callback: typing.Optional[typing.Callable] = No
 	return fake
 
 
-@pytest.fixture
-def patch_midi (monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(autouse = True)
+def fake_midi_backend (monkeypatch: pytest.MonkeyPatch) -> None:
 
-	"""Patch mido to use fake MIDI output and input for all tests that need it."""
+	"""Give EVERY test the fake MIDI backend, whether it asks for one or not.
+
+	This is autouse deliberately.  The rig plays out of this working tree, so a
+	test that reaches a real port sends notes into the synths in the room —
+	and the fixture used to be opt-in, which made isolation a property of what
+	the tests currently happen to do rather than of the suite.  One test
+	written without it was all it took, and nothing said so until something
+	made a noise.
+
+	It runs before any non-autouse fixture at the same scope, so
+	:func:`patch_midi_multi` still layers its own named ports on top.
+	"""
 
 	monkeypatch.setattr(mido, "get_output_names", _fake_get_output_names)
 	monkeypatch.setattr(mido, "open_output", _fake_open_output)
 	monkeypatch.setattr(mido, "get_input_names", _fake_get_input_names)
 	monkeypatch.setattr(mido, "open_input", _fake_open_input)
+
+
+@pytest.fixture
+def patch_midi (fake_midi_backend: None) -> None:
+
+	"""Kept for the hundreds of tests that name it, and for what naming it says.
+
+	The backend is faked for every test now, so this asks for nothing extra —
+	but a test that names it is saying "I touch MIDI", which is worth reading
+	in a signature.
+	"""
+
+	return None
 
 
 # ---------------------------------------------------------------------------

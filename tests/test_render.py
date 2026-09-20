@@ -1,11 +1,14 @@
 """Tests for composition.render() — limits, safety cap, and validation."""
 
 import pathlib
+import typing
+import unittest.mock
 
 import mido
 import pytest
 
 import subsequence
+import subsequence.sequencer
 
 
 # ---------------------------------------------------------------------------
@@ -64,30 +67,59 @@ def test_render_accepts_max_minutes_only (tmp_path: pathlib.Path, patch_midi: No
 # Default values
 # ---------------------------------------------------------------------------
 
-def test_render_default_max_minutes_is_60 (patch_midi: None) -> None:
+def _limits_render_would_set (
+	composition: subsequence.Composition,
+	tmp_path: pathlib.Path,
+	**kwargs: typing.Any,
+) -> typing.Tuple[typing.Optional[float], int]:
+
+	"""What render() hands the sequencer, without running the render.
+
+	Both of these tests used to `mock.patch("asyncio.run")` and then call
+	render() for real.  render() does not call asyncio.run — sequencer.run
+	uses asyncio.Runner — so the mock was inert, each test ran a full
+	sixty-minute simulated render (0.87 s and 0.85 s of a 15 s suite), and
+	each wrote a `dummy.mid` into the WORKING DIRECTORY.  That file is
+	gitignored, which is why it went unnoticed; it is also a plain truncating
+	write into the current directory, which is the hazard that wedged the
+	share on 2026-09-19 (#2438).
+
+	Stopping the run at the point the limits are set measures the thing these
+	tests are named for, and touches no disk at all.
+	"""
+
+	stopped_here: typing.List[typing.Tuple[typing.Optional[float], int]] = []
+
+	def capture (main: typing.Any) -> None:
+		stopped_here.append(
+			(composition._sequencer.render_max_seconds, composition._sequencer.render_bars)
+		)
+		main.close()
+
+	with unittest.mock.patch.object(subsequence.sequencer, "run", capture):
+		composition.render(filename=str(tmp_path / "unwritten.mid"), **kwargs)
+
+	assert stopped_here, "render() no longer goes through sequencer.run — this test is measuring nothing"
+
+	return stopped_here[0]
+
+
+def test_render_default_max_minutes_is_60 (tmp_path: pathlib.Path, patch_midi: None) -> None:
 
 	"""The sequencer receives render_max_seconds = 3600 when max_minutes is unset."""
 
 	composition = subsequence.Composition(bpm=120)
 
-	# Peek at what render() would pass: call the sequencer setup path without
-	# actually running the async loop by inspecting the attribute assignment.
-	# We trigger the ValueError path to confirm the default is NOT None.
 	@composition.pattern(channel=1, beats=4)
 	def p (p) -> None:
 		pass
 
-	# Monkey-patch asyncio.run to intercept without running
-	import asyncio
-	import unittest.mock as mock
+	max_seconds, _ = _limits_render_would_set(composition, tmp_path)
 
-	with mock.patch("asyncio.run", side_effect=lambda coro: coro.close()):
-		composition.render(filename="dummy.mid")
-
-	assert composition._sequencer.render_max_seconds == pytest.approx(3600.0)
+	assert max_seconds == pytest.approx(3600.0)
 
 
-def test_render_default_bars_is_none (patch_midi: None) -> None:
+def test_render_default_bars_is_none (tmp_path: pathlib.Path, patch_midi: None) -> None:
 
 	"""render() with no arguments sets render_bars = 0 (unlimited) on the sequencer."""
 
@@ -97,13 +129,41 @@ def test_render_default_bars_is_none (patch_midi: None) -> None:
 	def p (p) -> None:
 		pass
 
-	import asyncio
-	import unittest.mock as mock
+	_, bars = _limits_render_would_set(composition, tmp_path)
 
-	with mock.patch("asyncio.run", side_effect=lambda coro: coro.close()):
-		composition.render(filename="dummy.mid")
+	assert bars == 0
 
-	assert composition._sequencer.render_bars == 0
+
+def test_a_render_writes_nothing_outside_the_file_it_was_given (
+	tmp_path: pathlib.Path,
+	monkeypatch: pytest.MonkeyPatch,
+	patch_midi: None,
+) -> None:
+
+	"""No stray file in the working directory, whatever the working directory is.
+
+	The two tests above wrote `dummy.mid` into wherever pytest was started —
+	the repo root in practice, and the share if anybody ran the suite there.
+	"""
+
+	monkeypatch.chdir(tmp_path)
+
+	workspace = tmp_path / "cwd"
+	workspace.mkdir()
+	monkeypatch.chdir(workspace)
+
+	composition = subsequence.Composition(bpm=480)
+
+	@composition.pattern(channel=1, beats=4)
+	def p (p) -> None:
+		p.note(beat=0, pitch=36, velocity=100)
+
+	target = tmp_path / "wanted.mid"
+	composition.render(bars=2, filename=str(target))
+
+	assert target.exists()
+	assert list(workspace.iterdir()) == [], \
+		f"a render left files behind: {[f.name for f in workspace.iterdir()]}"
 
 
 # ---------------------------------------------------------------------------
