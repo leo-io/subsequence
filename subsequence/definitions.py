@@ -74,6 +74,131 @@ import typing
 import yaml
 
 
+# ---------------------------------------------------------------------------
+# YAML 1.2 numbers
+# ---------------------------------------------------------------------------
+
+class _Yaml12Loader(yaml.SafeLoader):
+
+	"""SafeLoader with YAML 1.1's surprising number rules taken out.
+
+	PyYAML implements YAML **1.1**, and two of its rules bite a file that is
+	mostly small integers written by hand:
+
+	- a leading zero means octal, so a drum map lining numbers up in a column
+	  reads ``kick: 036`` as **30** — a different drum, silently;
+	- a colon means sexagesimal, so a cue written ``1:30`` becomes **90**.
+
+	YAML 1.2's core schema has neither.  ``036`` is thirty-six, ``0o42`` is
+	thirty-four, and ``1:30`` is the string it looks like.  The resolver is
+	replaced rather than the values patched afterwards, because by the time a
+	document is loaded the two readings are indistinguishable: 30 is 30.
+	"""
+
+
+# A copy, so editing the resolvers here cannot reach yaml.SafeLoader itself —
+# which every other user of PyYAML in this process shares.
+_Yaml12Loader.yaml_implicit_resolvers = {
+	first: list(resolvers)
+	for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+# The sign is allowed on all three forms, where 1.2's core schema allows it
+# only on decimals. A deliberate superset: under the strict reading `-0x10`
+# stops being a number and becomes the string "-0x10", which 1.1 read as -16 —
+# a break nobody gains from, in exchange for nothing. Everything the decision
+# is actually about (036, 1:30) is unaffected.
+_YAML_12_INT = re.compile(
+	r"""^[-+]?(?:[0-9]+
+		|0o[0-7]+
+		|0x[0-9a-fA-F]+)$""",
+	re.VERBOSE,
+)
+
+# A float must carry a dot or an exponent. The 1.2 core schema's own pattern
+# also matches a bare "38", and leans on the int resolver being consulted
+# first — which is an ordering PyYAML does not guarantee per starting
+# character. Spelling the requirement out makes the two patterns disjoint, so
+# the order cannot matter. Without this, every plain integer in a definitions
+# file came back as a float: `snare: 38` was 38.0, and a MIDI note number is
+# not a float.
+_YAML_12_FLOAT = re.compile(
+	r"""^(?:[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?
+		|[-+]?[0-9]+[eE][-+]?[0-9]+
+		|[-+]?\.(?:inf|Inf|INF)
+		|\.(?:nan|NaN|NAN))$""",
+	re.VERBOSE,
+)
+
+
+def _use_yaml_12_numbers () -> None:
+
+	"""Swap the int and float resolvers on the private loader for 1.2's."""
+
+	for first, resolvers in _Yaml12Loader.yaml_implicit_resolvers.items():
+
+		replaced = []
+
+		for tag, pattern in resolvers:
+
+			if tag == "tag:yaml.org,2002:int":
+				replaced.append((tag, _YAML_12_INT))
+			elif tag == "tag:yaml.org,2002:float":
+				replaced.append((tag, _YAML_12_FLOAT))
+			else:
+				replaced.append((tag, pattern))
+
+		_Yaml12Loader.yaml_implicit_resolvers[first] = replaced
+
+	# 1.1 resolves an int or float on characters 1.2 does not start a number
+	# with, so those entries must be added rather than only rewritten.
+	for first in "0123456789-+.":
+		entries = _Yaml12Loader.yaml_implicit_resolvers.setdefault(first, [])
+
+		for tag, pattern in (
+			("tag:yaml.org,2002:int", _YAML_12_INT),
+			("tag:yaml.org,2002:float", _YAML_12_FLOAT),
+		):
+			if not any(existing == tag for existing, _ in entries):
+				entries.append((tag, pattern))
+
+
+_use_yaml_12_numbers()
+
+
+def _construct_yaml_12_int (loader: yaml.Loader, node: yaml.Node) -> int:
+
+	"""Read an integer by YAML 1.2 rules: decimal, 0o octal, 0x hex.
+
+	The resolver decides which TAG a scalar carries; the constructor decides
+	what value it becomes, and PyYAML's is 1.1 all the way down — a leading
+	zero is octal and a colon is sexagesimal there, whatever the resolver
+	said. Replacing only the resolver left ``kick: 036`` reading 30, exactly as
+	before, which is a good reminder that the two halves are separate.
+	"""
+
+	text = str(loader.construct_scalar(node))		# type: ignore[arg-type]
+
+	sign = 1
+
+	if text and text[0] in "+-":
+		sign = -1 if text[0] == "-" else 1
+		text = text[1:]
+
+	if text.startswith(("0o", "0O")):
+		return sign * int(text[2:], 8)
+
+	if text.startswith(("0x", "0X")):
+		return sign * int(text[2:], 16)
+
+	return sign * int(text, 10)
+
+
+# add_constructor on the subclass copies the table first, so SafeLoader — and
+# every other user of PyYAML in this process — keeps its own.
+_Yaml12Loader.add_constructor("tag:yaml.org,2002:int", _construct_yaml_12_int)
+
+
 CONSUMED_SECTIONS: typing.FrozenSet[str] = frozenset({
 	"notes", "cc", "channels", "programs", "nrpn",
 })
@@ -162,7 +287,7 @@ def load_definitions (path: typing.Union[str, pathlib.Path]) -> Definitions:
 
 	try:
 		with p.open(encoding="utf-8") as fh:
-			raw = yaml.safe_load(fh)
+			raw = yaml.load(fh, Loader = _Yaml12Loader)
 	except (OSError, yaml.YAMLError) as exc:
 		raise ValueError(
 			f"definitions file {p} could not be read: {exc}"
