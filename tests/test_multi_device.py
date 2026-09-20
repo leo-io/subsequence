@@ -55,8 +55,16 @@ def test_single_device_pattern_route (patch_midi: None) -> None:
 
 
 def test_single_device_midi_out_property (patch_midi: None) -> None:
-	"""sequencer.midi_out property still works on single-device setup."""
+	"""sequencer.midi_out is the port once one is opened — at start(), not at construction.
+
+	Building a Sequencer opens nothing: a render must be able to exist without
+	touching a device, and render() only says so after the object exists
+	(#2995).
+	"""
 	seq = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", initial_bpm=120)
+	assert seq.midi_out is None
+
+	seq._init_midi_output()
 	assert seq.midi_out is not None
 
 

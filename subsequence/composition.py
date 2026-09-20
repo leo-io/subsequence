@@ -5990,6 +5990,87 @@ class Composition:
 				if info:
 					self._osc_server.send("/section", info.name)
 
+	def _open_output_devices (self) -> None:
+
+		"""Open every output device, the primary first so it holds device 0.
+
+		A render opens nothing at all: it writes a file, and the rig is usually
+		playing something else (#2995).  Every device is registered as a silent
+		placeholder instead, so ``device=``, aliases and mirrors resolve exactly
+		as they would in a performance, and the rendered file carries what each
+		part plays (#2964, #2997).
+
+		A device that will not open keeps its number the same way, which is what
+		holds the numbering together for everything after it (#2997).
+		"""
+
+		if self._sequencer.render_mode:
+
+			self._sequencer.add_output_device(
+				self._sequencer.output_device_name or self._requested_output_device or "render",
+				None,
+				self._output_latency_ms,
+			)
+
+			for out in self._additional_outputs:
+				idx = self._sequencer.add_output_device(out.device, None, out.latency_ms)
+				self._output_device_names.setdefault(out.device, idx)
+
+				if out.alias is not None:
+					self._output_device_names[out.alias] = idx
+
+			logger.info("Rendering: no MIDI port is opened, and nothing is sent to a device.")
+
+			to_open: typing.List[_AdditionalOutput] = []
+
+		else:
+
+			self._sequencer._init_midi_output()
+			to_open = list(self._additional_outputs)
+
+		# The primary answers to the name it was opened under and to the string
+		# that asked for it — a partial or wildcard name opens a port under the
+		# port's own full name, and `device="what I asked for"` used to route to
+		# device 0 (#2964).  Its latency needs the device to exist, which it now
+		# does either way.
+		if self._sequencer.output_device_name:
+			self._output_device_names[self._sequencer.output_device_name] = 0
+
+		if self._requested_output_device:
+			self._output_device_names.setdefault(self._requested_output_device, 0)
+
+		if self._output_latency_ms and len(self._sequencer._output_devices):
+			self._sequencer.set_device_latency(0, self._output_latency_ms)
+
+		for out in to_open:
+			open_name, port = subsequence.midi_utils.select_output_device(out.device)
+			if open_name and port is not None:
+				idx = self._sequencer.add_output_device(open_name, port, out.latency_ms)
+				self._output_device_names[open_name] = idx
+				# As for the primary: the name midi_output() was given keeps
+				# addressing it, wildcards and partial names included (#2964).
+				self._output_device_names.setdefault(out.device, idx)
+				if out.alias is not None:
+					self._output_device_names[out.alias] = idx
+			else:
+				# A device that will not open keeps its number as a silent
+				# placeholder, so `device=2` still means the third device the
+				# composition declared and no part is quietly re-routed to a
+				# neighbour or dropped for an index that no longer exists
+				# (#2997).  Its name and alias resolve here too, so a part
+				# addressed by name is silent rather than landing on device 0.
+				idx = self._sequencer.add_output_device(out.device, None, out.latency_ms)
+				self._output_device_names.setdefault(out.device, idx)
+
+				if out.alias is not None:
+					self._output_device_names[out.alias] = idx
+
+				logger.warning(
+					"Could not open additional output device '%s' — it keeps device %d and stays silent, "
+					"so every other device keeps its own number.",
+					out.device, idx,
+				)
+
 	async def _run (self) -> None:
 
 		"""
@@ -6037,18 +6118,9 @@ class Composition:
 			if alias:
 				self._input_device_names[alias] = idx
 
-		# 2. Pre-calculate output device names.
-		if self._sequencer.output_device_name:
-			self._output_device_names[self._sequencer.output_device_name] = 0
-			# The string that opened it answers for it too: a partial or
-			# wildcard name opens a port under the port's own full name, and
-			# device="what I asked for" used to route to device 0 (#2964).
-			if self._requested_output_device:
-				self._output_device_names.setdefault(self._requested_output_device, 0)
-			# Primary device (index 0) is open by now (_init_midi_output ran in
-			# the Sequencer constructor), so its latency can be set safely here.
-			if self._output_latency_ms:
-				self._sequencer.set_device_latency(0, self._output_latency_ms)
+		# 2. The primary's name and latency are wired in step 6 instead, where
+		# the port is opened — it is no longer open by now, because building a
+		# Composition must not touch a device (#2995).
 
 		# 3. Resolve name-based INPUT device ids in cc_map/cc_forward early — the
 		# input-names map is fully populated above, and the callback thread needs
@@ -6102,35 +6174,8 @@ class Composition:
 			else:
 				logger.warning(f"Could not open additional input device '{dev_name}'")
 
-		# 6. Open additional MIDI output devices.
-		for out in self._additional_outputs:
-			open_name, port = subsequence.midi_utils.select_output_device(out.device)
-			if open_name and port is not None:
-				idx = self._sequencer.add_output_device(open_name, port, out.latency_ms)
-				self._output_device_names[open_name] = idx
-				# As for the primary: the name midi_output() was given keeps
-				# addressing it, wildcards and partial names included (#2964).
-				self._output_device_names.setdefault(out.device, idx)
-				if out.alias is not None:
-					self._output_device_names[out.alias] = idx
-			else:
-				# A device that will not open keeps its number as a silent
-				# placeholder, so `device=2` still means the third device the
-				# composition declared and no part is quietly re-routed to a
-				# neighbour or dropped for an index that no longer exists
-				# (#2997).  Its name and alias resolve here too, so a part
-				# addressed by name is silent rather than landing on device 0.
-				idx = self._sequencer.add_output_device(out.device, None, out.latency_ms)
-				self._output_device_names.setdefault(out.device, idx)
-
-				if out.alias is not None:
-					self._output_device_names[out.alias] = idx
-
-				logger.warning(
-					"Could not open additional output device '%s' — it keeps device %d and stays silent, "
-					"so every other device keeps its own number.",
-					out.device, idx,
-				)
+		# 6. Open the output devices.  See _open_output_devices().
+		self._open_output_devices()
 
 		# Warn if latency compensation adds noticeable whole-rig delay: the
 		# slowest device defines the alignment point, so every faster device is
@@ -6151,8 +6196,31 @@ class Composition:
 		# Pass clock output flag (suppressed automatically when clock_follow=True).
 		self._sequencer.clock_output = self._clock_output and not self.is_clock_following
 
+		# A render runs on its own simulated clock, whatever the piece asked
+		# for: following an external clock would wait for ticks that never
+		# come, and a Link session would put the render in the room's tempo —
+		# and in the room (#2995).  Said once, because it changes what the
+		# file is.
+		if self._sequencer.render_mode:
+
+			ignored = [
+				name
+				for name, asked in (("clock_follow", self.is_clock_following), ("link()", self._link_quantum is not None))
+				if asked
+			]
+
+			if ignored:
+				logger.info(
+					"Rendering on the internal clock: %s %s ignored for this render.",
+					" and ".join(ignored),
+					"is" if len(ignored) == 1 else "are",
+				)
+
+			self._sequencer.clock_follow = False
+			self._sequencer.clock_output = False
+
 		# Create Ableton Link clock if comp.link() was called.
-		if self._link_quantum is not None:
+		elif self._link_quantum is not None:
 			self._sequencer._link_clock = subsequence.link_clock.LinkClock(
 				bpm = self.bpm,
 				quantum = self._link_quantum,
@@ -6395,10 +6463,13 @@ class Composition:
 			self._sequencer.on_event("bar",  self._display.update)
 			self._sequencer.on_event("beat", self._display.update)
 
-		if self._live_server is not None:
+		# Neither server belongs in a render: a render writes a file and ends,
+		# and opening a socket for it invites a control surface to drive
+		# something that is not playing (#2995).
+		if self._live_server is not None and not self._sequencer.render_mode:
 			await self._live_server.start()
 
-		if self._osc_server is not None:
+		if self._osc_server is not None and not self._sequencer.render_mode:
 			await self._osc_server.start()
 			self._sequencer.osc_server = self._osc_server
 			self._sequencer.on_event("bar", self._broadcast_osc_status)

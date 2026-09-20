@@ -377,7 +377,10 @@ async def test_a_knob_turned_through_a_pause_arrives_where_it_now_stands (patch_
 
 	spy = conftest.SpyMidiOut()
 	sequencer = _running_sequencer()
-	sequencer._output_devices.add("Forwarded", spy)
+	# The index the registry gives it, not a literal: a Sequencer opens its own
+	# output at start() rather than at construction now, so this spy is the
+	# first device registered (#2995).
+	forwarded_device = sequencer._output_devices.add("Forwarded", spy)
 	await sequencer.start()
 
 	try:
@@ -386,7 +389,7 @@ async def test_a_knob_turned_through_a_pause_arrives_where_it_now_stands (patch_
 		await asyncio.sleep(0.05)
 
 		for value in range(0, 40):
-			sequencer._forward_buffer.append((sequencer.pulse_count, mido.Message('control_change', channel=0, control=74, value=value), 1))
+			sequencer._forward_buffer.append((sequencer.pulse_count, mido.Message('control_change', channel=0, control=74, value=value), forwarded_device))
 
 		sequencer.resume()
 		await asyncio.sleep(0.15)

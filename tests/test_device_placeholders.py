@@ -47,81 +47,69 @@ def patch_midi_with_a_dead_port (monkeypatch: pytest.MonkeyPatch) -> typing.Call
 	return install
 
 
-def _render_three_devices (tmp_path: pathlib.Path, ports: typing.Dict[str, conftest.NamedSpyMidiOut]) -> subsequence.Composition:
+def _three_devices (ports: typing.Dict[str, conftest.NamedSpyMidiOut]) -> subsequence.Composition:
 
-	"""One part per device — by number for the first two, by alias for the third."""
+	"""A composition with three declared outputs, whose ports are then opened.
+
+	It opens them through the very method a performance uses. A *render* is no
+	longer the way to test this: since #2995 a render opens no port at all and
+	stands every device in with a placeholder, so nothing would try to open the
+	dead one.
+	"""
 
 	composition = subsequence.Composition(output_device = "Synth A", bpm = 960)
 	composition.midi_output("Synth B", name = "middle")
 	composition.midi_output("Synth C", name = "last")
 
-	@composition.pattern(channel = 1, beats = 4, device = 0)
-	def on_primary (p) -> None:
-		p.note(48, beat = 0, duration = 1)
-
-	@composition.pattern(channel = 2, beats = 4, device = 1)
-	def on_middle (p) -> None:
-		p.note(60, beat = 0, duration = 1)
-
-	@composition.pattern(channel = 3, beats = 4, device = 2)
-	def on_last (p) -> None:
-		p.note(72, beat = 0, duration = 1)
-
-	@composition.pattern(channel = 4, beats = 4, device = "middle")
-	def by_alias (p) -> None:
-		p.note(84, beat = 0, duration = 1)
-
-	composition.render(bars = 1, filename = str(tmp_path / "devices.mid"))
+	composition._open_output_devices()
 
 	return composition
 
 
-def _notes (port: conftest.NamedSpyMidiOut) -> typing.List[int]:
+def _port_of (composition: subsequence.Composition, device: typing.Union[int, str]) -> typing.Any:
 
-	"""The note numbers a spy port was sent."""
+	"""The port a device name or number resolves to — None for a placeholder."""
 
-	return sorted({message.note for message in port.sent if message.type == "note_on" and message.velocity > 0})
+	return composition._sequencer._output_devices.get(device)
 
 
 # ---------------------------------------------------------------------------
-# Through a render, with the middle device unplugged
+# With the middle device unplugged
 # ---------------------------------------------------------------------------
 
 def test_a_device_that_does_not_open_keeps_its_number (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any) -> None:
 
-	"""Synth C is still device 2, so the part written for it arrives there."""
+	"""Synth C is still device 2, so a part written for it reaches its port."""
 
 	ports = patch_midi_with_a_dead_port("Synth B")
-	composition = _render_three_devices(tmp_path, ports)
+	composition = _three_devices(ports)
 
 	assert composition._output_device_names["Synth C"] == 2
 	assert composition._output_device_names["last"] == 2
-	assert _notes(ports["Synth C"]) == [72]
+	assert _port_of(composition, 2) is ports["Synth C"]
 
 
 def test_a_part_on_a_missing_device_is_silent_rather_than_moved (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any) -> None:
 
-	"""Its note used to land on whichever device inherited the number."""
+	"""Device 1 is the device that did not open — not whoever inherited the number."""
 
 	ports = patch_midi_with_a_dead_port("Synth B")
-	_render_three_devices(tmp_path, ports)
+	composition = _three_devices(ports)
 
-	assert 60 not in _notes(ports["Synth A"])
-	assert 60 not in _notes(ports["Synth C"])
+	assert composition._output_device_names["Synth B"] == 1
+	assert _port_of(composition, 1) is None
+	assert _port_of(composition, 0) is ports["Synth A"]
 
 
 def test_the_alias_of_a_missing_device_resolves_to_the_placeholder (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any) -> None:
 
-	"""'middle' means the device that did not open — not device 0."""
+	"""'middle' means the device that did not open — it used to mean device 0."""
 
 	ports = patch_midi_with_a_dead_port("Synth B")
-	composition = _render_three_devices(tmp_path, ports)
+	composition = _three_devices(ports)
 
-	# The audible symptom first: unmapped, the alias fell back to device 0 and
-	# the part played out of the primary synth.
-	assert 84 not in _notes(ports["Synth A"])
-	assert 84 not in _notes(ports["Synth C"])
 	assert composition._output_device_names["middle"] == 1
+	assert _port_of(composition, "middle") is None
 
 
 def test_a_missing_primary_keeps_device_zero (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any) -> None:
@@ -129,13 +117,13 @@ def test_a_missing_primary_keeps_device_zero (tmp_path: pathlib.Path, patch_midi
 	"""Everything used to shuffle up onto index 0: the lead out of the drum machine."""
 
 	ports = patch_midi_with_a_dead_port("Synth A")
-	composition = _render_three_devices(tmp_path, ports)
+	composition = _three_devices(ports)
 
+	assert _port_of(composition, 0) is None
 	assert composition._output_device_names["Synth B"] == 1
 	assert composition._output_device_names["Synth C"] == 2
-	assert _notes(ports["Synth B"]) == [60, 84]		# device 1 and its alias
-	assert _notes(ports["Synth C"]) == [72]
-	assert 48 not in _notes(ports["Synth B"])		# the primary's part is silent
+	assert _port_of(composition, 1) is ports["Synth B"]
+	assert _port_of(composition, 2) is ports["Synth C"]
 
 
 def test_the_missing_device_is_named_in_the_log (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any, caplog: pytest.LogCaptureFixture) -> None:
@@ -145,11 +133,31 @@ def test_the_missing_device_is_named_in_the_log (tmp_path: pathlib.Path, patch_m
 	ports = patch_midi_with_a_dead_port("Synth B")
 
 	with caplog.at_level("WARNING"):
-		_render_three_devices(tmp_path, ports)
+		_three_devices(ports)
 
 	warnings = [record.getMessage() for record in caplog.records if "Synth B" in record.getMessage()]
 
 	assert any("keeps device 1" in message for message in warnings), warnings
+
+
+def test_a_render_stands_every_device_in_and_opens_none (tmp_path: pathlib.Path, patch_midi_with_a_dead_port: typing.Any) -> None:
+
+	"""A render resolves every name to a placeholder, so routing is unchanged (#2995)."""
+
+	ports = patch_midi_with_a_dead_port("Synth B")
+
+	composition = subsequence.Composition(output_device = "Synth A", bpm = 960)
+	composition.midi_output("Synth B", name = "middle")
+	composition.midi_output("Synth C", name = "last")
+	composition._sequencer.render_mode = True
+
+	composition._open_output_devices()
+
+	assert composition._output_device_names["Synth A"] == 0
+	assert composition._output_device_names["middle"] == 1
+	assert composition._output_device_names["last"] == 2
+	assert [_port_of(composition, index) for index in (0, 1, 2)] == [None, None, None]
+	assert ports == {}		# not one port was opened
 
 
 # ---------------------------------------------------------------------------

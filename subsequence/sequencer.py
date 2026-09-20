@@ -650,7 +650,11 @@ class Sequencer:
 
 		self.set_bpm(initial_bpm)
 
-		self._init_midi_output()
+		# The port is NOT opened here.  Building a Composition must not open a
+		# device or prompt for one — a render has no business touching the
+		# rig, and it is render() that says so, after the Sequencer exists
+		# (#2995).  start() opens it, and Composition._run opens it earlier
+		# still, so the primary holds device 0 before any extra is added.
 
 		# OSC server reference — set by Composition after osc_server.start()
 		self.osc_server: typing.Optional[typing.Any] = None
@@ -1543,6 +1547,9 @@ class Sequencer:
 			message_type: One of ``"clock"``, ``"start"``, ``"stop"``, ``"continue"``.
 		"""
 
+		# No render_mode guard here on purpose: Composition.render() turns
+		# clock_output off outright (#2995), while a bare Sequencer in render
+		# mode is how the clock-output tests read this traffic quickly.
 		for port in self._output_devices:
 			try:
 				self._locked_send(port, mido.Message(message_type))
@@ -1562,6 +1569,13 @@ class Sequencer:
 
 		if self.running:
 			return
+
+		# Open the output now rather than at construction — and never in a
+		# render, which writes a file and must not reach a device (#2995).
+		# Composition._run has usually done this already, so the registry is
+		# non-empty and this is a no-op; a bare Sequencer arrives here first.
+		if not self._output_devices and not self.render_mode:
+			self._init_midi_output()
 
 		# Set up MIDI input queue before opening the port.
 		self._open_midi_inputs()
@@ -1837,7 +1851,12 @@ class Sequencer:
 
 		pulses_per_bar = subsequence.metre.pulses_per_bar(self.time_signature, self.pulses_per_beat)
 
-		if self.clock_follow and self._midi_input_queue is not None:
+		# A render always runs the simulated internal clock: an external clock
+		# would wait for ticks that never arrive, and a Link session would tie
+		# the render to the room's tempo (#2995).
+		if self.render_mode:
+			await self._run_loop_internal_clock(pulses_per_bar)
+		elif self.clock_follow and self._midi_input_queue is not None:
 			await self._run_loop_external_clock(pulses_per_bar)
 		elif self._link_clock is not None:
 			await self._run_loop_link_clock(self._link_clock, pulses_per_bar)
@@ -2567,16 +2586,24 @@ class Sequencer:
 		Send a MIDI message to the appropriate output device.
 		"""
 
+		# OSC does not go to a MIDI port, so it must not wait for one: the
+		# lookup below used to gate it, and an OSC-only piece — or any piece
+		# whose device is a placeholder — sent nothing at all (#2995).
+		if event.message_type == 'osc':
+
+			if self.osc_server is not None:
+				try:
+					address, args = event.data
+					self.osc_server.send(address, *args)
+				except Exception:
+					logger.exception("OSC send failed")
+
+			return
+
 		port = self._output_devices.get(event.device)
 		if port is not None:
 
 			try:
-
-				if event.message_type == 'osc':
-					if self.osc_server is not None:
-						address, args = event.data
-						self.osc_server.send(address, *args)
-					return
 
 				msg = event.to_mido()
 				if msg is None:
