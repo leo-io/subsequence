@@ -1225,13 +1225,31 @@ async def run_until_stopped (sequencer: subsequence.sequencer.Sequencer) -> None
 		stop_event.set()
 
 	for sig in (signal.SIGINT, signal.SIGTERM):
+
 		try:
 			loop.add_signal_handler(sig, _request_stop)
+			continue
 		except NotImplementedError:
 			# Windows: add_signal_handler is Unix-only.
-			# Fall back to signal.signal() for SIGINT (Ctrl+C); skip SIGTERM.
+			pass
+		except RuntimeError:
+			# Off the main thread, where the interpreter will not hand this
+			# thread the process's signals ("set_wakeup_fd only works in main
+			# thread").  Only NotImplementedError used to be caught, so a
+			# render on a worker thread died here rather than rendering.
+			pass
+
+		# Fall back to signal.signal() for SIGINT (Ctrl+C); skip SIGTERM.
+		# That is main-thread-only too, and raises ValueError elsewhere.
+		try:
 			if sig == signal.SIGINT:
 				signal.signal(sig, lambda s, f: _request_stop())
+		except ValueError:
+			logger.debug(
+				"No handler installed for %s on this thread — stop(), the bar limit and "
+				"the time cap still end the run.",
+				sig.name,
+			)
 
 	assert sequencer.task is not None, "Sequencer task should exist after start()"
 	await asyncio.wait(
@@ -6121,6 +6139,21 @@ class Composition:
 			raise ValueError(
 				"render() requires at least one limit: provide bars=, max_minutes=, or both. "
 				"Passing both as None would produce an infinite render."
+			)
+
+		# Zero and below used to reach the engine as its own "no bar limit"
+		# sentinel, so render(bars=0, max_minutes=None) never returned and
+		# filled memory while it did not.  A bar count is a number of bars.
+		if bars is not None and (not isinstance(bars, int) or isinstance(bars, bool) or bars < 1):
+			raise ValueError(
+				f"render(bars={bars!r}) needs a whole number of bars, 1 or more. "
+				f"For no bar limit, leave bars out and give max_minutes= instead."
+			)
+
+		if max_minutes is not None and (max_minutes <= 0 or max_minutes != max_minutes):
+			raise ValueError(
+				f"render(max_minutes={max_minutes!r}) needs a length above zero. "
+				f"For no time limit, pass max_minutes=None and give bars= instead."
 			)
 
 		self._sequencer.recording = True
