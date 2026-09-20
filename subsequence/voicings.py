@@ -58,7 +58,25 @@ def invert_chord (intervals: typing.List[int], inversion: int) -> typing.List[in
 	# bass note would change the chord's pitch classes once a caller adds the
 	# root back (the pre-2026-06 bug — [0, 3, 8] is an Ab-major shape, not
 	# C major first inversion).
-	return intervals[inversion:] + [i + 12 for i in intervals[:inversion]]
+	voiced = list(intervals[inversion:])
+
+	for moved in intervals[:inversion]:
+
+		# One octave is enough for a chord narrower than an octave, and it is
+		# what this did for every chord: [0, 4, 7, 11, 14] first inversion
+		# came out [4, 7, 11, 14, 12], with the moved note landing BELOW the
+		# ninth it was supposed to clear, and [0, 4, 7, 12] came out
+		# [4, 7, 12, 12] — the same pitch twice, so one note_off ended both.
+		# Ninth and eleventh chords span more than an octave by construction,
+		# so this is ordinary extend() territory, not just hand-built lists.
+		lifted = moved + 12
+
+		while voiced and lifted <= max(voiced):
+			lifted += 12
+
+		voiced.append(lifted)
+
+	return voiced
 
 
 def voice_lead (intervals: typing.List[int], root_midi: int, previous_voicing: typing.Optional[typing.List[int]]) -> typing.List[int]:

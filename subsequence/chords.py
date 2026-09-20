@@ -141,7 +141,12 @@ class Chord:
 		if self.quality not in CHORD_INTERVALS:
 			raise ValueError(f"Unknown chord quality: {self.quality}")
 
-		return CHORD_INTERVALS[self.quality]
+		# A copy, not the table's own list. Handing out the table meant a
+		# caller appending a ninth to THEIR chord gave every major chord in
+		# the process a ninth — including ones built later, which for a live
+		# session means until the rig restarts. Nothing raised; the piece
+		# simply sounded wrong from that bar on.
+		return list(CHORD_INTERVALS[self.quality])
 
 
 
