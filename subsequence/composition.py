@@ -1602,6 +1602,35 @@ class Composition:
 			if isinstance(pending.raw_device, str):
 				pending.device = self._resolve_device_id(pending.raw_device)
 
+	def _next_start_pulse (self, pending: "_PendingPattern", now: int) -> int:
+
+		"""Where a part added mid-flight comes in: the next whole multiple of its own length.
+
+		Counted on the song's timeline, the same counting a groove's slot uses
+		(#2788) — a one-bar part starts on the next bar, a four-bar part on
+		the next four-bar line — so a part added by a save, ``load_patterns``
+		or the REPL sits on the grid instead of wherever the save landed, for
+		ever after (#3000, decision 4 of #2991).
+
+		A boundary already inside the pattern's own lookahead is too close to
+		build for, so the one after it is used.
+		"""
+
+		length_pulses, lookahead_pulses = self._sequencer._get_schedule_timing(
+			pending.length,
+			pending.reschedule_lookahead,
+		)
+
+		if length_pulses <= 0:
+			return now
+
+		start = ((now // length_pulses) + 1) * length_pulses
+
+		if start - now < lookahead_pulses:
+			start += length_pulses
+
+		return start
+
 	async def _activate_new_pending_patterns (self) -> None:
 
 		"""Build and schedule any pending patterns whose names are not yet running.
@@ -1612,9 +1641,10 @@ class Composition:
 		place); only patterns whose names are not yet in ``_running_patterns``
 		need this graduation step.
 
-		Newly-scheduled patterns start at the current sequencer pulse —
-		they'll generate events from now onward, and the next reschedule
-		will fire at the same offset as their primary cycle.
+		A new pattern comes in on the next whole multiple of its own length
+		(see :meth:`_next_start_pulse`), not at the pulse the save happened to
+		land on — so a bar-long part starts on a bar line and a four-bar part
+		on a four-bar line, however the timing of the save fell (#3000).
 		"""
 
 		# Resolve any deferred string-device names against the now-open
@@ -1638,11 +1668,18 @@ class Composition:
 
 		for pending in new_pending:
 
-			pattern = self._build_pattern_from_pending(pending, start_pulse = current_pulse)
-			await self._sequencer.schedule_pattern_repeating(pattern, start_pulse = current_pulse)
+			start_pulse = self._next_start_pulse(pending, current_pulse)
+
+			pattern = self._build_pattern_from_pending(pending, start_pulse = start_pulse)
+			await self._sequencer.schedule_pattern_repeating(pattern, start_pulse = start_pulse)
 			self._running_patterns[pending.builder_fn.__name__] = pattern
 
-			logger.info(f"Live-reload: scheduled new pattern '{pending.builder_fn.__name__}'")
+			logger.info(
+				"Live-reload: scheduled new pattern '%s' from pulse %d (in %.2f beats)",
+				pending.builder_fn.__name__,
+				start_pulse,
+				(start_pulse - current_pulse) / self._sequencer.pulses_per_beat,
+			)
 
 		# Prune graduated (and stale duplicate) declarations: leaving them in
 		# _pending_patterns resurrected deleted patterns on every later reload.
@@ -3765,6 +3802,11 @@ class Composition:
 		the performance did to it, such as a ``mirror()``.  ``device`` is the
 		exception, because opening a port while the clock runs would be heard:
 		a pattern moves to a new device when the composition restarts.
+
+		A part the save *adds* comes in on the next whole multiple of its own
+		length — a one-bar part on the next bar, a four-bar part on the next
+		four-bar line — so it sits on the grid however the timing of the save
+		fell, and stays there.
 
 		Parameters:
 			path: Path to the Python file to watch.
