@@ -50,32 +50,49 @@ HOTKEYS_SUPPORTED: bool = False
 #: ``None`` when :data:`HOTKEYS_SUPPORTED` is ``True``.
 HOTKEYS_UNAVAILABLE_REASON: typing.Optional[str] = None
 
-try:
-	import termios
-	import tty
 
-	if not sys.stdin.isatty():
-		raise OSError("stdin is not a TTY (running in a pipe or non-interactive context)")
+def _detect_hotkey_support () -> typing.Tuple[bool, typing.Optional[str]]:
 
-	# Quick sanity check — attempt to read and restore the current settings.
-	_fd = sys.stdin.fileno()
-	_saved = termios.tcgetattr(_fd)
-	termios.tcsetattr(_fd, termios.TCSADRAIN, _saved)
+	"""Decide whether this process can read single keystrokes, and say why not.
 
-	HOTKEYS_SUPPORTED = True
+	Reads the terminal's settings; it must never **write** them.  A process in
+	a background process group that writes its terminal's settings is sent
+	SIGTTOU, whose default action is to stop it — and this runs on every
+	``import subsequence``, so an import-time ``tcsetattr`` here stopped
+	``python render_album.py &`` dead at the import, before the script ran a
+	line of its own (#3033).
 
-except ImportError:
-	HOTKEYS_UNAVAILABLE_REASON = (
-		"The 'tty' and 'termios' modules are not available on this platform. "
-		"Hotkeys require a POSIX operating system (Linux or macOS)."
-	)
-except OSError as _e:
-	HOTKEYS_UNAVAILABLE_REASON = (
-		f"Hotkeys require an interactive terminal (TTY) on stdin. "
-		f"Reason: {_e}"
-	)
-except Exception as _e:
-	HOTKEYS_UNAVAILABLE_REASON = f"Hotkeys unavailable: {_e}"
+	Returns ``(supported, reason_if_not)``.
+	"""
+
+	try:
+		import termios					# noqa: PLC0415
+		import tty						# noqa: PLC0415,F401
+
+		if not sys.stdin.isatty():
+			raise OSError("stdin is not a TTY (running in a pipe or non-interactive context)")
+
+		# Reading the settings proves the terminal can actually be
+		# interrogated, which isatty() alone does not.
+		termios.tcgetattr(sys.stdin.fileno())
+
+	except ImportError:
+		return False, (
+			"The 'tty' and 'termios' modules are not available on this platform. "
+			"Hotkeys require a POSIX operating system (Linux or macOS)."
+		)
+	except OSError as e:
+		return False, (
+			f"Hotkeys require an interactive terminal (TTY) on stdin. "
+			f"Reason: {e}"
+		)
+	except Exception as e:
+		return False, f"Hotkeys unavailable: {e}"
+
+	return True, None
+
+
+HOTKEYS_SUPPORTED, HOTKEYS_UNAVAILABLE_REASON = _detect_hotkey_support()
 
 
 # ---------------------------------------------------------------------------
