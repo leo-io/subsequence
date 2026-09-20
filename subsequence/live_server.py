@@ -10,6 +10,12 @@ Messages are delimited by ``\\x04`` (ASCII EOT). The server reads until it
 receives this sentinel, evaluates the code, and sends the result (or error
 traceback) followed by ``\\x04``.
 
+Each message is a declaration pass in its own right, run on the loop that owns
+the composition: whatever it declares afresh is brought in at the next whole
+multiple of its own length, whatever it re-declares is swapped in place, and
+what it leaves behind is remembered under ``REPL_SOURCE`` so a watched file's
+save never tears the performer's own work down.
+
 Security note: the server binds to ``localhost`` only and is opt-in via
 ``composition.live()``. It executes arbitrary Python in the composition's
 process - this is intentional for live coding. Any process on the same
@@ -30,6 +36,11 @@ if typing.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SENTINEL = b"\x04"
+
+# What the REPL declares is filed under this name, so a watched file's save
+# removes only what that file stopped declaring and never the performer's
+# typing (#2999).
+REPL_SOURCE = "<repl>"
 
 
 class LiveServer:
@@ -85,7 +96,7 @@ class LiveServer:
 				if code is None:
 					break
 
-				response = await asyncio.to_thread(self._evaluate, code)
+				response = await self._submit(code)
 				writer.write(response.encode() + SENTINEL)
 				await writer.drain()
 
@@ -130,32 +141,86 @@ class LiveServer:
 
 		return data if data else None
 
-	def _evaluate (self, code: str) -> str:
+	async def _submit (self, code: str) -> str:
 
-		"""Validate, then eval/exec the code string. Return the result or error traceback."""
+		"""Play one typed submission into the composition, and start what it added.
+
+		A line typed at the REPL is a declaration in its own right, and is
+		treated as one — the same pass a file save gets.  What it declares
+		afresh comes in at the next whole multiple of its own length, so a
+		new part lands on a bar line rather than wherever the typing fell
+		(:meth:`Composition._next_start_pulse`), and re-declaring a part that
+		is already playing swaps its body in place instead of standing a
+		second copy beside it.
+
+		Until #2999 a submission was run on a worker thread and then left
+		alone: a new ``@composition.pattern`` was acknowledged with ``OK``
+		and never heard, and a re-declared ``layer()`` came back as a second
+		layer with a ``#2`` on its name.  Running it here, on the loop that
+		owns the pattern registry and the scheduler's queue, is what lets the
+		declaration be acted on — at the cost of holding the clock for as
+		long as the submission runs, which is the same bargain a watched file
+		save already makes.
+
+		What the REPL declares is remembered under its own name, so a later
+		file save tears down its own deletions and leaves the performer's
+		typing alone.
+		"""
+
+		composition = self._composition
+
+		# Each submission is a fresh declaration pass, exactly as a save is.
+		# Names left over from startup are what turned a re-declared layer
+		# into a second one, because the name it would have reused was still
+		# taken.
+		composition._declared_names = set()
+
+		response, declared = self._evaluate(code)
+
+		if not declared:
+			return response
+
+		# Bring anything newly declared into rotation.  A part that was
+		# already playing hot-swapped inside the exec and is not here.
+		await composition._activate_new_pending_patterns()
+
+		composition._source_declared[REPL_SOURCE] = (
+			composition._source_declared.get(REPL_SOURCE, set()) | composition._declared_names
+		)
+
+		return response
+
+	def _evaluate (self, code: str) -> typing.Tuple[str, bool]:
+
+		"""Validate, then eval/exec the code string.
+
+		Returns the text to send back, and whether the code ran to completion —
+		a submission that raised has declared nothing worth scheduling, and its
+		half-built patterns must not be started.
+		"""
 
 		# Validate syntax before executing - never run invalid code.
 		try:
 			compile(code, "<live>", "exec")
 		except SyntaxError:
-			return traceback.format_exc()
+			return traceback.format_exc(), False
 
 		# Try as an expression first (returns a value).
 		try:
 			result = eval(compile(code, "<live>", "eval"), self._namespace)
-			return repr(result) if result is not None else "OK"
+			return (repr(result) if result is not None else "OK"), True
 		except SyntaxError:
 			pass
 		except SystemExit:
-			return "SystemExit is not allowed in live mode."
+			return "SystemExit is not allowed in live mode.", False
 		except Exception:
-			return traceback.format_exc()
+			return traceback.format_exc(), False
 
 		# Fall back to statement execution.
 		try:
 			exec(compile(code, "<live>", "exec"), self._namespace)
-			return "OK"
+			return "OK", True
 		except SystemExit:
-			return "SystemExit is not allowed in live mode."
+			return "SystemExit is not allowed in live mode.", False
 		except Exception:
-			return traceback.format_exc()
+			return traceback.format_exc(), False

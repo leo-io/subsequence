@@ -3756,6 +3756,15 @@ class Composition:
 		``subsequence.live_client`` REPL and hot-swap pattern code or
 		modify variables in real-time.
 
+		What you type is a declaration, and the piece takes it as one.  A new
+		``@composition.pattern`` comes in at the next whole multiple of its own
+		length, so a one-bar part lands on a bar line and a four-bar part on a
+		four-bar line, however the typing fell.  Re-declaring a part that is
+		already playing swaps its body in without disturbing its cycle count,
+		its tweaks or its mirrors.  What you add this way is yours: a save of a
+		watched file removes only what that file stopped declaring, and
+		``unregister()`` is how you take a typed part out again.
+
 		Security:
 			The server executes arbitrary Python in this process — it is **not** a
 			sandbox.  It binds to localhost only and is opt-in, but any process on

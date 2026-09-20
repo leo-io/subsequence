@@ -6,13 +6,15 @@ Usage::
     python -m subsequence.live_client --port 5555
 
 The client connects to a live server started by ``composition.live()`` and
-provides an interactive Python prompt. Multi-line blocks are supported  - 
-type a line ending with ``:`` and the client will wait for more input.
+provides an interactive Python prompt. Multi-line blocks are supported - type
+a block header, or a decorator, and the client waits for the rest; a blank line
+sends it.
 
 Press Ctrl+C to cancel the current input. Press Ctrl+D to quit.
 """
 
 import argparse
+import codeop
 import socket
 import sys
 import typing
@@ -82,22 +84,18 @@ def _is_incomplete (code: str) -> bool:
 	if not stripped:
 		return False
 
-	# Trailing colon suggests a block header (def, if, for, etc.).
-	if stripped.endswith(":"):
-		return True
-
-	# Unclosed brackets or parens.
-	opens = sum(1 for c in code if c in "([{")
-	closes = sum(1 for c in code if c in ")]}")
-
-	if opens > closes:
-		return True
-
-	# Trailing backslash (line continuation).
-	if stripped.endswith("\\"):
-		return True
-
-	return False
+	# Ask Python, which is the only thing that knows.  Counting brackets and
+	# looking for a trailing colon reads a block header, but it calls a lone
+	# decorator finished — so `@composition.pattern(channel=1, beats=4)` went
+	# off to the server by itself, came back a SyntaxError, and the `def` after
+	# it arrived undecorated.  A decorated function, which is what live() is
+	# for, could not be sent at all (#2999).
+	try:
+		return codeop.compile_command(code, "<live>", "exec") is None
+	except (SyntaxError, OverflowError, ValueError):
+		# Broken beyond repair: send it, and let the server say what is wrong.
+		# Holding the performer at a "..." prompt they cannot escape is worse.
+		return False
 
 
 def main () -> None:
