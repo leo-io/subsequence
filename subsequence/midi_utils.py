@@ -205,6 +205,17 @@ class MidiDeviceRegistry:
 		"""Iterate over the open port objects (not names); placeholders are skipped."""
 		return (port for _, port in self._ports if port is not None)
 
+	def indexed (self) -> typing.Iterator[typing.Tuple[int, typing.Any]]:
+
+		"""Iterate over ``(index, port)`` for the open ports; placeholders are skipped.
+
+		The counterpart to ``__iter__`` for anything that has to treat each
+		device differently — latency compensation needs the index to look the
+		offset up, and a bare port cannot be turned back into one (#3069).
+		"""
+
+		return ((index, port) for index, (_, port) in enumerate(self._ports) if port is not None)
+
 	def __bool__ (self) -> bool:
 
 		"""

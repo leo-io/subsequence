@@ -530,6 +530,11 @@ class Sequencer:
 	# magnitude below anything anybody plays, so no real tempo trips it.
 	_CLOCK_GAP_SECONDS: float = 0.5
 
+	# How far past the last deferred send for a device the next one is held, so
+	# that two clamped to the same floor keep their dispatch order.  A
+	# microsecond: below MIDI's own resolution, and far below the loop's.
+	_SEND_ORDER_EPSILON: float = 1e-6
+
 	def __init__ (
 		self,
 		output_device_name: typing.Optional[str] = None,
@@ -679,6 +684,12 @@ class Sequencer:
 		# internal clock's _hold_while_paused keeps its own local instead: it
 		# blocks for the whole hold, so it has somewhere to put one.
 		self._paused_from: float = 0.0
+
+		# When the last deferred send for each device is due, on the loop's own
+		# clock.  Nothing for a device may be sent before this, so a latency
+		# change mid-piece cannot let a message overtake one already waiting
+		# (#3069).
+		self._send_floor: typing.Dict[int, float] = {}
 
 		# Device latency compensation: cached max across all output devices, and
 		# the set of in-flight deferred sends (call_later handles) awaiting their
@@ -1756,25 +1767,43 @@ class Sequencer:
 			await self.stop()
 
 
-	def _send_clock_message (self, message_type: str) -> None:
+	def _send_clock_message (self, message_type: str, compensated: bool = True) -> None:
 
 		"""Send a bare MIDI system-realtime message (clock, start, stop, continue).
 
 		These messages carry no channel or data bytes — they are sent directly to
 		the output port.  Used for MIDI clock output when ``clock_output`` is True.
 
+		**Latency-compensated, like every note.**  They used to go straight out
+		while the notes for the same device were held back, so compensation
+		pulled the transport and the music apart instead of together: with one
+		device at 0 ms and another at 20 ms, a Start reached the faster synth in
+		0.01 ms where its notes wait 20 ms, and a slaved drum machine ran a whole
+		offset ahead of the part it was locking to (#3069).
+
 		Parameters:
 			message_type: One of ``"clock"``, ``"start"``, ``"stop"``, ``"continue"``.
+			compensated: False sends immediately, for the Stop at shutdown —
+				``stop()`` closes the ports straight afterwards, so a deferred
+				send would fire on a closed one, and a Stop arriving an offset
+				early at the very end of a piece costs nothing.
 		"""
 
 		# No render_mode guard here on purpose: Composition.render() turns
 		# clock_output off outright (#2995), while a bare Sequencer in render
 		# mode is how the clock-output tests read this traffic quickly.
-		for port in self._output_devices:
-			try:
-				self._locked_send(port, mido.Message(message_type))
-			except Exception:
-				logger.exception(f"Failed to send MIDI {message_type} message")
+		for index, port in self._output_devices.indexed():
+
+			def deliver (port: typing.Any = port, index: int = index) -> None:
+				try:
+					self._locked_send(port, mido.Message(message_type))
+				except Exception:
+					logger.exception(f"Failed to send MIDI {message_type} message")
+
+			if compensated:
+				self._send_after_compensating(index, deliver)
+			else:
+				deliver()
 
 
 	async def start (self) -> None:
@@ -1865,7 +1894,12 @@ class Sequencer:
 		self._cancel_pending_sends()
 
 		if self.clock_output:
-			self._send_clock_message("stop")
+			# Uncompensated on purpose: close_all() is four lines below, so a
+			# deferred Stop would fire on a closed port — and the cancellation
+			# above has just thrown away everything it would have queued behind
+			# anyway.  Early by one offset at the very end of a piece is nothing;
+			# a Stop that never arrives leaves a slaved device running (#3069).
+			self._send_clock_message("stop", compensated=False)
 
 		await self.panic()
 
@@ -3018,37 +3052,77 @@ class Sequencer:
 			return 0.0
 		return offset_ms / 1000.0
 
-	def _dispatch_with_compensation (self, event: MidiEvent) -> None:
+	def _send_after_compensating (self, device: int, send: typing.Callable[[], None]) -> None:
 
-		"""Send *event* now, or defer it by its device's latency offset.
+		"""Call *send* now, or defer it by *device*'s latency offset.
 
 		Deferral is a wall-clock ``call_later`` so it is correct regardless of
 		tempo or clock source.  Skipped entirely in render mode (no real clock
 		— deferring would drop events from the rendered file) and when no event
 		loop is running (the synchronous test path).
+
+		**Nothing may overtake what is already deferred for its device.**  The
+		offset is read at dispatch, and ``set_device_latency`` can move it under
+		a performer's hand mid-piece — so a note_on deferred by 50 ms could have
+		its own note_off dispatched under an offset of 0 and sent first, leaving
+		the note ringing for good.  Measured before this: the synth received
+		``['note_off', 'note_on']``, and ``active_notes`` had already forgotten
+		the note, so neither the release sweep nor ``stop()`` would catch it
+		(#3069).
+
+		A per-device floor fixes the whole class rather than that one pair: each
+		send is held to at least the moment the last one for its device is due,
+		which also keeps an NRPN burst (CC 99 → 98 → 6 → 38) in order across a
+		latency change, exactly as the per-device offset keeps it in order
+		without one.
 		"""
 
 		if self.render_mode or self._event_loop is None:
-			self._send_midi(event)
+			send()
 			return
 
-		offset_s = self._send_offset_seconds(event.device)
-		if offset_s <= 0.0:
-			self._send_midi(event)
+		offset_s = self._send_offset_seconds(device)
+
+		now = self._event_loop.time()
+
+		# The floor is nudged past the last send rather than merely matched, so
+		# two messages clamped to it keep the order they were dispatched in:
+		# asyncio's timer heap orders on the due time alone and breaks a tie
+		# arbitrarily.  A microsecond is far below anything MIDI can express and
+		# four of them across an NRPN burst is not a delay anybody can measure.
+		floor = self._send_floor.get(device, 0.0) + self._SEND_ORDER_EPSILON
+		due = max(now + offset_s, floor)
+
+		self._send_floor[device] = due
+
+		if due <= now:
+			send()
 			return
 
-		# Defer the physical send.  The one-element ``cell`` lets the callback
-		# discard exactly its own handle from _pending_sends (the handle isn't
-		# known until call_later returns, but _fire only runs after we append).
+		# Deferred to an ABSOLUTE time, not a delay: ``call_later`` reads the
+		# clock again itself, so the send would land a few hundred nanoseconds
+		# past the floor recorded here — which is enough to put a note_off
+		# ahead of the note_on it was clamped behind, and did (#3069).
+		#
+		# The one-element ``cell`` lets the callback discard exactly its own
+		# handle from _pending_sends (the handle isn't known until call_at
+		# returns, but _fire only runs after we append).
 		cell: typing.List[asyncio.TimerHandle] = []
 
 		def _fire () -> None:
 			self._pending_sends.discard(cell[0])
-			self._send_midi(event)
+			send()
 
-		handle = self._event_loop.call_later(offset_s, _fire)
+		handle = self._event_loop.call_at(due, _fire)
 		cell.append(handle)
 		self._pending_sends.add(handle)
+
+
+	def _dispatch_with_compensation (self, event: MidiEvent) -> None:
+
+		"""Send *event* now, or defer it by its device's latency offset."""
+
+		self._send_after_compensating(event.device, lambda: self._send_midi(event))
 
 	def _cancel_pending_sends (self) -> None:
 
