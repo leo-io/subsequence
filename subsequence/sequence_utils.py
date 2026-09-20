@@ -1878,6 +1878,20 @@ def generate_cellular_automaton_1d (steps: int, rule: int = 30, generation: int 
 	if steps <= 0:
 		return []
 
+	# A negative generation is not "before the beginning" — it poisons the
+	# cache below for everybody. The cache holds (generation, state) per
+	# (steps, rule, seed), and a negative one stores the INITIAL state under a
+	# negative number; the next call with generation=0 then finds -3 <= 0,
+	# accepts it, and runs range(-3, 0) — three evolution steps, returned as
+	# "generation 0". The cache is process-global, so the damage reaches other
+	# patterns sharing a rule and seed, and it depends on the order calls
+	# happen to be made in. Refuse it where it is written (#3050).
+	if generation < 0:
+		raise ValueError(
+			f"generation must be 0 or more, got {generation}. "
+			f"Generation 0 is the initial state; p.cycle counts up from there."
+		)
+
 	# Memoise the evolution: the common idiom drives `generation` from `p.cycle`,
 	# advancing one generation per bar, so without a cache each bar re-ran every
 	# prior generation from scratch (cost growing without bound over a long set).
@@ -2032,6 +2046,20 @@ def generate_cellular_automaton_2d (
 	# degenerate empty grid, matching the 1D kernel's steps<=0 no-op.
 	if rows <= 0 or cols <= 0:
 		return [[] for _ in range(max(0, rows))]
+
+	# A negative generation is not "before the beginning" — it poisons the
+	# cache below for everybody. The cache holds (generation, state) per
+	# (steps, rule, seed), and a negative one stores the INITIAL state under a
+	# negative number; the next call with generation=0 then finds -3 <= 0,
+	# accepts it, and runs range(-3, 0) — three evolution steps, returned as
+	# "generation 0". The cache is process-global, so the damage reaches other
+	# patterns sharing a rule and seed, and it depends on the order calls
+	# happen to be made in. Refuse it where it is written (#3050).
+	if generation < 0:
+		raise ValueError(
+			f"generation must be 0 or more, got {generation}. "
+			f"Generation 0 is the initial state; p.cycle counts up from there."
+		)
 
 	birth_set, survival_set = _parse_life_rule(rule)
 
