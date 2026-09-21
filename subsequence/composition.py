@@ -147,6 +147,22 @@ _RETIRED_HARMONY_PARAMETERS: typing.Dict[str, str] = {
 }
 
 
+class _Keep:
+
+	"""Sentinel for a ``harmony()`` argument that was not given.
+
+	``None`` cannot serve: ``cycle_beats=None`` already means "a chord a bar",
+	and ``progression=None`` is how a bound progression is unbound.  So "keep
+	what is configured" needs a value of its own.
+	"""
+
+	def __repr__ (self) -> str:
+		return "<keep>"
+
+
+KEEP: typing.Any = _Keep()
+
+
 def _refuse_retired_harmony_parameters (given: typing.Dict[str, typing.Any]) -> None:
 
 	"""Raise for a harmony() keyword that has been retired, or is simply unknown."""
@@ -870,7 +886,13 @@ async def schedule_harmonic_clock (
 
 		bound_progression = get_bound_progression() if get_bound_progression is not None else None
 
-		if bound_progression is not None and state["bound_seen"] is not bound_progression:
+		if bound_progression is None:
+			# Unbound (harmony(progression=None), #3088).  Forget what was
+			# seen, or re-binding the SAME Progression object later would
+			# match on identity and carry on from its old anchor.
+			state["bound_seen"] = None
+
+		elif state["bound_seen"] is not bound_progression:
 			# First sighting (or a re-bind): anchor the walk here and forget exhaustion.
 			state["bound_seen"] = bound_progression
 			state["bound_anchor"] = beat
@@ -1558,6 +1580,18 @@ class Composition:
 		# harmony() call — reused by parameter-only re-calls.
 		self._last_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
 		self._harmony_reschedule_lookahead: float = 1
+		# What the most recent harmony() call configured, so a later re-call
+		# naming one parameter keeps the rest instead of silently defaulting
+		# them (#3088).  The style has its own home in _last_harmony_style.
+		self._harmony_settings: typing.Dict[str, typing.Any] = {
+			"cycle_beats": None,
+			"dominant_7th": True,
+			"key_pull": 0.0,
+			"nir_strength": 0.5,
+			"minor_turnaround_weight": 0.0,
+			"root_diversity": subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
+			"reschedule_lookahead": 1.0,
+		}
 		self._section_progressions: typing.Dict[str, Progression] = {}
 		self._bound_progression: typing.Optional[Progression] = None
 		self._pinned_chords: typing.Dict[int, typing.Any] = {}
@@ -2072,14 +2106,14 @@ class Composition:
 	def harmony (
 		self,
 		style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None,
-		cycle_beats: typing.Optional[float] = None,
-		dominant_7th: bool = True,
-		key_pull: float = 0.0,
-		nir_strength: float = 0.5,
-		minor_turnaround_weight: float = 0.0,
-		root_diversity: float = subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
-		reschedule_lookahead: float = 1,
-		progression: typing.Optional[typing.Any] = None,
+		cycle_beats: typing.Optional[float] = KEEP,
+		dominant_7th: bool = KEEP,
+		key_pull: float = KEEP,
+		nir_strength: float = KEEP,
+		minor_turnaround_weight: float = KEEP,
+		root_diversity: float = KEEP,
+		reschedule_lookahead: float = KEEP,
+		progression: typing.Optional[typing.Any] = KEEP,
 		**retired: typing.Any,
 	) -> None:
 
@@ -2094,6 +2128,13 @@ class Composition:
 		through to live stepping (the frozen-replay bridge).  Calling with
 		neither argument keeps today's default live engine
 		(``style="functional_major"``).
+
+		**A re-call changes only what it names.**  Anything left out keeps the
+		value the last call gave it, so ``harmony(key_pull=0.4)`` after
+		``harmony(style="aeolian_minor", cycle_beats=8, nir_strength=0.9)``
+		leaves the style, the harmonic rhythm and the inertia where they were.
+		Pass ``progression=None`` to **unbind** a bound progression — the walk
+		falls back to live stepping at the next chord boundary.
 
 		Parameters:
 			style: The harmonic style to use, by name or as a ``ChordGraph``.
@@ -2136,7 +2177,9 @@ class Composition:
 				next chord.
 			progression: A progression to bind to the global clock.  Key-
 				relative content resolves now, against the composition key
-				and scale (binding freezes one realisation).
+				and scale (binding freezes one realisation).  ``None``
+				unbinds whatever is bound, handing the harmony back to the
+				live engine at the next chord boundary.
 
 		Example:
 			```python
@@ -2151,10 +2194,30 @@ class Composition:
 		if retired:
 			_refuse_retired_harmony_parameters(retired)
 
+		# Resolve each parameter against what the last call configured, so a
+		# re-call naming one of them keeps the rest (#3088).  Before this, the
+		# signature's own defaults won every time: after
+		# harmony(style="aeolian_minor", cycle_beats=8, nir_strength=0.9), a
+		# later harmony(key_pull=0.4) silently reset cycle_beats, the
+		# lookahead, nir_strength and root_diversity.
+		def _resolve (name: str, given: typing.Any) -> typing.Any:
+			if given is KEEP:
+				return self._harmony_settings[name]
+			self._harmony_settings[name] = given
+			return given
+
+		cycle_beats = _resolve("cycle_beats", cycle_beats)
+		dominant_7th = _resolve("dominant_7th", dominant_7th)
+		key_pull = _resolve("key_pull", key_pull)
+		nir_strength = _resolve("nir_strength", nir_strength)
+		minor_turnaround_weight = _resolve("minor_turnaround_weight", minor_turnaround_weight)
+		root_diversity = _resolve("root_diversity", root_diversity)
+		reschedule_lookahead = _resolve("reschedule_lookahead", reschedule_lookahead)
+
 		if not 0.0 <= key_pull <= 1.0:
 			raise ValueError(f"harmony(key_pull={key_pull!r}) takes 0.0 to 1.0")
 
-		if style is None and progression is None:
+		if style is None and progression is KEEP:
 			# A parameter-only re-call (key_pull=, cycle_beats=, ...) keeps the
 			# configured style — defaulting unconditionally here would silently
 			# replace e.g. aeolian_minor with functional_major.
@@ -2199,8 +2262,14 @@ class Composition:
 			self._harmony_style = style if isinstance(style, str) else None
 			self._last_harmony_style = style
 
-		if progression is not None:
-			self._bound_progression = self._coerce_progression(progression, "harmony(progression=)")
+		if progression is not KEEP:
+			# An explicit None unbinds.  The clock reads the binding through a
+			# getter on every tick, so clearing it here is enough to fall back
+			# to live stepping at the next boundary (#3088).
+			self._bound_progression = (
+				None if progression is None
+				else self._coerce_progression(progression, "harmony(progression=)")
+			)
 
 		self._harmony_cycle_beats = cycle_beats
 		self._harmony_reschedule_lookahead = reschedule_lookahead
