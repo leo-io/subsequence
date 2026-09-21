@@ -707,6 +707,7 @@ async def schedule_harmonic_clock (
 		"last_chord": None,			# what is sounding, to hold when no source applies
 		"held_once": False,			# the hold is said once, not every bar
 		"cadence_queue": [],		# planned approach chords (None = step live at that boundary)
+		"cadence_target": None,		# (bar, name) the queued approach is walking toward
 	}
 
 	def _plan_cadence_request (beat: float, hs: subsequence.harmonic_state.HarmonicState) -> None:
@@ -783,12 +784,14 @@ async def schedule_harmonic_clock (
 				f"{saved_current.name()} ({error}) — the arrival lands by fiat"
 			)
 			state["cadence_queue"] = [None] * (steps - len(tail)) + tail
+			state["cadence_target"] = (target_bar, name)
 			return
 		finally:
 			hs.history = saved_history
 			hs.current_chord = saved_current
 
 		state["cadence_queue"] = list(walked[1:])
+		state["cadence_target"] = (target_bar, name)
 
 	def _data_future (
 		progression: "Progression",
@@ -854,6 +857,24 @@ async def schedule_harmonic_clock (
 					state["next_change"] = beat		# a section entry forces a chord decision
 					horizon.invalidate_future()
 					state["planned"] = None
+
+					# A planned cadence approach belongs to the section it was
+					# walked in: it starts from the chord sounding then and
+					# counts boundaries to a bar.  A section change — a
+					# form_jump especially — invalidates both, so the approach
+					# is discarded rather than replayed here (#3085).  Where
+					# its arrival is still ahead, the REQUEST goes back so it
+					# re-plans from where the harmony now stands; the musician
+					# asked for a cadence at a bar, not for these chords.
+					if state["cadence_queue"]:
+						stale_target = state["cadence_target"]
+						state["cadence_queue"] = []
+						state["cadence_target"] = None
+
+						if stale_target is not None and cadence_requests is not None:
+							stale_bar, stale_name = stale_target
+							if (stale_bar - 1) * bar_beats > beat + 1e-9:
+								cadence_requests.setdefault(stale_bar, stale_name)
 
 					# Restore the NIR context that was current when this
 					# progression was frozen, so every replay starts alike.
@@ -987,6 +1008,11 @@ async def schedule_harmonic_clock (
 
 						if state["cadence_queue"]:
 							queued = state["cadence_queue"].pop(0)
+
+							if not state["cadence_queue"]:
+								# The approach has arrived; it is no longer
+								# walking toward anything (#3085).
+								state["cadence_target"] = None
 
 						if queued is not None:
 							# A planned approach supersedes the pre-committed step.
