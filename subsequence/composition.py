@@ -626,7 +626,7 @@ async def schedule_harmonic_clock (
 	get_cycle_beats: typing.Optional[typing.Callable[[], float]] = None,
 	get_bound_progression: typing.Optional[typing.Callable[[], typing.Optional["Progression"]]] = None,
 	get_section_progression: typing.Optional[
-		typing.Callable[[], typing.Optional[typing.Tuple[str, int, int, typing.Optional["Progression"]]]]
+		typing.Callable[[], typing.Optional[typing.Tuple[str, typing.Any, int, typing.Optional["Progression"]]]]
 	] = None,
 	get_section_progression_at: typing.Optional[
 		typing.Callable[[int], typing.Optional["Progression"]]
@@ -659,9 +659,12 @@ async def schedule_harmonic_clock (
 	``get_harmonic_state``, ``get_bound_progression``, and ``get_pinned``
 	are evaluated on every tick so mid-playback calls to ``harmony()``,
 	re-binds, and new pins take effect immediately.  ``get_section_progression``
-	returns ``(name, index, bars, Progression|None)`` for the current section
-	(``index`` increments on every entry, so verse→verse re-entry resets
-	correctly) or ``None`` when no form is active.  ``get_section_progression_at``
+	returns ``(name, entry, bars, Progression|None)`` for the current section
+	or ``None`` when no form is active.  *entry* is any value that differs
+	between one entry and the next - it is only ever compared for inequality -
+	so verse→verse re-entry resets, and so does a mid-playback ``form()``
+	re-bind, where one form's section 0 would otherwise look like another's
+	(#3084).  ``get_section_progression_at``
 	answers the same question for the section owning a 1-based global bar, and
 	is what lets the window see one chord past a section's edge (#3086).  It
 	returns ``None`` for graph and generator forms, whose layout is not known
@@ -1289,6 +1292,7 @@ async def schedule_form (
 	reschedule_lookahead: float = 1,
 	on_bar: typing.Optional[typing.Callable[[int, bool], None]] = None,
 	get_form_state: typing.Optional[typing.Callable[[], typing.Optional[subsequence.form_state.FormState]]] = None,
+	start_pulse: typing.Optional[int] = None,
 ) -> None:
 
 	"""Schedule the form state to advance each bar.
@@ -1321,6 +1325,8 @@ async def schedule_form (
 	if on_bar is not None:
 		on_bar(0, True)		# the first bar is a boundary too (a 1-bar opener can end)
 
+	seen_form: typing.Dict[str, typing.Any] = {"state": initial_form}
+
 	def advance_form (pulse: int) -> None:
 
 		"""Advance the form by one bar, logging and announcing section changes."""
@@ -1328,13 +1334,26 @@ async def schedule_form (
 		fs = _current_form_state()
 
 		if fs is None:
+			seen_form["state"] = None
 			if on_bar is not None:
 				on_bar(pulse + lookahead_pulses, False)
 			return
 
+		# A mid-playback form() re-bind IS a section change, however the two
+		# forms' indices happen to line up (#3084).  Entry detection keyed on
+		# the index alone stayed silent going from one form's section 0 to
+		# another's, so on_section never fired for the new form's first
+		# section and transition mutes were never lifted.
+		#
+		# The bar count is NOT this function's problem: the new state is read
+		# through the getter from the moment it is bound, so it advances
+		# normally from here and each section gets the bars it declares.
+		swapped = fs is not seen_form["state"]
+		seen_form["state"] = fs
+
 		section_changed = fs.advance()
 
-		if section_changed:
+		if swapped or section_changed:
 			section = fs.get_section_info()
 			if section:
 				logger.info(f"Form: {section.name}")
@@ -1345,16 +1364,21 @@ async def schedule_form (
 		if on_bar is not None:
 			# Fixed callbacks fire lookahead-early; the bar line itself is
 			# lookahead pulses ahead of the fire pulse.
-			on_bar(pulse + lookahead_pulses, section_changed)
+			on_bar(pulse + lookahead_pulses, swapped or section_changed)
 
 	# Form advances once per bar based on the global time signature.
 	bar_beats = subsequence.metre.bar_beats(sequencer.time_signature)
-	first_bar_pulse = subsequence.constants.pulses.beats_to_pulses(bar_beats, sequencer.pulses_per_beat)
+
+	if start_pulse is None:
+		# The form is announced above for the bar it starts on, and advances
+		# at every bar line after it.  Before playback that is bar 2; a form
+		# arriving mid-playback passes the bar after the one it starts on.
+		start_pulse = subsequence.constants.pulses.beats_to_pulses(bar_beats, sequencer.pulses_per_beat)
 
 	await sequencer.schedule_callback_repeating(
 		callback = advance_form,
 		interval_beats = bar_beats,
-		start_pulse = first_bar_pulse,
+		start_pulse = start_pulse,
 		reschedule_lookahead = reschedule_lookahead
 	)
 
@@ -1676,6 +1700,11 @@ class Composition:
 		self._freeze_count: int = 0
 		self._harmony_count: int = 0
 		self._form_count: int = 0
+		# Which form() call the current form came from.  Paired with a
+		# section's own entry count it makes a token that differs across a
+		# mid-playback re-bind, where both forms sit on section 0 (#3084).
+		self._form_generation: int = 0
+		self._form_clock_started: bool = False
 		# How many times each trigger function has fired, so a one-shot's
 		# stream differs from its own last one as well as from its neighbours.
 		self._trigger_counts: typing.Dict[str, int] = {}
@@ -2426,6 +2455,57 @@ class Composition:
 			else:
 				asyncio.run_coroutine_threadsafe(self._start_harmonic_clock(), loop)
 
+	async def _start_form_clock (self, clock_lookahead: typing.Optional[float] = None) -> None:
+
+		"""Register the bar-by-bar form clock (idempotent per playback).
+
+		Called from ``_run()`` when a form exists at play time, and from
+		:meth:`form` when the FIRST form arrives mid-playback (#3084).
+		Without the second path the clock was never registered at all, and
+		the form simply never advanced: measured at ``('verse', 0)`` for
+		seven bars after a ``form()`` call in bar 3.
+
+		Registered BEFORE the harmonic clock, which matters: same-pulse fixed
+		callbacks fire in registration order, and on a section-boundary bar
+		the harmonic clock reads the current section to decide whether to walk
+		that section's chords.  The other way round it reads the OLD section
+		on every boundary, shifting section_chords() replays by a bar and
+		bleeding them across sections.
+		"""
+
+		if self._form_clock_started or self._form_state is None:
+			return
+
+		self._form_clock_started = True
+
+		bar_beats = self.bar_beats
+
+		if clock_lookahead is None:
+			lookaheads = [pattern.reschedule_lookahead for pattern in self._running_patterns.values()]
+			clock_lookahead = min(bar_beats, max(1.0, float(max(lookaheads, default = 1))))
+
+		per_beat = self._sequencer.pulses_per_beat
+		bar_pulses = subsequence.constants.pulses.beats_to_pulses(bar_beats, per_beat)
+		now_pulse = self._sequencer.pulse_count
+
+		# The form is announced for the bar it starts on and advances at every
+		# bar line after that.  Before playback the playhead is 0, so this is
+		# the usual "first advance at bar 2"; arriving mid-playback it is the
+		# bar after the one the form starts on, rather than a pulse already
+		# gone by (the same trap as #3083).
+		start_pulse = ((now_pulse // bar_pulses) + 2) * bar_pulses if now_pulse else bar_pulses
+
+		await schedule_form(
+			sequencer = self._sequencer,
+			form_state = self._form_state,
+			reschedule_lookahead = clock_lookahead,
+			on_bar = self._check_transitions,
+			# Re-read every bar so a mid-playback form() re-bind advances
+			# the NEW state instead of the abandoned object.
+			get_form_state = lambda: self._form_state,
+			start_pulse = start_pulse,
+		)
+
 	async def _start_harmonic_clock (self, bar_beats: typing.Optional[float] = None, clock_lookahead: typing.Optional[float] = None) -> None:
 
 		"""Register the span-walking harmonic clock (idempotent per playback).
@@ -2457,7 +2537,7 @@ class Composition:
 			lookaheads = [pattern.reschedule_lookahead for pattern in self._running_patterns.values()]
 			clock_lookahead = min(bar_beats, max(1.0, float(self._harmony_reschedule_lookahead), float(max(lookaheads, default = 1))))
 
-		def _get_section_progression () -> typing.Optional[typing.Tuple[str, int, int, typing.Optional[Progression]]]:
+		def _get_section_progression () -> typing.Optional[typing.Tuple[str, typing.Any, int, typing.Optional[Progression]]]:
 			"""Return (section_name, section_index, bars, Progression|None) for the current section, or None.
 
 			The progression is resolved against the section's effective
@@ -2470,7 +2550,10 @@ class Composition:
 			if info is None:
 				return None
 			prog = self._resolve_section_progression(info)
-			return (info.name, info.index, info.bars, prog)
+			# The entry token pairs the form's generation with the section's
+			# own entry count, so a re-bind is a section change even when both
+			# forms are on their section 0 (#3084).
+			return (info.name, (self._form_generation, info.index), info.bars, prog)
 
 		def _get_section_progression_at (bar: int) -> typing.Optional[Progression]:
 			"""The progression bound to the section owning a 1-based global bar.
@@ -5155,6 +5238,10 @@ class Composition:
 			at_end = at_end,
 		)
 
+		# Bumped on every form() call so the harmonic clock can tell one form's
+		# section 0 from another's (#3084).
+		self._form_generation += 1
+
 		# A Form value carries energy payloads — that counts as an energy
 		# source for the min_energy registration check in _run().
 		self._form_has_payload = isinstance(sections, subsequence.forms.Form) or (
@@ -5172,6 +5259,27 @@ class Composition:
 			self._form_scale = scale
 
 		self._resolved_section_cache = {}
+
+		# A FIRST form() call mid-playback must start the clock itself —
+		# _run() only registers clocks for sources it can see at play() time,
+		# so without this the form never advanced at all (#3084).  A re-bind
+		# needs nothing here: the clock reads the form through a getter on
+		# every bar.
+		# NOT `loop`: form() already takes a loop= argument (the at_end sugar),
+		# and shadowing it here would be a trap for the next edit.
+		event_loop = self._sequencer._event_loop
+
+		if event_loop is not None and event_loop.is_running() and not self._form_clock_started:
+
+			try:
+				on_loop = asyncio.get_running_loop() is event_loop
+			except RuntimeError:
+				on_loop = False
+
+			if on_loop:
+				event_loop.create_task(self._start_form_clock())
+			else:
+				asyncio.run_coroutine_threadsafe(self._start_form_clock(), event_loop)
 
 	def form_freeze (self, sections: typing.Optional[int] = None) -> "subsequence.forms.Form":
 
@@ -6871,17 +6979,9 @@ class Composition:
 		# whether to walk that section's chords.  Registering harmony first would
 		# make it read the OLD section on every boundary, shifting section_chords()
 		# replays by one bar and bleeding them across sections.
-		if self._form_state is not None:
+		self._form_clock_started = False
 
-			await schedule_form(
-				sequencer = self._sequencer,
-				form_state = self._form_state,
-				reschedule_lookahead = clock_lookahead,
-				on_bar = self._check_transitions,
-				# Re-read every bar so a mid-playback form() re-bind advances
-				# the NEW state instead of the abandoned object.
-				get_form_state = lambda: self._form_state,
-			)
+		await self._start_form_clock(clock_lookahead)
 
 		self._harmony_horizon.reset()
 		self._harmonic_clock_started = False
