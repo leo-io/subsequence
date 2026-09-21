@@ -2049,8 +2049,20 @@ class Composition:
 		is spiced; it duck-types the ``Chord`` voicing protocol either way.
 		"""
 
+		beat = self._sequencer.pulse_count / self._sequencer.pulses_per_beat
+
+		return self._chord_sounding_at(beat)
+
+	def _chord_sounding_at (self, beat: float) -> typing.Optional[typing.Any]:
+
+		"""The chord sounding at an absolute *beat*, or ``None`` without harmony.
+
+		:meth:`current_chord` is this read at the playhead.  A *quantized*
+		one-shot needs it where the one-shot lands instead, which is a bar or
+		a beat ahead of the call (#3087).
+		"""
+
 		if not self._harmony_horizon.is_empty:
-			beat = self._sequencer.pulse_count / self._sequencer.pulses_per_beat
 			chord = self._harmony_horizon.chord_at(beat)
 			if chord is not None:
 				return chord
@@ -6271,9 +6283,17 @@ class Composition:
 		trigger_section = self._form_state.get_section_info() if self._form_state else None
 		trigger_key, trigger_scale = self._effective_key_scale(trigger_section)
 
+		# Anchor the view where the one-shot LANDS, not where trigger() was
+		# called (#3087).  start_pulse is already computed above for exactly
+		# this reason - the builder is meant to know where on the song's
+		# timeline it will play - and the harmony was the one thing still
+		# reading the playhead.  Quantized to the next bar, every one-shot was
+		# built against the bar before its own.
+		start_beat = start_pulse / pulses_per_beat
+
 		trigger_harmony: typing.Optional[HarmonyView] = None
 		if not self._harmony_horizon.is_empty:
-			trigger_harmony = HarmonyView(self._harmony_horizon, self._sequencer.pulse_count / self._sequencer.pulses_per_beat)
+			trigger_harmony = HarmonyView(self._harmony_horizon, start_beat)
 
 		# Create a PatternBuilder
 		builder = subsequence.pattern_builder.PatternBuilder(
@@ -6304,7 +6324,7 @@ class Composition:
 		# Call the builder function
 		try:
 
-			current_chord = self.current_chord() if chord else None
+			current_chord = self._chord_sounding_at(start_beat) if chord else None
 
 			if current_chord is not None:
 				injected = _InjectedChord(current_chord, None)  # No voice leading for one-shots
