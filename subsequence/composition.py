@@ -12,6 +12,7 @@ import builtins
 import dataclasses
 import inspect
 import logging
+import math
 import os
 import pathlib
 import random
@@ -635,6 +636,7 @@ async def schedule_harmonic_clock (
 	resolve_cadence: typing.Optional[typing.Callable[[str], typing.List[subsequence.chords.Chord]]] = None,
 	get_section_cadence: typing.Optional[typing.Callable[[str], typing.Optional[str]]] = None,
 	reschedule_lookahead: float = 1,
+	start_beat: float = 0.0,
 	on_stop: typing.Optional[typing.Callable[[], None]] = None,
 ) -> None:
 
@@ -703,12 +705,12 @@ async def schedule_harmonic_clock (
 	pulses_per_beat = sequencer.pulses_per_beat
 
 	state: typing.Dict[str, typing.Any] = {
-		"next_change": 0.0,			# absolute beat of the next chord boundary
+		"next_change": start_beat,	# absolute beat of the next chord boundary
 		"last_section_index": None,
-		"section_anchor": 0.0,		# beat the current section entered
+		"section_anchor": start_beat,	# beat the current section entered
 		"section_end": None,		# beat the current section ends (None = unbounded)
 		"section_exhausted": False,
-		"bound_anchor": 0.0,		# beat the bound progression was first walked from
+		"bound_anchor": start_beat,	# beat the bound progression was first walked from
 		"bound_seen": None,			# identity of the bound progression last walked
 		"bound_exhausted": False,
 		"planned": None,			# the live engine's pre-committed next chord
@@ -908,7 +910,7 @@ async def schedule_harmonic_clock (
 		"""Prepare the boundary at *beat*; return beats to the next fire (or None to stop)."""
 
 		hs = get_harmonic_state()
-		initial = beat == 0.0 and horizon.is_empty
+		initial = beat == start_beat and horizon.is_empty
 
 		# A mid-song style switch replaces the engine.  A chord the old one had
 		# already drawn is not the new style's to play — it came out of a graph
@@ -1165,14 +1167,14 @@ async def schedule_harmonic_clock (
 
 		"""The sequencer-facing callback: pulses in, beats out."""
 
-		# Nothing to guard here: beat 0 is always a chord boundary (next_change
-		# starts at 0.0) and a boundary either declines to start at all or
-		# commits a chord, so once the clock is running it has one to hold.
+		# Nothing to guard here: start_beat is always a chord boundary
+		# (next_change starts there) and a boundary either declines to start at
+		# all or commits a chord, so once the clock is running it has one to hold.
 		return advance(boundary_pulse / pulses_per_beat)
 
-	# Populate the window for beat 0 synchronously, BEFORE patterns first
+	# Populate the window for start_beat synchronously, BEFORE patterns first
 	# build, then schedule the walker from the first boundary it reported.
-	first_interval = advance(0.0)
+	first_interval = advance(start_beat)
 
 	if first_interval is None:
 		# No source, and nothing sounding to hold: this clock never starts.
@@ -1184,7 +1186,7 @@ async def schedule_harmonic_clock (
 
 	await sequencer.schedule_callback_sequence(
 		callback = advance_pulse,
-		start_pulse = subsequence.constants.pulses.beats_to_pulses(first_interval, pulses_per_beat),
+		start_pulse = subsequence.constants.pulses.beats_to_pulses(start_beat + first_interval, pulses_per_beat),
 		reschedule_lookahead = reschedule_lookahead,
 	)
 
@@ -2442,6 +2444,15 @@ class Composition:
 		if bar_beats is None:
 			bar_beats = self.bar_beats
 
+		# Where the walk begins.  _run() registers the clock before playback,
+		# so this is 0 and nothing changes; a FIRST harmony() arriving
+		# mid-playback starts at the next BAR LINE instead of replaying the
+		# piece from beat 0 (#3083).  Chord changes are bar-aligned everywhere
+		# else in the engine, and a chord appearing mid-bar under a pattern
+		# that has already rendered its bar would clash with it.
+		now_beat = self._sequencer.pulse_count / self._sequencer.pulses_per_beat
+		start_beat = math.ceil(now_beat / bar_beats - 1e-9) * bar_beats
+
 		if clock_lookahead is None:
 			lookaheads = [pattern.reschedule_lookahead for pattern in self._running_patterns.values()]
 			clock_lookahead = min(bar_beats, max(1.0, float(self._harmony_reschedule_lookahead), float(max(lookaheads, default = 1))))
@@ -2501,6 +2512,7 @@ class Composition:
 			resolve_cadence = _resolve_cadence_formula,
 			get_section_cadence = self._section_cadences.get,
 			reschedule_lookahead = clock_lookahead,
+			start_beat = start_beat,
 			on_stop = self._harmonic_clock_stopped,
 		)
 
