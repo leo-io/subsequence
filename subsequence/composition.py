@@ -627,6 +627,9 @@ async def schedule_harmonic_clock (
 	get_section_progression: typing.Optional[
 		typing.Callable[[], typing.Optional[typing.Tuple[str, int, int, typing.Optional["Progression"]]]]
 	] = None,
+	get_section_progression_at: typing.Optional[
+		typing.Callable[[int], typing.Optional["Progression"]]
+	] = None,
 	get_pinned: typing.Optional[typing.Callable[[int], typing.Optional[typing.Any]]] = None,
 	cadence_requests: typing.Optional[typing.Dict[int, str]] = None,
 	resolve_cadence: typing.Optional[typing.Callable[[str], typing.List[subsequence.chords.Chord]]] = None,
@@ -656,7 +659,12 @@ async def schedule_harmonic_clock (
 	re-binds, and new pins take effect immediately.  ``get_section_progression``
 	returns ``(name, index, bars, Progression|None)`` for the current section
 	(``index`` increments on every entry, so verse→verse re-entry resets
-	correctly) or ``None`` when no form is active.
+	correctly) or ``None`` when no form is active.  ``get_section_progression_at``
+	answers the same question for the section owning a 1-based global bar, and
+	is what lets the window see one chord past a section's edge (#3086).  It
+	returns ``None`` for graph and generator forms, whose layout is not known
+	ahead of the playhead, and the window then reports ``None`` rather than
+	guessing.
 
 	``cadence_requests`` is the request-hook seam: a mutable ``{bar: name}``
 	dict (shared with ``Composition.request_cadence``) the live walk steers
@@ -698,6 +706,7 @@ async def schedule_harmonic_clock (
 		"next_change": 0.0,			# absolute beat of the next chord boundary
 		"last_section_index": None,
 		"section_anchor": 0.0,		# beat the current section entered
+		"section_end": None,		# beat the current section ends (None = unbounded)
 		"section_exhausted": False,
 		"bound_anchor": 0.0,		# beat the bound progression was first walked from
 		"bound_seen": None,			# identity of the bound progression last walked
@@ -827,6 +836,73 @@ async def schedule_harmonic_clock (
 
 		return future
 
+	def _section_future (
+		progression: "Progression",
+		anchor: float,
+		loops: bool,
+		section_end: typing.Optional[float],
+	) -> typing.Callable[[float], typing.Optional[typing.Tuple[float, float, typing.Any]]]:
+
+		"""A section's spans, stopping at the section's own edge (#3086).
+
+		``_data_future`` alone wraps a short progression inside its own length
+		for ever.  That is right INSIDE a section — a two-chord progression in
+		a four-bar section repeats — and wrong AT its end, where the chord that
+		follows is the next section's first, not a wrap back to this one's.
+		Unbounded, the window's ``next_chord`` said C at the verse's last bar
+		where Am, the chorus's first chord, actually followed.
+
+		Past the edge this reports the next section's FIRST span and nothing
+		further: that is what anticipation needs, and it is the most the clock
+		can honestly claim.  Where the next section is unknowable (a graph or
+		generator form) or plays live chords, it reports ``None`` — the caller
+		then says "not known" rather than something false.
+		"""
+
+		inner = _data_future(progression, anchor, loops)
+
+		def future (beat: float) -> typing.Optional[typing.Tuple[float, float, typing.Any]]:
+
+			if section_end is None:
+				return inner(beat)
+
+			if beat >= section_end - 1e-9:
+
+				if get_section_progression_at is None:
+					return None
+
+				following = get_section_progression_at(int(section_end // bar_beats) + 1)
+
+				if following is None:
+					return None
+
+				span, span_start, span_end = following.span_at(0.0)
+				start = section_end + span_start
+				end = section_end + span_end
+
+				if not (start - 1e-9 <= beat < end - 1e-9):
+					return None		# further than its first chord: not claimed
+
+				chord = _span_chord(span)
+
+				if get_pinned is not None:
+					pinned = get_pinned(int(start // bar_beats) + 1)
+					if pinned is not None:
+						chord = pinned
+
+				return (start, end, chord)
+
+			span_here = inner(beat)
+
+			if span_here is None:
+				return None
+
+			start, end, chord = span_here
+
+			return (start, min(end, section_end), chord)
+
+		return future
+
 	def advance (beat: float) -> typing.Optional[float]:
 
 		"""Prepare the boundary at *beat*; return beats to the next fire (or None to stop)."""
@@ -853,6 +929,9 @@ async def schedule_harmonic_clock (
 				if section_index != state["last_section_index"]:
 					state["last_section_index"] = section_index
 					state["section_anchor"] = beat
+					state["section_end"] = (
+						beat + section_bars * bar_beats if section_bars > 0 else None
+					)
 					state["section_exhausted"] = False
 					state["next_change"] = beat		# a section entry forces a chord decision
 					horizon.invalidate_future()
@@ -955,7 +1034,20 @@ async def schedule_harmonic_clock (
 					span, span_start, span_end = section_progression.span_at(offset)
 					chord_like = _span_chord(span)
 					span_beats = span_end - (offset % section_progression.length)
-					horizon.set_future(_data_future(section_progression, state["section_anchor"], loops))
+
+					# A chord whose span outlasts its section must not carry
+					# the boundary past the edge with it (#3086): the section
+					# ends there whatever the harmonic rhythm says, and a
+					# committed span running beyond it makes the window read
+					# the wrong place.  Three bars of 4/4 walked by 8-beat
+					# spans is the case — the second span runs 8 to 16 and the
+					# section ends at 12.
+					if state["section_end"] is not None:
+						span_beats = min(span_beats, state["section_end"] - beat)
+
+					horizon.set_future(_section_future(
+						section_progression, state["section_anchor"], loops, state["section_end"],
+					))
 
 			# Priority 2: the composition-bound progression.
 			if chord_like is None and bound_progression is not None and not state["bound_exhausted"]:
@@ -2357,6 +2449,21 @@ class Composition:
 			prog = self._resolve_section_progression(info)
 			return (info.name, info.index, info.bars, prog)
 
+		def _get_section_progression_at (bar: int) -> typing.Optional[Progression]:
+			"""The progression bound to the section owning a 1-based global bar.
+
+			``section_info_at_bar`` answers for sequence forms only and returns
+			``None`` for graphs and generators, whose layout past the playhead
+			is not decided yet — which is exactly the case where the window
+			should admit it does not know (#3086).
+			"""
+			if self._form_state is None:
+				return None
+			info = self._form_state.section_info_at_bar(bar)
+			if info is None:
+				return None
+			return self._resolve_section_progression(info)
+
 		def _resolve_cadence_formula (name: str) -> typing.List[subsequence.chords.Chord]:
 			"""Resolve a cadence formula against the composition key and scale, at plan time."""
 			hs = self._harmonic_state
@@ -2376,6 +2483,7 @@ class Composition:
 			get_cycle_beats = lambda: self._harmony_cycle_beats or self.bar_beats,
 			get_bound_progression = lambda: self._bound_progression,
 			get_section_progression = _get_section_progression,
+			get_section_progression_at = _get_section_progression_at,
 			get_pinned = self._resolve_pin,
 			cadence_requests = self._cadence_requests,
 			resolve_cadence = _resolve_cadence_formula,
