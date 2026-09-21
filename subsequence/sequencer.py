@@ -653,6 +653,10 @@ class Sequencer:
 		# the moments that look the same from here: before the first Start, and
 		# after a Stop that holds the position (#3053).
 		self._transport_held: bool = False
+		# Set by a Composition: put the piece back to its opening when an
+		# external Start arrives (#3089).  A bare Sequencer has no form or
+		# harmony to rewind, so it leaves this None.
+		self.on_restart: typing.Optional[typing.Callable[[], typing.Awaitable[None]]] = None
 
 		self.event_queue: typing.List[MidiEvent] = []
 		self.task: typing.Optional[asyncio.Task] = None
@@ -2151,12 +2155,15 @@ class Sequencer:
 		was the pattern's seventh note, 6.04 beats later (#3053).
 
 		So: release what is sounding, drop every event the old position had
-		queued, and re-anchor every part and clock on cycle 0.
+		queued, rewind the composition, and re-anchor every part and clock on
+		cycle 0.
 
-		**What restarts is the transport, not the composition.**  A part is put
-		back on cycle 0 of the grid; the harmony, the form and a pattern's own
-		evolution carry on from where they had got to.  Rewinding those is a
-		musical question rather than a transport one, and it is not this.
+		**The whole piece goes back, not only the transport** (#3089).  The MIDI
+		specification is the argument: Start means "start at the beginning of
+		the song", and Continue is the message that resumes where a Stop left
+		off.  A Composition registers ``on_restart`` to put its form back to
+		section 0 and its harmony back to the tonic; a bare Sequencer has no
+		such thing to rewind and the hook is simply absent.
 		"""
 
 		if self._transport_held and self.pulse_count == 0 and self.current_bar < 0:
@@ -2174,6 +2181,11 @@ class Sequencer:
 		self.pulse_count = 0
 		self.current_bar = -1
 		self.current_beat = -1
+
+		# Before the re-anchor, so the clocks are re-placed around a
+		# composition that has already gone back to its opening.
+		if self.on_restart is not None:
+			await self.on_restart()
 
 		await self._reanchor_on_cycle_zero()
 

@@ -638,6 +638,7 @@ async def schedule_harmonic_clock (
 	reschedule_lookahead: float = 1,
 	start_beat: float = 0.0,
 	on_stop: typing.Optional[typing.Callable[[], None]] = None,
+	register_rewind: typing.Optional[typing.Callable[[typing.Callable[[], None]], None]] = None,
 ) -> None:
 
 	"""Schedule the harmonic clock — a span walker over the bound harmony sources.
@@ -1193,6 +1194,49 @@ async def schedule_harmonic_clock (
 		reschedule_lookahead = reschedule_lookahead,
 	)
 
+	if register_rewind is not None:
+
+		def _rewind () -> None:
+
+			"""Put the walk back where it started — an external Start (#3089).
+
+			The walk's whole position lives in this closure, so nothing outside
+			can reset it: the anchors, what the engine last saw, the planned
+			step and any cadence approach in flight all have to go back
+			together, or the piece resumes its old harmony over its new bar 1.
+			"""
+
+			state.update({
+				"next_change": start_beat,
+				"last_section_index": None,
+				"section_anchor": start_beat,
+				"section_end": None,
+				"section_exhausted": False,
+				"bound_anchor": start_beat,
+				"bound_seen": None,
+				"bound_exhausted": False,
+				"planned": None,
+				"engine_seen": None,
+				"last_chord": None,
+				"held_once": False,
+				"cadence_queue": [],
+				"cadence_target": None,
+			})
+
+			horizon.reset()
+
+			hs_now = get_harmonic_state()
+
+			if hs_now is not None:
+				hs_now.history = []
+				hs_now.current_chord = hs_now.home_chord
+
+			# Re-populate the window for the opening bar, exactly as the
+			# registration above does.
+			advance(start_beat)
+
+		register_rewind(_rewind)
+
 
 def _make_safe_callback (
 	fn: typing.Callable,
@@ -1705,6 +1749,11 @@ class Composition:
 		# mid-playback re-bind, where both forms sit on section 0 (#3084).
 		self._form_generation: int = 0
 		self._form_clock_started: bool = False
+		# What form() was last given, so a MIDI Start can rebuild the walk from
+		# its opening rather than from wherever it had got to (#3089).  The
+		# stream salt is kept too, so a seeded piece replays the same path.
+		self._form_spec: typing.Optional[typing.Tuple[typing.Any, bool, typing.Optional[str], str, int]] = None
+		self._rewind_harmony: typing.Optional[typing.Callable[[], None]] = None
 		# How many times each trigger function has fired, so a one-shot's
 		# stream differs from its own last one as well as from its neighbours.
 		self._trigger_counts: typing.Dict[str, int] = {}
@@ -2455,6 +2504,48 @@ class Composition:
 			else:
 				asyncio.run_coroutine_threadsafe(self._start_harmonic_clock(), loop)
 
+	def _remember_harmony_rewind (self, rewind: typing.Callable[[], None]) -> None:
+
+		"""Keep the harmonic clock's own rewind, for an external Start (#3089)."""
+
+		self._rewind_harmony = rewind
+
+	async def _rewind_to_the_top (self) -> None:
+
+		"""Put the composition back to its opening — an external MIDI Start.
+
+		Decision of 2026-09-21: a Start rewinds the **whole piece**, not only
+		the transport.  The MIDI specification is the argument — Start means
+		"start at the beginning of the song", and Continue is the message that
+		resumes where a Stop left off — and it is what a DAW does.  Before
+		this, a Start put every part back on bar 1 while the harmony and the
+		form carried on, so the piece was heard from the top over whatever
+		chord happened to be sounding, in whatever section it had reached.
+
+		The form is rebuilt from what ``form()`` was given, on the same stream
+		salt, so a seeded graph walks the same path it walked the first time —
+		a restart is the same piece again, not a different one.
+		"""
+
+		if self._form_spec is not None:
+
+			sections, loop, start, at_end, count = self._form_spec
+
+			self._form_state = subsequence.form_state.FormState(
+				sections,
+				loop = loop,
+				start = start,
+				rng = self._stream(f"form:{count}"),
+				at_end = at_end,
+			)
+
+			# The new state is a different object, so the form clock sees the
+			# swap and announces section 0 (#3084).
+			self._resolved_section_cache = {}
+
+		if self._rewind_harmony is not None:
+			self._rewind_harmony()
+
 	async def _start_form_clock (self, clock_lookahead: typing.Optional[float] = None) -> None:
 
 		"""Register the bar-by-bar form clock (idempotent per playback).
@@ -2597,6 +2688,7 @@ class Composition:
 			reschedule_lookahead = clock_lookahead,
 			start_beat = start_beat,
 			on_stop = self._harmonic_clock_stopped,
+			register_rewind = self._remember_harmony_rewind,
 		)
 
 	def _warn_about_sections_with_no_chords (self) -> None:
@@ -5238,6 +5330,8 @@ class Composition:
 			at_end = at_end,
 		)
 
+		self._form_spec = (sections, loop, start, at_end, self._form_count)
+
 		# Bumped on every form() call so the harmonic clock can tell one form's
 		# section 0 from another's (#3084).
 		self._form_generation += 1
@@ -6980,6 +7074,11 @@ class Composition:
 		# make it read the OLD section on every boundary, shifting section_chords()
 		# replays by one bar and bleeding them across sections.
 		self._form_clock_started = False
+
+		# An external Start rewinds the whole piece, not only the transport
+		# (#3089).  The Sequencer cannot know what a composition's opening is,
+		# so it asks.
+		self._sequencer.on_restart = self._rewind_to_the_top
 
 		await self._start_form_clock(clock_lookahead)
 
