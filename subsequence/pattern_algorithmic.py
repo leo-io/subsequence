@@ -53,7 +53,7 @@ def _fit_to_budget (verb: str, alphabet: int, window: int) -> int:
 	Clamping rather than raising, for the reason the bounds elsewhere clamp: a
 	rebuild runs every bar and a failing one costs its pattern that cycle, so a
 	control nudged past the bound would silence a part mid-performance.  A
-	smaller window is still a complete de Bruijn sequence — just a shorter one —
+	smaller window is still a complete de Bruijn sequence - just a shorter one -
 	so the generator keeps the property it promises.
 	"""
 
@@ -115,13 +115,13 @@ class PatternAlgorithmicMixin:
 
 		"""Resolve the effective random generator for a generative call.
 
-		Determinism has one friendly knob — ``seed=`` (an int) — and one advanced
-		form — ``rng=`` (a ``random.Random`` instance).  Precedence, most explicit
+		Determinism has one friendly knob - ``seed=`` (an int) - and one advanced
+		form - ``rng=`` (a ``random.Random`` instance).  Precedence, most explicit
 		first:
 
-			1. ``rng=`` — an explicit generator you supplied (wins; warns if ``seed=`` was also given).
-			2. ``seed=`` — a fresh ``random.Random(seed)``, fixed for this call.
-			3. ``self.rng`` — the pattern's own generator (the default; reproducible under the composition seed).
+			1. ``rng=`` - an explicit generator you supplied (wins; warns if ``seed=`` was also given).
+			2. ``seed=`` - a fresh ``random.Random(seed)``, fixed for this call.
+			3. ``self.rng`` - the pattern's own generator (the default; reproducible under the composition seed).
 		"""
 
 		if rng is not None:
@@ -141,7 +141,7 @@ class PatternAlgorithmicMixin:
 		Accepts a plain ``int`` (returned unchanged) or a ``(low, high)``
 		tuple from which a random value is drawn via ``rng.randint``.
 		Centralised here so every note-placement method offers the same
-		idiom — ``velocity=(60, 90)`` works wherever ``velocity=`` is
+		idiom - ``velocity=(60, 90)`` works wherever ``velocity=`` is
 		accepted.
 
 		Raises ``TypeError`` for any other shape so a typo surfaces at
@@ -203,13 +203,13 @@ class PatternAlgorithmicMixin:
 
 		The shared placement kernel: steps are evenly spaced across the pattern
 		length; for each step, ``event_for(index, value)`` returns either
-		``None`` (a silent step — no probability draw is consumed) or a
+		``None`` (a silent step - no probability draw is consumed) or a
 		``(pitch, velocity, duration)`` event.  Surviving events pass the
 		probability gate and, when ``no_overlap`` is set, the same-pitch check,
 		then land via ``self.note()``.
 
 		``(low, high)`` velocity tuples are resolved here, against the caller's
-		``rng`` — not left to ``self.note()``, which would draw from the pattern's
+		``rng`` - not left to ``self.note()``, which would draw from the pattern's
 		own RNG and silently ignore the ``seed=`` the caller passed.
 		"""
 
@@ -278,7 +278,7 @@ class PatternAlgorithmicMixin:
 		With ``spacing`` None the sequence is spread evenly across the whole pattern,
 		so every symbol is heard.  Given a spacing, events land that many beats apart
 		and the sequence is truncated to whatever fits in the bar.  Callers slice with
-		the returned count — ``sequence[:n_steps]`` — which is a no-op in the auto-fit
+		the returned count - ``sequence[:n_steps]`` - which is a no-op in the auto-fit
 		case, so one code path serves both.
 
 		Parameters:
@@ -288,7 +288,7 @@ class PatternAlgorithmicMixin:
 			noun: What the caller places, for the error message.
 
 		Returns:
-			A ``(step, n_steps)`` pair — beats between events, and how many to place.
+			A ``(step, n_steps)`` pair - beats between events, and how many to place.
 
 		Raises:
 			ValueError: If ``spacing`` is zero or negative.
@@ -318,9 +318,9 @@ class PatternAlgorithmicMixin:
 			velocity: MIDI velocity, or a ``(low, high)`` tuple for a
 				fresh random draw per hit.
 			duration: Note duration.
-			probability: Chance (0.0–1.0) that each pulse plays — 1.0 places them all, lower thins the rhythm.
+			probability: Chance (0.0–1.0) that each pulse plays - 1.0 places them all, lower thins the rhythm.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 			no_overlap: If True, skip steps where a note of the same pitch
 				already exists. Useful for layering ghost notes around
 				hand-placed anchors.
@@ -353,9 +353,9 @@ class PatternAlgorithmicMixin:
 			velocity: MIDI velocity, or a ``(low, high)`` tuple for a
 				fresh random draw per hit.
 			duration: Note duration.
-			probability: Chance (0.0–1.0) that each pulse plays — 1.0 places them all, lower thins the rhythm.
+			probability: Chance (0.0–1.0) that each pulse plays - 1.0 places them all, lower thins the rhythm.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 			no_overlap: If True, skip steps where a note of the same pitch
 				already exists. Useful for layering ghost notes around
 				hand-placed anchors.
@@ -401,11 +401,11 @@ class PatternAlgorithmicMixin:
 			duration: Note duration in beats (default 0.1).
 			grid: Number of steps to divide the pattern into. Defaults to the
 				pattern's ``default_grid``.
-			probability: Chance (0.0–1.0) that each hit plays — 1.0 places them all, lower thins.
+			probability: Chance (0.0–1.0) that each hit plays - 1.0 places them all, lower thins.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
 			no_overlap: If True, skip steps where a note of the same pitch already
 				exists. Useful for layering ghost notes around hand-placed anchors.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -539,7 +539,7 @@ class PatternAlgorithmicMixin:
 
 		Returns:
 			A ``List[float]`` of length ``grid`` where each value is a probability
-			multiplier from 0.0 to 1.0.  The list is a plain Python list — modify
+			multiplier from 0.0 to 1.0.  The list is a plain Python list - modify
 			it freely before passing to ``ghost_fill(bias=...)``.
 
 		Example:
@@ -672,12 +672,12 @@ class PatternAlgorithmicMixin:
 			seed: Fix the ghost layer for this call (an int); omit to use the
 				pattern's RNG.
 
-				**Tip — freeze the layer each cycle:**  ``seed=`` starts a fresh
-				random stream on every rebuild, so the same steps — and the same
-				``(low, high)`` velocity draws — are chosen on every cycle: the
+				**Tip - freeze the layer each cycle:**  ``seed=`` starts a fresh
+				random stream on every rebuild, so the same steps - and the same
+				``(low, high)`` velocity draws - are chosen on every cycle: the
 				ghost layer is locked in place.  The default ``self.rng``
 				advances state across rebuilds, so placement differs every cycle.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -688,7 +688,7 @@ class PatternAlgorithmicMixin:
 			p.ghost_fill("kick_1", density=0.2, velocity=(30, 45),
 			             bias="sixteenths", no_overlap=True)
 
-			# The same ghost layer every cycle — placement frozen
+			# The same ghost layer every cycle - placement frozen
 			p.ghost_fill("snare_1", density=0.15, velocity=(25, 40),
 			             bias="before", seed=42)
 			```
@@ -771,9 +771,9 @@ class PatternAlgorithmicMixin:
 				fresh random draw per hit.
 			duration: Note duration in beats.
 			no_overlap: If True, skip where same pitch already exists.
-			probability: Chance (0.0–1.0) that each hit plays — 1.0 places them all, lower thins.
+			probability: Chance (0.0–1.0) that each hit plays - 1.0 places them all, lower thins.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -834,7 +834,7 @@ class PatternAlgorithmicMixin:
 			velocities: One value per row.  Wins over ``velocity``.
 			duration: Note duration in beats.
 			no_overlap: If True, skip notes where same pitch already exists.
-			probability: Chance (0.0–1.0) that each live cell plays — 1.0 places them all, lower thins.
+			probability: Chance (0.0–1.0) that each live cell plays - 1.0 places them all, lower thins.
 			initial_state: The generation-0 grid.  ``"center"`` (default) lights a
 			      single cell at the centre; ``"random"`` fills cells with probability
 			      *density* (seed it with *seed* for a reproducible fill); or pass an
@@ -955,7 +955,7 @@ class PatternAlgorithmicMixin:
 			start: Name of the starting state.  Defaults to the first key
 				in ``transitions`` when not provided.
 			seed: Fix the walk for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Raises:
 			ValueError: If ``transitions`` or ``pitch_map`` is empty.
@@ -1046,7 +1046,7 @@ class PatternAlgorithmicMixin:
 			    tones this bar (e.g. from ``chord.tones(root)``).  Chord-tone
 			    pitch classes receive a ``chord_weight`` bonus inside ``state``.
 			seed: Fix the walk for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1111,7 +1111,7 @@ class PatternAlgorithmicMixin:
 		at different time scales.  The Fibonacci-word rule (``A → AB``,
 		``B → A``) spaces hits evenly but never quite repeats, so the pattern
 		keeps shifting against the bar.  Koch and dragon curve rules produce
-		fractal melodic contours.  (Hits land on the grid here — for events
+		fractal melodic contours.  (Hits land on the grid here - for events
 		placed *off* the grid by the golden ratio, see :meth:`golden`.)
 
 		With ``spacing=None`` (default) the entire expanded string is fitted
@@ -1135,7 +1135,7 @@ class PatternAlgorithmicMixin:
 			duration: Note duration in beats.
 			seed: Fix the stochastic-rule choices and velocity draws for this
 				call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1244,9 +1244,9 @@ class PatternAlgorithmicMixin:
 			velocity_b: Velocity for ``pitch_b`` (int or ``(low, high)``
 			    tuple).  Defaults to ``velocity``.
 			no_overlap: Skip steps where ``pitch`` is already sounding.
-			probability: Chance (0.0–1.0) that each active step plays — 1.0 places them all, lower thins.
+			probability: Chance (0.0–1.0) that each active step plays - 1.0 places them all, lower thins.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1310,7 +1310,7 @@ class PatternAlgorithmicMixin:
 			pitches: List of MIDI note numbers or note strings.  The alphabet
 			    size ``k`` is ``len(pitches)``.
 			window: Subsequence length ``n``.  The output has ``len(pitches) ** window``
-			    notes.  Keep small (2–4) for practical bar lengths — the cost is
+			    notes.  Keep small (2–4) for practical bar lengths - the cost is
 			    combinatorial in both arguments, so a window that is modest over
 			    two pitches is enormous over eight.  A window whose output would
 			    exceed the generated-note budget is reduced (warned once) to the
@@ -1319,9 +1319,9 @@ class PatternAlgorithmicMixin:
 			    into the bar; a float uses fixed spacing and truncates.
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises per note.
 			duration: Note duration in beats.
-			seed: Fix the velocity draws for this call (an int) — the note order
+			seed: Fix the velocity draws for this call (an int) - the note order
 			    itself is deterministic; omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1373,11 +1373,11 @@ class PatternAlgorithmicMixin:
 		repetition.
 
 		Give a single pitch (or drum name) for one voice, or a list to cycle a pool
-		through the placed notes in time order — the first note takes the first
+		through the placed notes in time order - the first note takes the first
 		pitch, and the pool repeats once exhausted.  The positions themselves never
 		change, so swapping one pitch for a pool re-voices a rhythm without moving it.
 
-		This shapes *time* only — the pool is walked in order, not chosen by the
+		This shapes *time* only - the pool is walked in order, not chosen by the
 		golden ratio.  For the Fibonacci integer sequence as pitch material, see
 		:meth:`fibonacci`.
 
@@ -1386,9 +1386,9 @@ class PatternAlgorithmicMixin:
 			count: Number of notes to place.
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises per note.
 			duration: Note duration in beats.
-			seed: Fix the velocity draws for this call (an int) — the timing
+			seed: Fix the velocity draws for this call (an int) - the timing
 				itself is deterministic; omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Raises:
 			ValueError: If ``pitches`` is an empty list.
@@ -1442,13 +1442,13 @@ class PatternAlgorithmicMixin:
 		rng: typing.Optional[random.Random] = None,
 	) -> "subsequence.pattern_builder.PatternBuilder":
 
-		"""Play Recamán's sequence — a melody that wanders off and never repeats.
+		"""Play Recamán's sequence - a melody that wanders off and never repeats.
 
 		The rule is *step back if you can, otherwise step forward*, by one at the first
 		note, two at the second, and so on.  Because the steps keep growing, the line
 		lurches ever wider, and the back-and-forth splits into **two voices**: alternate
 		notes sink while the ones between them climb, so a single line is heard as two
-		moving apart.  That wedge is the reason to reach for this — nothing else here
+		moving apart.  That wedge is the reason to reach for this - nothing else here
 		produces it, and it is deterministic, so the same call always gives it back.
 
 		It is at its best over one or two bars.  Left running much longer the sequence
@@ -1457,29 +1457,29 @@ class PatternAlgorithmicMixin:
 		Because the numbers grow without limit, they are read as *scale degrees plus
 		register*: each value picks a note from the pool and how many octaves up to put
 		it, which is what turns the widening into an audible opening-out.  Give a pool
-		of **one octave** — the degrees of your scale.  A multi-octave pool works, but
+		of **one octave** - the degrees of your scale.  A multi-octave pool works, but
 		it stacks octaves on octaves and the wedge gets very wide very fast.
 
 		The sister generator :meth:`fibonacci` always returns home; this one never does.
 
 		Parameters:
-			pitches: One octave of pitches — the degrees values are drawn from.
+			pitches: One octave of pitches - the degrees values are drawn from.
 			count: How many notes to place.  Defaults to the pattern's grid.
 			spacing: Beats between notes.  Omit to spread them across the bar.
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises per note.
 			duration: Note duration in beats.
 			start: The first value.  From 2 upward this is genuinely new material, and
 				the higher it is the longer the melody's opening descent.  ``0`` and
-				``1`` give the same shape, so step by more than one to hear a change —
+				``1`` give the same shape, so step by more than one to hear a change -
 				``start=2 + p.cycle * 3`` evolves the line every cycle.
 			skip: Start further along the sequence, discarding this many values.
 			octave_span: How many octaves the line may climb before it turns back.
 				Set to 0 to keep everything in one octave.
 			mapping: ``f(value, index)`` returning ``(pitch, velocity, duration)`` to
-				place, or None for a rest — full control over how numbers become notes.
-			seed: Fix the velocity draws for this call (an int) — the pitches and
+				place, or None for a rest - full control over how numbers become notes.
+			seed: Fix the velocity draws for this call (an int) - the pitches and
 				timing are deterministic; omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Raises:
 			ValueError: If ``pitches`` is empty, ``spacing`` is not positive, or
@@ -1580,13 +1580,13 @@ class PatternAlgorithmicMixin:
 
 		Each number is the sum of the previous two, folded into your pitch pool.  The
 		musical trick is that folding makes the sequence *repeat*, and the length it
-		repeats after is decided by the size of the pool — so the number of notes you
+		repeats after is decided by the size of the pool - so the number of notes you
 		hand it chooses the phrase length: a triad gives 8 steps, a pentatonic 20, a
 		seven-note scale 16, an octatonic 12, the full chromatic 24.  Called bare, it
 		plays exactly one complete cycle, so the phrase closes on itself.
 
 		Unlike :meth:`recaman`, which wanders off and never comes back, this always
-		returns home — pair them when you want one voice looping against one that
+		returns home - pair them when you want one voice looping against one that
 		doesn't.  For golden-ratio *timing* (which has no Fibonacci numbers in it at
 		all), see :meth:`golden`.
 
@@ -1599,19 +1599,19 @@ class PatternAlgorithmicMixin:
 			count: How many notes to place.  Omit for one complete cycle.
 			spacing: Beats between notes.  Omit to spread the whole cycle across the
 				bar, however long it is.  Setting a spacing fixes the note length
-				instead, so a cycle longer than the bar is cut off where the bar ends —
+				instead, so a cycle longer than the bar is cut off where the bar ends -
 				a 20-step cycle at ``spacing=0.25`` gets its first 16 notes.
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises per note.
 			duration: Note duration in beats.
 			a: The first number.  Defaults to 1.
 			b: The second number.  Defaults to 1.  ``(2, 1)`` gives the Lucas numbers,
 				a different cycle through the same pool.  Note many pairs are that same
-				cycle started elsewhere — ``(1, 3)`` is Lucas one step along.
+				cycle started elsewhere - ``(1, 3)`` is Lucas one step along.
 			mapping: ``f(value, index)`` returning ``(pitch, velocity, duration)`` to
-				place, or None for a rest — full control over how numbers become notes.
-			seed: Fix the velocity draws for this call (an int) — the pitches and
+				place, or None for a rest - full control over how numbers become notes.
+			seed: Fix the velocity draws for this call (an int) - the pitches and
 				timing are deterministic; omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Raises:
 			ValueError: If ``pitches`` is empty, or ``spacing`` is not positive.
@@ -1800,14 +1800,14 @@ class PatternAlgorithmicMixin:
 			feed_rate: Rate of U replenishment.  Default 0.055.
 			kill_rate: Rate of V removal.  Default 0.062.
 			steps: Number of simulation iterations.  More = more developed
-			    pattern.  Default 1000, and bounded at 20000 — the cost is
+			    pattern.  Default 1000, and bounded at 20000 - the cost is
 			    linear (about 3 ms per thousand) and a rebuild that overruns
 			    delays the whole pattern.  The pattern settles by about 2000
 			    in any case; beyond that it drifts rather than develops.
 			no_overlap: Skip steps where ``pitch`` is already sounding.
-			probability: Chance (0.0–1.0) that each active step plays — 1.0 places them all, lower thins.
+			probability: Chance (0.0–1.0) that each active step plays - 1.0 places them all, lower thins.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1873,7 +1873,7 @@ class PatternAlgorithmicMixin:
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises per note.
 			duration: Note duration in beats.
 			seed: Fix the walk for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1959,7 +1959,7 @@ class PatternAlgorithmicMixin:
 				organic thinning over time.
 			grid: Step grid size. Defaults to the pattern's ``default_grid``.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example::
 
@@ -2102,7 +2102,7 @@ class PatternAlgorithmicMixin:
 				stack on the same pulse.
 			pitch: Only ratchet notes matching this pitch (MIDI number or drum
 				name).  ``None`` (default) ratchets all notes regardless of
-				pitch — useful for melodic patterns such as arpeggios.
+				pitch - useful for melodic patterns such as arpeggios.
 			probability: Chance (0.0–1.0) that each note gets ratcheted.  Notes
 				that fail the check are left completely unchanged.  Default 1.0
 				(every note is ratcheted).
@@ -2119,14 +2119,14 @@ class PatternAlgorithmicMixin:
 				(0.0–1.0).  ``1.0`` = legato (sub-hits touch), ``0.5`` =
 				staccato (half the slot).  Default 0.5.
 			steps: Grid positions to ratchet (e.g. ``[0, 4, 12]``).  Notes are
-				classified to grid zones the same way ``thin()`` works — swing-
+				classified to grid zones the same way ``thin()`` works - swing-
 				shifted notes remain in their original zone.  ``None`` (default)
 				applies ratchet to all eligible notes.
 			grid: Grid resolution used for ``steps`` zone classification.
 				Defaults to the pattern's ``default_grid``.
 			seed: Fix the probability gating for this call (an int); omit to
 				use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Examples:
 			```python
@@ -2289,7 +2289,7 @@ class PatternAlgorithmicMixin:
 			spacing: Beat interval between steps.
 			seed: Fix the drift mutations and velocity draws for this call (an
 			    int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -2371,12 +2371,12 @@ class PatternAlgorithmicMixin:
 
 		**Transforms** (assigned deterministically per level):
 
-		- *Retrograde* — reverse the sequence.
-		- *Invert* — mirror each pitch around the first note.
-		- *Transpose* — shift all pitches by the interval between the first
+		- *Retrograde* - reverse the sequence.
+		- *Invert* - mirror each pitch around the first note.
+		- *Transpose* - shift all pitches by the interval between the first
 		  two notes.
-		- *Rotate* — shift the starting position by one step.
-		- *Scale intervals* — multiply intervals from the first note by 0.5
+		- *Rotate* - shift the starting position by one step.
+		- *Scale intervals* - multiply intervals from the first note by 0.5
 		  (compress) or 2.0 (expand), rounded to the nearest semitone.
 
 		An optional ``mutation`` layer randomly substitutes individual notes
@@ -2394,9 +2394,9 @@ class PatternAlgorithmicMixin:
 			duration: Note duration in beats.
 			spacing: Beat interval between steps.
 			seed: Fix the mutation substitutions and velocity draws for this
-			    call (an int) — the variation tree itself is deterministic;
+			    call (an int) - the variation tree itself is deterministic;
 			    omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python

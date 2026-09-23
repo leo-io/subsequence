@@ -37,14 +37,14 @@ Three ways to use this module:
        p.hit_steps(tr8s.BD, [0, 4, 8, 12], velocity=127)
        p.cc(tr8s.BD_TUNE, 64)
 
-``ROLAND_TR8S_DRUM_MAP`` also accepts General MIDI drum names — the unnumbered
+``ROLAND_TR8S_DRUM_MAP`` also accepts General MIDI drum names - the unnumbered
 ``"kick"`` / ``"snare"`` / ``"crash"`` / ``"ride"`` primaries as well as the
-numbered ``"kick_1"``, ``"hi_hat_closed"``, ``"side_stick"``, etc. — as aliases
+numbered ``"kick_1"``, ``"hi_hat_closed"``, ``"side_stick"``, etc. - as aliases
 for the matching TR-8S voices, a *faithful* subset only, covering the voices
 the machine genuinely has.  This lets GM-named patterns play on the TR-8S and
 lets it take part in symbolic mirroring (each device re-resolves a shared drum
 name through its own map).  Voices the TR-8S lacks (cowbell, tambourine,
-congas, splash/Chinese cymbals, …) are intentionally not aliased — naming one
+congas, splash/Chinese cymbals, …) are intentionally not aliased - naming one
 anyway is dropped with a one-time warning (never a wrong voice).  Canonical
 GM names come from `pymididefs.drums <https://github.com/simonholliday/PyMidiDefs>`_
 (``GM_DRUM_MAP``).

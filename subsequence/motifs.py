@@ -1,8 +1,8 @@
 """
-Motif and Phrase — immutable musical values.
+Motif and Phrase - immutable musical values.
 
 A :class:`Motif` is a short musical figure stored as a value: a frozen tuple
-of timed note events (with *specification* pitches — scale degrees, chord
+of timed note events (with *specification* pitches - scale degrees, chord
 tones, drum names, or absolute MIDI) plus an optional stream of control
 gestures (CC sweeps, pitch bends, NRPN/RPN moves), and an explicit length in
 beats.  A :class:`Phrase` is a frozen sequence of Motifs whose segmentation
@@ -10,25 +10,25 @@ is preserved.
 
 Values are frozen dataclasses: immutable, deterministic to construct,
 hashable, printable, and safe to define at module level in a live-coded
-file.  They carry no playback position — the engine owns position; values
+file.  They carry no playback position - the engine owns position; values
 are placed onto patterns with ``p.motif()`` / ``p.phrase()``.
 
 Pitch is resolved late: a stored :class:`Degree` or :class:`ChordTone`
 becomes a MIDI note only at placement, against the key/scale (and, where
 applicable, the chord) in effect at that event's own beat.  The same motif
-therefore sounds different under different harmony — by design.
+therefore sounds different under different harmony - by design.
 
 The combination algebra:
 
-- ``a + b`` — sequential: a Phrase of the two (segmentation preserved).
-- ``a.then(b)`` / ``Motif.join([...])`` — closed sequential concat (one longer Motif).
-- ``a & b`` / ``a.stack(b)`` — parallel merge (event union; length = max).
-- ``m * n`` — repetition: a Phrase of n segments (``m * 1`` is ``m``).
-- ``m.slice(start, end)`` — a window; a note keeps its whole duration and a ramp
+- ``a + b`` - sequential: a Phrase of the two (segmentation preserved).
+- ``a.then(b)`` / ``Motif.join([...])`` - closed sequential concat (one longer Motif).
+- ``a & b`` / ``a.stack(b)`` - parallel merge (event union; length = max).
+- ``m * n`` - repetition: a Phrase of n segments (``m * 1`` is ``m``).
+- ``m.slice(start, end)`` - a window; a note keeps its whole duration and a ramp
   keeps the piece of itself that falls inside, so windows of one gesture join up.
 
 Transforms are pure and return new values.  Time transforms (``reverse``,
-``rotate``, ``stretch``, ``slice``) carry control gestures with them — a
+``rotate``, ``stretch``, ``slice``) carry control gestures with them - a
 reversed rising sweep becomes a falling one; pitch- and note-scoped
 transforms (``transpose``, ``invert``, ``pitched``, ``accent``,
 ``with_velocity``, ``quantize``) leave control gestures untouched.
@@ -98,7 +98,7 @@ _CHORD_TONE_NAMES = {"root": 1, "third": 2, "fifth": 3, "seventh": 4}
 class Degree:
 
 	"""
-	A scale degree — 1-based, resolved against key + scale at placement.
+	A scale degree - 1-based, resolved against key + scale at placement.
 
 	Degree 1 is the tonic; 8 is the tonic an octave up (steps may exceed the
 	scale length and resolve into higher octaves).  ``octave`` shifts whole
@@ -121,7 +121,7 @@ class Degree:
 class ChordTone:
 
 	"""
-	An index into the current chord's tones — 1-based, resolved at placement.
+	An index into the current chord's tones - 1-based, resolved at placement.
 
 	Accepts an int (1 = root, 2 = third, ...) or one of the names
 	``"root"`` / ``"third"`` / ``"fifth"`` / ``"seventh"``.  ``octave``
@@ -171,7 +171,7 @@ class Approach:
 @dataclasses.dataclass(frozen=True)
 class CC:
 
-	"""A MIDI CC signal — number, or a name resolved at placement via the pattern's ``cc_name_map``."""
+	"""A MIDI CC signal - number, or a name resolved at placement via the pattern's ``cc_name_map``."""
 
 	control: typing.Union[int, str]
 
@@ -185,7 +185,7 @@ class PitchBend:
 @dataclasses.dataclass(frozen=True)
 class NRPN:
 
-	"""An NRPN parameter — number, or a name resolved at placement via the pattern's ``nrpn_name_map``."""
+	"""An NRPN parameter - number, or a name resolved at placement via the pattern's ``nrpn_name_map``."""
 
 	parameter: typing.Union[int, str]
 	fine: bool = False
@@ -195,10 +195,10 @@ class NRPN:
 @dataclasses.dataclass(frozen=True)
 class RPN:
 
-	"""An RPN parameter — number, or one of the standard RPN names (resolved at placement).
+	"""An RPN parameter - number, or one of the standard RPN names (resolved at placement).
 
 	The names are the MIDI specification's and there is no per-pattern map to
-	extend them, unlike CC and NRPN — so the vocabulary is genuinely closed and
+	extend them, unlike CC and NRPN - so the vocabulary is genuinely closed and
 	says so.
 	"""
 
@@ -271,7 +271,7 @@ def _refuse_captured_drum (origin: typing.Optional[str], verb: str, moved: str) 
 	"""Refuse to move a pitch that a capture resolved from a drum name.
 
 	The type guards elsewhere read the pitch, and a captured drum is an int
-	like any other note — so they never fire.  ``origin`` remembers which
+	like any other note - so they never fire.  ``origin`` remembers which
 	instrument the number came from, and moving it is the same wrongness
 	reached by a different route.
 	"""
@@ -292,15 +292,15 @@ class MotifEvent:
 	One timed note event inside a Motif.
 
 	``pitch`` is a specification: an absolute MIDI int, a drum name string,
-	a :class:`Degree`, :class:`ChordTone`, or :class:`Approach` — or None
+	a :class:`Degree`, :class:`ChordTone`, or :class:`Approach` - or None
 	for a pitch-stripped skeleton event (see :meth:`Motif.rhythm`), which
 	must be re-pitched via :meth:`Motif.pitched` before placement.
 	``velocity`` is an int or a ``(low, high)`` random-range tuple.
 
 	``origin`` names the drum a pitch was resolved *from*.  Only
-	:meth:`~subsequence.pattern_builder.PatternBuilder.capture` sets it —
+	:meth:`~subsequence.pattern_builder.PatternBuilder.capture` sets it -
 	capture reads notes back as absolute MIDI, so ``"kick"`` arrives here as
-	``36`` — and it is what lets the pitch-moving methods go on refusing a
+	``36`` - and it is what lets the pitch-moving methods go on refusing a
 	drum they can no longer see.
 	"""
 
@@ -322,7 +322,7 @@ class MotifEvent:
 
 	def _sort_key (self) -> tuple:
 
-		"""Canonical ordering key — makes parallel merge order-independent."""
+		"""Canonical ordering key - makes parallel merge order-independent."""
 
 		return (self.beat, _pitch_sort_key(self.pitch), _velocity_key(self.velocity), self.duration, self.probability)
 
@@ -335,7 +335,7 @@ class ControlEvent:
 
 	A discrete write has ``end=None`` and ``span=0.0``; a ramp interpolates
 	``start`` → ``end`` over ``span`` beats through the easing ``shape``.
-	Pulse density (``resolution=``) is deliberately not stored here — beats
+	Pulse density (``resolution=``) is deliberately not stored here - beats
 	and shapes are music; MIDI traffic density is set at the placement call.
 	"""
 
@@ -374,7 +374,7 @@ class ControlEvent:
 
 	def _sort_key (self) -> tuple:
 
-		"""Canonical ordering key — makes parallel merge order-independent."""
+		"""Canonical ordering key - makes parallel merge order-independent."""
 
 		end = self.start if self.end is None else self.end
 		return (
@@ -394,7 +394,7 @@ class ControlEvent:
 
 		For a whole ramp that is a fraction of the whole curve.  For a piece of
 		one it is a fraction of the piece, read off the part of the curve the
-		piece covers — so a window catching the second half of an eight-beat
+		piece covers - so a window catching the second half of an eight-beat
 		sweep plays the second half of the sweep, and not a fresh ramp between
 		the two values at its ends (#3010).
 		"""
@@ -420,7 +420,7 @@ class ControlEvent:
 
 		A whole ramp keeps its shape by name, so a named curve stays named all
 		the way to the builder verb.  A piece of one gets a function that walks
-		the piece's stretch of the real curve — and it is emitted between the
+		the piece's stretch of the real curve - and it is emitted between the
 		WHOLE gesture's start and end, not between the piece's own values.
 
 		That distinction is worth a sentence, because it is the difference
@@ -494,7 +494,7 @@ class Motif:
 	it runs to the next whole beat at or after the last slot the figure
 	occupies, silent slots included, so a bar-long idea ending in silence is
 	a bar long.  A length that would leave an event past the end is refused
-	rather than dropping it, while a note ringing past the end is fine — that
+	rather than dropping it, while a note ringing past the end is fine - that
 	is a tie over the barline.
 	"""
 
@@ -530,7 +530,7 @@ class Motif:
 	@classmethod
 	def empty (cls) -> "Motif":
 
-		"""The empty motif (zero events, zero length) — the identity for ``then``."""
+		"""The empty motif (zero events, zero length) - the identity for ``then``."""
 
 		return cls(events=(), length=0.0)
 
@@ -666,7 +666,7 @@ class Motif:
 		probabilities: typing.Any = 1.0,
 	) -> "Motif":
 
-		"""One pitch (usually a drum name) at a list of beat positions — the ``hit()`` convention."""
+		"""One pitch (usually a drum name) at a list of beat positions - the ``hit()`` convention."""
 
 		return cls._from_sequence([pitch] * len(beats), list(beats), velocities, durations, probabilities, length)
 
@@ -683,7 +683,7 @@ class Motif:
 	) -> "Motif":
 
 		"""
-		Grid placement — the ``sequence()`` convention: ``steps`` are 0-based
+		Grid placement - the ``sequence()`` convention: ``steps`` are 0-based
 		grid indices (sixteenths by default), ``pitches`` a scalar or
 		parallel list of MIDI ints or drum names.
 		"""
@@ -744,7 +744,7 @@ class Motif:
 		probabilities: typing.Any = 1.0,
 	) -> "Motif":
 
-		"""A named world-rhythm timeline as a value — ``Motif.preset("son_clave_3_2")``.
+		"""A named world-rhythm timeline as a value - ``Motif.preset("son_clave_3_2")``.
 
 		Looks a curated timeline up in the world-rhythm table (clave family,
 		West-African bell patterns, tresillo/cinquillo, samba) and lays its
@@ -755,7 +755,7 @@ class Motif:
 
 		Parameters:
 			name: A preset name (``KeyError``-style ValueError lists them all).
-			pitch: The voice — a drum name or MIDI int; defaults to the
+			pitch: The voice - a drum name or MIDI int; defaults to the
 				preset's General-MIDI voice (``"claves"``, ``"cowbell"``,
 				``"side_stick"``, ``"low_conga"``), so it sounds against the
 				standard GM drum map without a ``pitch=``.
@@ -865,70 +865,70 @@ class Motif:
 	@classmethod
 	def cc (cls, control: typing.Union[int, str], values: typing.List[int], beats: typing.List[float], length: typing.Optional[float] = None, probabilities: typing.Any = 1.0) -> "Motif":
 
-		"""Discrete CC writes at beat positions — mirrors ``p.cc()``; names resolve at placement."""
+		"""Discrete CC writes at beat positions - mirrors ``p.cc()``; names resolve at placement."""
 
 		return cls._control_writes(CC(control), list(values), list(beats), length, probabilities)
 
 	@classmethod
 	def cc_ramp (cls, control: typing.Union[int, str], start: int, end: int, beat_start: float = 0.0, beat_end: typing.Optional[float] = None, shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear", length: typing.Optional[float] = None, probability: float = 1.0) -> "Motif":
 
-		"""A CC value swept ``start`` → ``end`` over a beat range — mirrors ``p.cc_ramp()``."""
+		"""A CC value swept ``start`` → ``end`` over a beat range - mirrors ``p.cc_ramp()``."""
 
 		return cls._control_ramp(CC(control), start, end, beat_start, beat_end, shape, length, probability)
 
 	@classmethod
 	def pitch_bend (cls, values: typing.List[float], beats: typing.List[float], length: typing.Optional[float] = None, probabilities: typing.Any = 1.0) -> "Motif":
 
-		"""Discrete pitch-bend writes (-1.0 to 1.0) at beat positions — mirrors ``p.pitch_bend()``."""
+		"""Discrete pitch-bend writes (-1.0 to 1.0) at beat positions - mirrors ``p.pitch_bend()``."""
 
 		return cls._control_writes(PitchBend(), list(values), list(beats), length, probabilities)
 
 	@classmethod
 	def pitch_bend_ramp (cls, start: float, end: float, beat_start: float = 0.0, beat_end: typing.Optional[float] = None, shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear", length: typing.Optional[float] = None, probability: float = 1.0) -> "Motif":
 
-		"""Pitch bend swept ``start`` → ``end`` (-1.0 to 1.0) over a beat range — mirrors ``p.pitch_bend_ramp()``."""
+		"""Pitch bend swept ``start`` → ``end`` (-1.0 to 1.0) over a beat range - mirrors ``p.pitch_bend_ramp()``."""
 
 		return cls._control_ramp(PitchBend(), start, end, beat_start, beat_end, shape, length, probability)
 
 	@classmethod
 	def nrpn (cls, parameter: typing.Union[int, str], values: typing.List[int], beats: typing.List[float], fine: bool = False, null_reset: bool = True, length: typing.Optional[float] = None, probabilities: typing.Any = 1.0) -> "Motif":
 
-		"""Discrete NRPN parameter writes at beat positions — mirrors ``p.nrpn()``."""
+		"""Discrete NRPN parameter writes at beat positions - mirrors ``p.nrpn()``."""
 
 		return cls._control_writes(NRPN(parameter, fine=fine, null_reset=null_reset), list(values), list(beats), length, probabilities)
 
 	@classmethod
 	def nrpn_ramp (cls, parameter: typing.Union[int, str], start: int, end: int, beat_start: float = 0.0, beat_end: typing.Optional[float] = None, shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear", fine: bool = True, null_reset: bool = True, length: typing.Optional[float] = None, probability: float = 1.0) -> "Motif":
 
-		"""An NRPN value swept over a beat range — mirrors ``p.nrpn_ramp()``."""
+		"""An NRPN value swept over a beat range - mirrors ``p.nrpn_ramp()``."""
 
 		return cls._control_ramp(NRPN(parameter, fine=fine, null_reset=null_reset), start, end, beat_start, beat_end, shape, length, probability)
 
 	@classmethod
 	def rpn (cls, parameter: typing.Union[int, "subsequence.declarations.RpnParameter"], values: typing.List[int], beats: typing.List[float], fine: bool = False, null_reset: bool = True, length: typing.Optional[float] = None, probabilities: typing.Any = 1.0) -> "Motif":
 
-		"""Discrete RPN parameter writes at beat positions — mirrors ``p.rpn()``."""
+		"""Discrete RPN parameter writes at beat positions - mirrors ``p.rpn()``."""
 
 		return cls._control_writes(RPN(parameter, fine=fine, null_reset=null_reset), list(values), list(beats), length, probabilities)
 
 	@classmethod
 	def rpn_ramp (cls, parameter: typing.Union[int, "subsequence.declarations.RpnParameter"], start: int, end: int, beat_start: float = 0.0, beat_end: typing.Optional[float] = None, shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear", fine: bool = True, null_reset: bool = True, length: typing.Optional[float] = None, probability: float = 1.0) -> "Motif":
 
-		"""An RPN value swept over a beat range — mirrors ``p.rpn_ramp()``."""
+		"""An RPN value swept over a beat range - mirrors ``p.rpn_ramp()``."""
 
 		return cls._control_ramp(RPN(parameter, fine=fine, null_reset=null_reset), start, end, beat_start, beat_end, shape, length, probability)
 
 	@classmethod
 	def osc (cls, address: str, values: typing.List[float], beats: typing.List[float], length: typing.Optional[float] = None, probabilities: typing.Any = 1.0) -> "Motif":
 
-		"""Discrete OSC float sends at beat positions — mirrors ``p.osc()``."""
+		"""Discrete OSC float sends at beat positions - mirrors ``p.osc()``."""
 
 		return cls._control_writes(OSC(address), list(values), list(beats), length, probabilities)
 
 	@classmethod
 	def osc_ramp (cls, address: str, start: float, end: float, beat_start: float = 0.0, beat_end: typing.Optional[float] = None, shape: typing.Union["subsequence.declarations.EasingCurve", "subsequence.easing.EasingFn"] = "linear", length: typing.Optional[float] = None, probability: float = 1.0) -> "Motif":
 
-		"""An OSC float swept over a beat range — mirrors ``p.osc_ramp()``."""
+		"""An OSC float swept over a beat range - mirrors ``p.osc_ramp()``."""
 
 		return cls._control_ramp(OSC(address), start, end, beat_start, beat_end, shape, length, probability)
 
@@ -984,10 +984,10 @@ class Motif:
 		tessitura_strength: float = 0.6,
 	) -> "Motif":
 
-		"""Generate a melodic motif — rhythm first, pitches walked, a value out.
+		"""Generate a melodic motif - rhythm first, pitches walked, a value out.
 
 		The melody engine emitting a value: you give the **rhythm** (an onset
-		list in beats, or another motif whose rhythm to borrow — cross-pattern
+		list in beats, or another motif whose rhythm to borrow - cross-pattern
 		rhythm reuse is shared values); the engine walks pitches over it
 		through the soft scoring factors (NIR expectation, contour envelope,
 		tessitura regression, diversity), honouring any pins.
@@ -996,8 +996,8 @@ class Motif:
 		composition key/scale), so a generated hook transposes, varies, and
 		develops like a hand-written one.  ``scale=`` constrains *candidate
 		choice only*: a name or interval list masks which pitches the walk
-		may use, spelled relative to its best-fit reference (major or minor)
-		— bind it in a composition whose scale matches that family and
+		may use, spelled relative to its best-fit reference (major or minor) -
+		bind it in a composition whose scale matches that family and
 		resolution is exact.  An explicit MIDI pitch pool (a list of note
 		numbers) switches to absolute output (the sieve/atonal path).
 
@@ -1009,17 +1009,17 @@ class Motif:
 				in bars of ``p.bar_beats``.
 			scale: A scale name, an interval list, or an explicit MIDI
 				pitch pool.  ``None`` = the plain seven degrees.
-			contour: Envelope shaping the line's height over its span —
+			contour: Envelope shaping the line's height over its span -
 				``"arch"``, ``"valley"``, ``"ascending"``, ``"descending"``.
-			end_on: Degree the line must end on — sugar for ``pins={-1: ...}``.
+			end_on: Degree the line must end on - sugar for ``pins={-1: ...}``.
 				Degree semantics: raises with an explicit MIDI pool (pin the
 				exact note instead).
 			cadence: A cadence name (``"strong"``/``"soft"``/``"open"``/
-				``"fakeout"``) — the line closes on that cadence's melodic
+				``"fakeout"``) - the line closes on that cadence's melodic
 				degree (1 for the full closes and the fakeout, 5 for the
 				open half).  Sugar for ``end_on=``; conflicts with it, and
 				raises with an explicit MIDI pool like ``end_on=``.
-			pins: ``{position: degree}`` — 1-based note positions (``-1`` =
+			pins: ``{position: degree}`` - 1-based note positions (``-1`` =
 				the last, the Python idiom); the engine fills between.  With
 				an explicit MIDI pool there are no degrees to read, so each
 				pin is the exact MIDI note to play (``Degree`` pins raise).
@@ -1027,11 +1027,11 @@ class Motif:
 				keeps the most central candidates.
 			velocities / durations: Scalar or per-note list (the parallel-
 				list convention).
-			seed: Seed for the walk (required or warned — module-level
+			seed: Seed for the walk (required or warned - module-level
 				nondeterminism breaks live reload).
 			rng: Explicit stream (overrides ``seed``).
 			state: A ``MelodicState`` whose dials, scoring factors, and
-				melodic history seed the walk.  It is **copied** — building
+				melodic history seed the walk.  It is **copied** - building
 				a value never mutates a module-level live object.  The
 				candidate pool is not carried over: it is always rebuilt
 				from ``scale=`` (pass an explicit pool there instead),
@@ -1236,7 +1236,7 @@ class Motif:
 		"""
 		Parallel merge (the spelled form of ``&``): event union, length = max.
 
-		No implicit tiling — a short gesture stacked under a long figure
+		No implicit tiling - a short gesture stacked under a long figure
 		plays once.  Phrase operands flatten first.
 		"""
 
@@ -1263,7 +1263,7 @@ class Motif:
 		**A note keeps its whole duration** even where that runs past the end
 		of the window.  The sequencer already lets a note ring into the next
 		cycle, and cutting it here made a two-beat note at beat 3 last one beat
-		under a four-beat pattern and two under an eight-beat one — the same
+		under a four-beat pattern and two under an eight-beat one - the same
 		phrase, played differently for no musical reason (#3010).
 
 		**A ramp that began before the window is resumed**, not dropped.  It
@@ -1317,7 +1317,7 @@ class Motif:
 
 	def __add__ (self, other: typing.Any) -> "Phrase":
 
-		"""``a + b`` — sequential: a two-segment Phrase (segmentation preserved)."""
+		"""``a + b`` - sequential: a two-segment Phrase (segmentation preserved)."""
 
 		if isinstance(other, Motif):
 			return Phrase((self, other))
@@ -1326,7 +1326,7 @@ class Motif:
 
 	def __mul__ (self, count: int) -> typing.Union["Motif", "Phrase"]:
 
-		"""``m * n`` — repetition: a Phrase of n segments; ``m * 1`` is ``m``; ``m * 0`` is empty."""
+		"""``m * n`` - repetition: a Phrase of n segments; ``m * 1`` is ``m``; ``m * 0`` is empty."""
 
 		if not isinstance(count, int):
 			return NotImplemented
@@ -1343,7 +1343,7 @@ class Motif:
 
 	def __and__ (self, other: typing.Any) -> "Motif":
 
-		"""``a & b`` — parallel merge; the spelled form is :meth:`stack`."""
+		"""``a & b`` - parallel merge; the spelled form is :meth:`stack`."""
 
 		if isinstance(other, (Motif, Phrase)):
 			return self.stack(other)
@@ -1407,7 +1407,7 @@ class Motif:
 		"""Snap note onsets to the nearest multiple of *grid* beats (control gestures untouched).
 
 		An onset exactly midway between grid lines snaps LATER (round half
-		up) — every midpoint moves the same way, the predictable behaviour
+		up) - every midpoint moves the same way, the predictable behaviour
 		for a musician.  (Python's own ``round()`` is half-to-even, which
 		made exact midpoints snap in alternating directions.)
 		"""
@@ -1453,8 +1453,8 @@ class Motif:
 		"""One varied pitch: a small melodic nudge that always changes the note.
 
 		Degrees move by scale steps, MIDI ints by semitones, chord tones by
-		index; an Approach's target is nudged.  Drum names raise — a varied
-		drum is a different instrument, not a variation — and so does a
+		index; an Approach's target is nudged.  Drum names raise - a varied
+		drum is a different instrument, not a variation - and so does a
 		captured drum, which arrives as a number carrying its ``origin``.
 		"""
 
@@ -1488,7 +1488,7 @@ class Motif:
 		keep_contour: bool = False,
 	) -> "Motif":
 
-		"""Replace a few pitches, preserving the rhythm — the smallest variation.
+		"""Replace a few pitches, preserving the rhythm - the smallest variation.
 
 		Rhythm, velocities, durations, rests, and control gestures are
 		untouched; only the chosen notes' pitches move (by a small melodic
@@ -1496,17 +1496,17 @@ class Motif:
 
 		Parameters:
 			notes: How many pitched notes to vary (clamped to what exists).
-			position: Which notes — ``"end"`` (the tail, the default),
+			position: Which notes - ``"end"`` (the tail, the default),
 				``"start"``, or ``"anywhere"`` (drawn from the stream).
 			seed: Seed for the variation.  A standalone vary without a seed
-				warns — module-level nondeterminism breaks live reload.
+				warns - module-level nondeterminism breaks live reload.
 			rng: An explicit random stream (overrides ``seed``; used by
 				recipe machinery).
 			keep_contour: When True, the variation preserves the line's
-				CSEG — every varied note keeps its rank relations with
+				CSEG - every varied note keeps its rank relations with
 				every other note, so the melodic shape is identical (the
 				motif-identity guard).  Where no nudge can preserve the
-				contour, that note stays unchanged — shape wins over
+				contour, that note stays unchanged - shape wins over
 				motion.
 
 		Example:
@@ -1583,7 +1583,7 @@ class Motif:
 		Candidates are the usual small nudges, filtered to those keeping the
 		note's above/below/equal relation to every other pitched note.  One
 		rng draw happens regardless (stream stability); ``None`` means no
-		candidate preserves the shape — leave the note alone.
+		candidate preserves the shape - leave the note alone.
 		"""
 
 		_refuse_captured_drum(events[index].origin, "vary()", "varied")
@@ -1630,10 +1630,10 @@ class Motif:
 
 		"""Call → response: re-aim the tail to a stable degree.
 
-		The classic consequent move — the figure repeats but its last pitched
+		The classic consequent move - the figure repeats but its last pitched
 		note lands home (degree 1 by default; pass ``to=5`` for a half-close,
-		or a full ``Degree`` for register control).  Everything else —
-		rhythm, the other pitches, velocities, controls — is untouched.
+		or a full ``Degree`` for register control).  Everything else -
+		rhythm, the other pitches, velocities, controls - is untouched.
 
 		Degree content only: absolute MIDI has no degrees to re-aim (build
 		the call with ``motif([...])``), and drums raise.
@@ -1666,7 +1666,7 @@ class Motif:
 	def pitched (self, spec: PitchSpec) -> "Motif":
 
 		"""
-		Replace every pitch with one spec — a kick rhythm becomes a bass line.
+		Replace every pitch with one spec - a kick rhythm becomes a bass line.
 
 		``"root"`` / ``"third"`` / ``"fifth"`` / ``"seventh"`` become chord
 		tones; any other string is a drum name; ints are MIDI; Degree /
@@ -1696,7 +1696,7 @@ class Motif:
 
 	def onsets (self) -> typing.List[float]:
 
-		"""The note onset beats, in order — ready for rhythm-first generation."""
+		"""The note onset beats, in order - ready for rhythm-first generation."""
 
 		return [e.beat for e in self.events]
 
@@ -1708,8 +1708,8 @@ class Motif:
 		``steps=`` moves scale degrees diatonically (the sequencing move) and
 		raises on absolute-MIDI or drum content; ``semitones=`` is the
 		literal chromatic form for MIDI ints and degrees.  Drum motifs raise
-		on both — a transposed drum name is a different instrument, not a
-		transposition — and a captured drum raises too, because its number
+		on both - a transposed drum name is a different instrument, not a
+		transposition - and a captured drum raises too, because its number
 		still remembers which instrument it came from.
 		"""
 
@@ -1840,7 +1840,7 @@ def _pitch_label (pitch: PitchSpec) -> str:
 
 def _event_label (event: MotifEvent) -> str:
 
-	"""One event's pitch label — the drum name wherever a capture kept one."""
+	"""One event's pitch label - the drum name wherever a capture kept one."""
 
 	if event.origin is not None:
 		return event.origin
@@ -1874,7 +1874,7 @@ def _control_label (c: ControlEvent) -> str:
 @dataclasses.dataclass(frozen=True)
 class _PhraseRecipe:
 
-	"""Provenance of a generated phrase — what reroll() regenerates from.
+	"""Provenance of a generated phrase - what reroll() regenerates from.
 
 	Generated values carry their recipe (the generator spec and seed) so
 	per-region regeneration is possible; a hand-written or transformed
@@ -1926,7 +1926,7 @@ def _tile_source (motif: Motif, bars: int, unit_count: int, beats_per_bar: float
 
 	"""Validate the bars/unit arithmetic and tile the motif up to one unit.
 
-	A 1-bar hook in 2-bar units repeats — the unit is the tile, and
+	A 1-bar hook in 2-bar units repeats - the unit is the tile, and
 	answer()/vary() act on the whole tile (its tail is the unit's tail).
 	"""
 
@@ -1967,7 +1967,7 @@ class Phrase:
 	"""
 	A sequence of Motifs with segmentation preserved.
 
-	Segmentation is the unit of editing — it is what development and
+	Segmentation is the unit of editing - it is what development and
 	per-region regeneration operate on.  ``flatten()`` erases it into one
 	long Motif.  Length is the sum of segment lengths.
 
@@ -2010,16 +2010,16 @@ class Phrase:
 		beats_per_bar: float = 4.0,
 	) -> "Phrase":
 
-		"""Grow a motif into a phrase by a plan — the phrase generator.
+		"""Grow a motif into a phrase by a plan - the phrase generator.
 
 		``plan`` follows the standard form.  The literal form is a **list of
-		unit labels** — ``plan=["a", "a", "a", "b"]``, equivalently
+		unit labels** - ``plan=["a", "a", "a", "b"]``, equivalently
 		``["a"] * 3 + ["b"]``: the first label is the given motif, each new
 		label is a generated contrast unit (the source's rhythm, freshly
 		re-pitched), a repeated label is a restatement, and *bars* spreads
 		evenly across the units.  A bare string is a **recipe name** from
-		the curated table — ``plan="call_response"`` (call, answer, call,
-		varied answer) — reserved for plans whose semantics exceed a label
+		the curated table - ``plan="call_response"`` (call, answer, call,
+		varied answer) - reserved for plans whose semantics exceed a label
 		skeleton.  A letter string is not a plan: a sequence of labels is a
 		sequence, so it is a list.
 
@@ -2028,12 +2028,12 @@ class Phrase:
 
 		Parameters:
 			motif: The source unit (its length must be ``bars / len(units)``
-				bars — the plan's units tile the phrase exactly).
+				bars - the plan's units tile the phrase exactly).
 			bars: Phrase length in bars (must divide evenly by the unit
 				count).
 			plan: A list of unit labels, or a recipe name.
 			seed: Seed for the generated units.  Without one, develop()
-				warns — module-level nondeterminism breaks live reload.
+				warns - module-level nondeterminism breaks live reload.
 			beats_per_bar: Bar size in beats (the value is context-free;
 				4 is the common-time default).  In any other metre pass
 				``p.bar_beats``, which is one bar of the composition's.
@@ -2109,7 +2109,7 @@ class Phrase:
 		seed: typing.Optional[int] = None,
 	) -> "Phrase":
 
-		"""Regenerate only the named bars — rhythm and boundary pitches kept.
+		"""Regenerate only the named bars - rhythm and boundary pitches kept.
 
 		Within each named bar, the first and last pitched notes stay (the
 		boundary pins) and the interior pitches re-roll from a fresh per-bar
@@ -2118,7 +2118,7 @@ class Phrase:
 		drums, and control gestures are untouched.  Segmentation and the
 		recipe survive, so rerolls compose.
 
-		Only a phrase that carries a recipe can reroll — a hand-written or
+		Only a phrase that carries a recipe can reroll - a hand-written or
 		transformed phrase raises loudly (its notes no longer come from a
 		generator, so regenerating them would invent music).
 
@@ -2248,7 +2248,7 @@ class Phrase:
 
 	def stack (self, other: typing.Union[Motif, "Phrase"]) -> Motif:
 
-		"""The spelled form of ``&`` — flattens, then merges."""
+		"""The spelled form of ``&`` - flattens, then merges."""
 
 		return self.flatten().stack(other)
 
@@ -2260,7 +2260,7 @@ class Phrase:
 		than each segment being sliced against its own bounds.  The difference
 		is what happens to something that crosses an internal boundary: a note
 		ringing over it, or a ramp sweeping across it, used to lose everything
-		past the edge of the segment it started in — which undid
+		past the edge of the segment it started in - which undid
 		:meth:`rotate`'s promise that a note may ring past its segment, and
 		meant ``phrase.slice(0, phrase.length)`` was not the phrase (#3010).
 
@@ -2448,7 +2448,7 @@ def motif (
 	"""
 	The lowercase shortcut: a melody as 1-based scale degrees.
 
-	``subsequence.motif([5, 6, 5, 3])`` is ``Motif.degrees([5, 6, 5, 3])`` —
+	``subsequence.motif([5, 6, 5, 3])`` is ``Motif.degrees([5, 6, 5, 3])`` -
 	relative pitch is the primary form.  For absolute MIDI note numbers use
 	``Motif.notes([64, 65, 64, 60])``; implausibly large ints here raise so
 	a pasted MIDI list fails loud instead of squealing octaves up.
@@ -2476,23 +2476,23 @@ def sentence (
 	beats_per_bar: float = 4.0,
 ) -> Phrase:
 
-	"""The classical sentence, as a thin combinator — idea, idea, drive, close.
+	"""The classical sentence, as a thin combinator - idea, idea, drive, close.
 
 	Four units: the basic idea stated twice (the presentation), a generated
-	contrast unit (the continuation — the source's rhythm, freshly
+	contrast unit (the continuation - the source's rhythm, freshly
 	re-pitched), and a second contrast unit whose tail lands on the
 	cadence's close degree (the cadential close).  An 8-bar sentence from a
 	2-bar idea is the textbook proportion; a shorter idea tiles up to the
 	unit size first.
 
-	The melodic side of a cadence only — pair it with the harmonic side
+	The melodic side of a cadence only - pair it with the harmonic side
 	(``prog.cadence()``, ``Progression.generate(cadence=)``, or
 	``request_cadence()``) and the two arrive together.
 
 	Parameters:
-		motif: The basic idea (degree content — the close re-aims a degree).
+		motif: The basic idea (degree content - the close re-aims a degree).
 		bars: Sentence length (must divide evenly across the 4 units).
-		cadence: The close — ``"strong"`` lands on 1, ``"open"`` on 5,
+		cadence: The close - ``"strong"`` lands on 1, ``"open"`` on 5,
 			``"soft"``/``"fakeout"`` on 1 (theory aliases accepted).
 		seed: Seed for the generated continuation units (seed-or-warn).
 		beats_per_bar: Bar size in beats (context-free; 4 is the default).
@@ -2540,21 +2540,21 @@ def period (
 	beats_per_bar: float = 4.0,
 ) -> Phrase:
 
-	"""The classical period, as a thin combinator — question, then answer.
+	"""The classical period, as a thin combinator - question, then answer.
 
 	Two halves: the antecedent with its tail re-aimed to the open half-close
-	(degree 5 — the question), then the same material restated with its tail
+	(degree 5 - the question), then the same material restated with its tail
 	on the cadence's close degree (the answer).  The two halves differ
-	exactly at their closes — the open/closed contrast *is* the period.
+	exactly at their closes - the open/closed contrast *is* the period.
 
 	Deterministic: no notes are generated, only the two tail notes re-aim
 	(so there is no seed).  Vary the consequent yourself for a looser
 	restatement: ``period(a).reroll(bar=7, seed=4)``.
 
 	Parameters:
-		antecedent: The first half — a Motif, or a Phrase whose segmentation
+		antecedent: The first half - a Motif, or a Phrase whose segmentation
 			is kept (only its last segment's tail re-aims).
-		cadence: The consequent's close — ``"strong"`` lands on 1 (theory
+		cadence: The consequent's close - ``"strong"`` lands on 1 (theory
 			aliases accepted).
 		beats_per_bar: Bar size in beats, recorded for ``reroll()`` windows
 			(4 by default).  In any other metre pass ``p.bar_beats``.

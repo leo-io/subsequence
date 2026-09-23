@@ -1,7 +1,7 @@
 """Interval and scale definitions, plus the helpers that resolve them.
 
 Holds ``INTERVAL_DEFINITIONS`` (named scales and chords as semitone lists) and
-the functions that work against it — ``scale_notes``, ``scale_pitch_classes``,
+the functions that work against it - ``scale_notes``, ``scale_pitch_classes``,
 ``quantize_pitch``, ``register_scale`` and friends.
 """
 
@@ -204,7 +204,7 @@ def scale_notes (
 
 	Parameters:
 		key: Scale root as a note name (``"C"``, ``"F#"``, ``"Bb"``, etc.).
-		     This acts as a **pitch-class filter only** — it determines which
+		     This acts as a **pitch-class filter only** - it determines which
 		     semitone positions (0–11) are valid members of the scale, but does
 		     not affect which octave notes are drawn from. Notes are selected
 		     starting from ``low`` upward; ``key`` controls *which* notes are
@@ -247,15 +247,15 @@ def scale_notes (
 		subsequence.scale_notes("A", "minor_pentatonic", low=notes.A3, count=15)
 		# → [57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84, 86, 88, 91]
 
-		# Misalignment: key="E" but low=C4 — first note is C, not E
+		# Misalignment: key="E" but low=C4 - first note is C, not E
 		subsequence.scale_notes("E", "minor", low=60, count=4)
-		# → [60, 62, 64, 66]  (C D E F# — all in E natural minor, but starts on C)
+		# → [60, 62, 64, 66]  (C D E F# - all in E natural minor, but starts on C)
 
 		# Fix: derive key name from root_pitch so low is always in the scale
 		root_pitch = 64  # E4
 		key = subsequence.chords.PC_TO_NOTE_NAME[root_pitch % 12]  # → "E"
 		subsequence.scale_notes(key, "minor", low=root_pitch, count=4)
-		# → [64, 66, 67, 69]  (E F# G A — starts on the root)
+		# → [64, 66, 67, 69]  (E F# G A - starts on the root)
 		```
 	"""
 
@@ -355,7 +355,7 @@ def register_scale (
 	``scale_pitch_classes()``.
 
 	Built-in scale names (e.g. ``"minor"``, ``"hirajoshi"``) cannot be
-	overwritten.  Custom names may be re-registered freely — live reload
+	overwritten.  Custom names may be re-registered freely - live reload
 	re-runs registration on every save, so this must not raise.
 
 	Parameters:

@@ -1,4 +1,4 @@
-"""Instrument definitions — note maps, CC maps, and constants.
+"""Instrument definitions - note maps, CC maps, and constants.
 
 Each instrument module exports constants and lookup dictionaries that can be
 passed to ``@composition.pattern()`` via ``drum_note_map`` and ``cc_name_map``.

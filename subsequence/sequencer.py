@@ -1,4 +1,4 @@
-"""The ``Sequencer`` — clock, scheduling, and MIDI delivery.
+"""The ``Sequencer`` - clock, scheduling, and MIDI delivery.
 
 Owns the pulse clock, the event heap, and the output ports, turning scheduled
 patterns and callbacks into timed MIDI messages.  ``Composition`` drives one
@@ -284,12 +284,12 @@ class MidiEvent:
 @dataclasses.dataclass
 class _MirrorTarget:
 
-	"""A resolved fan-out destination — a ``(device, channel)`` plus an optional
+	"""A resolved fan-out destination - a ``(device, channel)`` plus an optional
 	per-device ``drum_note_map`` used to re-resolve mirrored drum names.
 
 	Constructed transiently inside ``schedule_pattern`` (never stored on the
 	Pattern, never public) purely for ergonomic attribute access in the
-	fan-out loops.  Stored mirror entries remain plain tuples — a dict-bearing
+	fan-out loops.  Stored mirror entries remain plain tuples - a dict-bearing
 	entry would be unhashable and could not live in the ``set`` used by
 	``_stop_pattern_notes``.
 	"""
@@ -303,7 +303,7 @@ def _to_target (entry: typing.Sequence[typing.Any]) -> _MirrorTarget:
 
 	"""Coerce a stored mirror entry to a ``_MirrorTarget``.
 
-	*entry* is ``(device, channel)`` or ``(device, channel, drum_note_map)`` —
+	*entry* is ``(device, channel)`` or ``(device, channel, drum_note_map)`` -
 	a tuple or list.  Branching on length here keeps the 2-vs-3 split in one
 	place (and off the typed ``MirrorSpec`` union).
 	"""
@@ -320,7 +320,7 @@ def _destination_pitch (note: typing.Any, target: _MirrorTarget, primary: bool) 
 	the name stays silent (returns None) rather than sounding a wrong number.
 
 	- A ``primary_unmapped`` note (its ``origin`` was absent from the pattern's
-	  own map) has no real primary pitch — only a mirror whose map contains the
+	  own map) has no real primary pitch - only a mirror whose map contains the
 	  name voices it; the primary and raw (map-less) mirrors return None.
 	- Otherwise the primary and raw 2-tuple mirrors copy ``note.pitch``; a
 	  symbolic (map-bearing) mirror re-resolves ``note.origin`` through its own
@@ -357,8 +357,8 @@ def new_event_loop () -> asyncio.AbstractEventLoop:
 	The clock sleeps to within 1 ms of each pulse and spins the rest, so a
 	sleep that overruns by more than that makes the pulse late.  On Linux the
 	default loop waits in epoll, and CPython's epoll selector rounds a timeout
-	up to whole milliseconds twice — once in Python, then again in C after a
-	float conversion — so a wait that rounds to 13 or 18 ms asks the kernel for
+	up to whole milliseconds twice - once in Python, then again in C after a
+	float conversion - so a wait that rounds to 13 or 18 ms asks the kernel for
 	a millisecond more.  Tempos whose pulse lands the sleep there (130 and 180
 	BPM among them) then run up to 1.5 ms late.  ``select()`` takes a
 	microsecond timeout and overruns by kernel wake-up latency alone, so that
@@ -471,7 +471,7 @@ class ScheduledCallbackSequence:
 
 	"""Tracks a self-rescheduling callback whose firing interval varies per hop.
 
-	The variable-interval counterpart to :class:`ScheduledCallback` — built
+	The variable-interval counterpart to :class:`ScheduledCallback` - built
 	for clocks that walk irregular spans (the harmonic clock under a bound
 	progression).  Each fire targets a *boundary* pulse; the callback's
 	return value sets the distance to the next boundary.
@@ -572,7 +572,7 @@ class Sequencer:
 				reduces clock jitter at the cost of ~1–5% extra CPU.  Set to False
 				to use pure ``asyncio.sleep()`` (lower CPU, higher jitter).
 			_jitter_log: Optional list to append per-pulse jitter values (seconds)
-				to during playback.  Intended for the clock jitter benchmark — not
+				to during playback.  Intended for the clock jitter benchmark - not
 				for general use.
 		"""
 
@@ -841,7 +841,7 @@ class Sequencer:
 		"""Record a MIDI message with an absolute pulse timestamp for later export.
 
 		*device* is the output port the message went to, and decides which track
-		it is saved on.  It defaults to :data:`CONDUCTOR` — the tempo and metre
+		it is saved on.  It defaults to :data:`CONDUCTOR` - the tempo and metre
 		markings, which belong to the file rather than to a synth.
 		"""
 
@@ -863,8 +863,8 @@ class Sequencer:
 
 		A DAW takes both from the file, and without them imports at its own
 		tempo and in 4/4, so every bar line after the first lands in the wrong
-		place (#2719).  A tempo set before playback — the constructor's own
-		``set_bpm`` among them — was recorded at pulse 0 already; the opening
+		place (#2719).  A tempo set before playback - the constructor's own
+		``set_bpm`` among them - was recorded at pulse 0 already; the opening
 		replaces it with the tempo playback actually starts at, so the file
 		states it once.
 
@@ -900,7 +900,7 @@ class Sequencer:
 
 		**The first device shares track 0 with the tempo and metre**, rather
 		than there being a conductor track of its own.  That keeps a
-		single-device recording — which is nearly all of them — exactly the
+		single-device recording - which is nearly all of them - exactly the
 		one-track file it has always been, so nothing downstream changes for a
 		piece that drives one synth.
 
@@ -1002,7 +1002,7 @@ class Sequencer:
 
 		By default the sequencer busy-waits for the final sub-millisecond of each
 		pulse interval to minimise clock jitter.  Call this to revert to pure
-		``asyncio.sleep()`` — lower CPU usage at the cost of higher jitter: a median of
+		``asyncio.sleep()`` - lower CPU usage at the cost of higher jitter: a median of
 		about 0.4 ms on Linux, against 1 μs with spin-wait on (see the README's
 		Performance section).
 
@@ -1020,7 +1020,7 @@ class Sequencer:
 		Note: If ``clock_follow`` is enabled and the sequencer is running,
 		this method will be ignored as the tempo is slaved to the external source.
 		When Ableton Link is active, the new BPM is proposed to the Link network
-		instead of being applied locally — the network-authoritative tempo is
+		instead of being applied locally - the network-authoritative tempo is
 		then picked up on the next pulse.
 		"""
 
@@ -1058,14 +1058,14 @@ class Sequencer:
 		Parameters:
 			target_bpm: The BPM to ramp toward.
 			bars: Duration of the transition in bars.
-			shape: Easing curve — a name string (e.g. ``"ease_in_out"``) or any
+			shape: Easing curve - a name string (e.g. ``"ease_in_out"``) or any
 			       callable that maps [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			       ``"ease_in_out"`` or ``"s_curve"`` are recommended for natural-
 			       sounding tempo changes.  See :mod:`subsequence.easing`.
 
 		Note:
 			When Ableton Link is active the shared network tempo is authoritative,
-			so a local ramp cannot be honoured — this call is ignored.  Use
+			so a local ramp cannot be honoured - this call is ignored.  Use
 			``set_bpm()`` to propose a new tempo to the Link session instead.
 		"""
 
@@ -1275,7 +1275,7 @@ class Sequencer:
 		"""Estimate BPM from recent MIDI clock tick arrival times, for display and recording.
 
 		*tick_time* is when the tick came off the cable, stamped on the input
-		port's callback thread — not when this loop got round to it (#3066).
+		port's callback thread - not when this loop got round to it (#3066).
 
 		A silence is not a slow tempo.  The averaging window is a beat wide, so
 		a master that stops sending and starts again leaves a window straddling
@@ -1366,11 +1366,11 @@ class Sequencer:
 		"""Push a MidiEvent onto the queue, stamping a FIFO tie-breaker.
 
 		The ``sequence`` field guarantees that events of one rank sharing a
-		``pulse`` dispatch in insertion order — required for NRPN/RPN bursts
+		``pulse`` dispatch in insertion order - required for NRPN/RPN bursts
 		and Bank Select before Program Change.  The rank is re-read here, so an
 		event altered after it was built still sorts by what it now is.
 
-		*owner*, when given, is the pattern this event belongs to — what lets
+		*owner*, when given, is the pattern this event belongs to - what lets
 		``unregister()`` release its notes without cutting a neighbour's on the
 		same channel (#2996).
 		"""
@@ -1407,7 +1407,7 @@ class Sequencer:
 		"""Fire-and-forget *coro* on the event loop, tracked and exception-safe.
 
 		Retains a strong reference until the task completes (so it cannot be
-		collected mid-flight) and surfaces any exception via the done-callback —
+		collected mid-flight) and surfaces any exception via the done-callback -
 		a bare ``asyncio.create_task`` drops both, silently losing a raising bar
 		or beat callback.
 		"""
@@ -1444,7 +1444,7 @@ class Sequencer:
 		**Tuning + mirrors**: ``CcEvent.channel`` and ``CcEvent.device`` overrides
 		(used by polyphonic microtonal tuning to rotate notes onto separate
 		channels) apply to the *primary* destination only.  Mirror destinations
-		always use their own pinned ``(device, channel)`` — i.e. a polyphonic-
+		always use their own pinned ``(device, channel)`` - i.e. a polyphonic-
 		tuning pattern mirrored to another synth will collapse all channel
 		rotations onto the mirror's single channel, losing per-note bend
 		isolation on that destination.  Apply tuning per-pattern if both ends
@@ -1720,12 +1720,12 @@ class Sequencer:
 		interval, this primitive lets the callback decide each hop: it is
 		called ``lookahead`` before every *boundary* pulse, receives that
 		boundary pulse, and returns the number of beats to the **next**
-		boundary — or ``None`` to stop.  Built for clocks that walk irregular
+		boundary - or ``None`` to stop.  Built for clocks that walk irregular
 		spans, e.g. the harmonic clock under a bound progression's
 		harmonic rhythm.
 
 		The first fire targets *start_pulse* as its boundary and is due
-		``lookahead`` before it (immediately, when that is already past —
+		``lookahead`` before it (immediately, when that is already past -
 		the same backshift idiom as the repeating scheduler).
 
 		Parameters:
@@ -1775,7 +1775,7 @@ class Sequencer:
 
 		"""Send a bare MIDI system-realtime message (clock, start, stop, continue).
 
-		These messages carry no channel or data bytes — they are sent directly to
+		These messages carry no channel or data bytes - they are sent directly to
 		the output port.  Used for MIDI clock output when ``clock_output`` is True.
 
 		**Latency-compensated, like every note.**  They used to go straight out
@@ -1787,7 +1787,7 @@ class Sequencer:
 
 		Parameters:
 			message_type: One of ``"clock"``, ``"start"``, ``"stop"``, ``"continue"``.
-			compensated: False sends immediately, for the Stop at shutdown —
+			compensated: False sends immediately, for the Stop at shutdown -
 				``stop()`` closes the ports straight afterwards, so a deferred
 				send would fire on a closed one, and a Stop arriving an offset
 				early at the very end of a piece costs nothing.
@@ -1955,14 +1955,14 @@ class Sequencer:
 
 		Playback stops advancing, sounding notes are released, and MIDI Stop
 		(0xFC) goes out when ``clock_output`` is on.  ``resume()`` continues
-		from the same pulse, beat and bar — unlike ``stop()``, which discards
+		from the same pulse, beat and bar - unlike ``stop()``, which discards
 		the position.
 
 		Takes effect on the clock loop's next turn (within a few milliseconds),
 		not on return: the ``"pause"`` event fires when the transport has
 		actually stopped, so a UI following it shows the real state rather than
 		assuming its own button worked.  Safe to call from any thread, and
-		idempotent — pausing a paused sequencer does nothing.
+		idempotent - pausing a paused sequencer does nothing.
 
 		**A note cut short by a pause is not re-struck on resume.**  Re-striking
 		would invent an articulation the composition never asked for; the
@@ -1971,7 +1971,7 @@ class Sequencer:
 		Refused, with a log line rather than silently, when the pulse is not
 		ours to hold: under ``clock_follow`` the tempo comes from the cable, and
 		under Ableton Link the transport belongs to the session.  Render mode is
-		refused too — its clock is simulated, so there is nothing to hold.
+		refused too - its clock is simulated, so there is nothing to hold.
 		"""
 
 		if not self.running or self._paused:
@@ -1996,7 +1996,7 @@ class Sequencer:
 
 		"""Continue playback from the pulse ``pause()`` held.
 
-		Sends MIDI Continue (0xFB) when ``clock_output`` is on — never Start
+		Sends MIDI Continue (0xFB) when ``clock_output`` is on - never Start
 		(0xFA), which would reset downstream hardware to the top of its own
 		pattern.  Idempotent: resuming a running sequencer does nothing.
 
@@ -2039,7 +2039,7 @@ class Sequencer:
 
 		The clock loop's inner ``while current_time >= next_pulse_time`` catches
 		up every overdue pulse in one pass, so a pause that left the deadline
-		where it was would fire the whole held span as a burst on resume — 480
+		where it was would fire the whole held span as a burst on resume - 480
 		pulses for a ten-second pause at 120 BPM.  Shifting the deadline by the
 		measured hold carries the remainder of the interrupted pulse across it
 		and puts the next pulse a proper interval after the resume instant.
@@ -2097,7 +2097,7 @@ class Sequencer:
 
 	async def _transport_pause (self) -> None:
 
-		"""Hold the position and release what is sounding — an external Stop.
+		"""Hold the position and release what is sounding - an external Stop.
 
 		Stop used to end the session outright, so a master's Stop button tore
 		down the piece and the Continue after it had nothing to resume.  It
@@ -2105,7 +2105,7 @@ class Sequencer:
 		feeding the BPM estimate, and the piece carries on from here.
 
 		The release is compensated because the rig is still live and a note_on
-		may be deferred on a device offset — the same reason ``pause()`` gives.
+		may be deferred on a device offset - the same reason ``pause()`` gives.
 		"""
 
 		if self._transport_held:
@@ -2122,7 +2122,7 @@ class Sequencer:
 
 	async def _transport_resume (self) -> None:
 
-		"""Carry on from the held pulse — an external Continue.
+		"""Carry on from the held pulse - an external Continue.
 
 		Never a restart: Continue means *from where you were*, which is the
 		whole of the difference between it and Start.
@@ -2146,7 +2146,7 @@ class Sequencer:
 
 	async def _restart_from_the_top (self) -> None:
 
-		"""Put the piece back at bar 0 — an external Start.
+		"""Put the piece back at bar 0 - an external Start.
 
 		A Start used to reset the pulse counter and nothing else, so the queues
 		kept their old numbering: a piece stopped six beats in went silent for
@@ -2201,7 +2201,7 @@ class Sequencer:
 		shape.  That is why the callbacks carry ``initial_start_pulse``: the
 		harmonic clock is scheduled one interval in so it does *not* fire at
 		pulse 0 (``HarmonicState`` already holds the tonic), while an ordinary
-		callback scheduled at 0 does — and nothing else distinguishes them.
+		callback scheduled at 0 does - and nothing else distinguishes them.
 		"""
 
 		async with self.pattern_lock:
@@ -2256,7 +2256,7 @@ class Sequencer:
 
 		Queued ``cc_forward`` messages drain a pulse at a time, so a pause
 		queues every value a knob passed through and the resume sent the lot
-		within a millisecond — the knob's journey rather than where it now is
+		within a millisecond - the knob's journey rather than where it now is
 		(#2967).  Notes and anything else queued keep every message, and the
 		controls that remain stay in the order they were last touched.
 
@@ -2524,7 +2524,7 @@ class Sequencer:
 		**The transport is the master's** (#3053).  Following it as a slave means:
 
 		- **Stop** holds the position and releases what is sounding.  It does
-			not end the session — only Ctrl+C or :meth:`stop` does — so the
+			not end the session - only Ctrl+C or :meth:`stop` does - so the
 			piece is still there when the master presses play again.
 		- **Continue** carries on from the held pulse.
 		- **Start** restarts from bar 0: it releases, drops every queued event
@@ -2580,12 +2580,12 @@ class Sequencer:
 
 		``link_clock.sync(period)`` is the timing gate, and what it takes is a
 		**period**: aalink resumes at the next *multiple* of it.  This used to
-		pass an absolute beat — ``beat_origin + pulse / PPQN`` — so every pulse
+		pass an absolute beat - ``beat_origin + pulse / PPQN`` - so every pulse
 		waited for a multiple of itself.  Pulse 0 waited for two bars, and every
 		pulse after it landed on a lattice twice as coarse as intended, so the
 		piece played at exactly **half tempo** while the display showed the
-		right BPM (#2993).  It stepped with ``sync(1 / PPQN)`` — the next pulse
-		lattice point — and reads the beat it is handed.
+		right BPM (#2993).  It stepped with ``sync(1 / PPQN)`` - the next pulse
+		lattice point - and reads the beat it is handed.
 
 		A stall is caught up pulse by pulse, exactly as the internal clock's
 		inner loop does, up to a beat's worth.  Past that, playing every missed
@@ -2899,7 +2899,7 @@ class Sequencer:
 			compensated: Route the note_offs through
 				:meth:`_dispatch_with_compensation` instead of sending them
 				straight to the port.  Needed whenever in-flight deferred sends
-				are being left to land — a note_on still waiting on its device
+				are being left to land - a note_on still waiting on its device
 				offset would otherwise be overtaken by its own note_off and ring
 				forever (the same hazard ``_stop_pattern_notes`` guards against).
 				``stop()`` leaves this False because it cancels the pending sends
@@ -2946,7 +2946,7 @@ class Sequencer:
 		"""Record a note-off at the current pulse for a note silenced outside the event queue.
 
 		*device* is the port the note was sounding on, so the release lands on
-		the same track as its note-on (#3067) — both callers take it straight
+		the same track as its note-on (#3067) - both callers take it straight
 		off the ``active_notes`` entry they are releasing.
 
 		Only ``_process_pulse`` records what it dispatches, so a release sent
@@ -3053,7 +3053,7 @@ class Sequencer:
 
 		Invariant: the offset is **per-device**, so every event for one device
 		shares it.  That is what preserves same-pulse FIFO order through
-		deferral — an NRPN burst (CC 99 → 98 → 6 → 38) on one device stays in
+		deferral - an NRPN burst (CC 99 → 98 → 6 → 38) on one device stays in
 		order because all four are deferred by the same amount.  A future
 		per-channel/per-message latency would break that and must not be added
 		without re-thinking burst ordering.
@@ -3069,13 +3069,13 @@ class Sequencer:
 		"""Call *send* now, or defer it by *device*'s latency offset.
 
 		Deferral is a wall-clock ``call_later`` so it is correct regardless of
-		tempo or clock source.  Skipped entirely in render mode (no real clock
-		— deferring would drop events from the rendered file) and when no event
+		tempo or clock source.  Skipped entirely in render mode (no real clock -
+		deferring would drop events from the rendered file) and when no event
 		loop is running (the synchronous test path).
 
 		**Nothing may overtake what is already deferred for its device.**  The
 		offset is read at dispatch, and ``set_device_latency`` can move it under
-		a performer's hand mid-piece — so a note_on deferred by 50 ms could have
+		a performer's hand mid-piece - so a note_on deferred by 50 ms could have
 		its own note_off dispatched under an offset of 0 and sent first, leaving
 		the note ringing for good.  Measured before this: the synth received
 		``['note_off', 'note_on']``, and ``active_notes`` had already forgotten

@@ -73,7 +73,7 @@ class PatternMidiMixin:
 
 		"""Walk from pulse_start to pulse_end, calling event_fn(pulse, value) at each step.
 
-		The pulse-domain kernel shared by every ramp on this mixin — the
+		The pulse-domain kernel shared by every ramp on this mixin - the
 		beat-based ramps via :meth:`_ramp_pulses` and the note-correlated pitch
 		bends via :meth:`_generate_bend_events`.  ``event_fn`` receives the pulse
 		position and the linearly-interpolated (then eased) value, and is
@@ -122,7 +122,7 @@ class PatternMidiMixin:
 		and ``osc_ramp()``.
 
 		A ramp starting before beat 0 wraps from the end, as a note does, and
-		keeps its length — so it crosses the cycle's end and lands each event
+		keeps its length - so it crosses the cycle's end and lands each event
 		inside the pattern rather than before it (#3005).  Wrapping the start
 		alone would leave the span negative, and a negative span emits nothing
 		at all.
@@ -161,7 +161,7 @@ class PatternMidiMixin:
 				raises, naming it: MIDI cannot carry it, so it would have
 				been dropped at every send (#3004).
 			value: CC value (0–127); out-of-range values are clamped, as on
-				every sibling verb — a computed value running past an end is
+				every sibling verb - a computed value running past an end is
 				a controller reaching its limit, not a mistake.
 			beat: Beat position within the pattern.
 		"""
@@ -208,7 +208,7 @@ class PatternMidiMixin:
 			resolution: Pulses between CC messages (1 = every pulse, ~20ms at 120 BPM).
 				Higher values (e.g. 2 or 4) reduce MIDI traffic density but may sound
 				stepped at slow tempos.
-			shape: Easing curve — a name string (e.g. ``"exponential"``) or any
+			shape: Easing curve - a name string (e.g. ``"exponential"``) or any
 			       callable that maps [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			       See :mod:`subsequence.easing` for available shapes.
 		"""
@@ -277,7 +277,7 @@ class PatternMidiMixin:
 			resolution: Pulses between pitch bend messages (1 = every pulse).
 				Higher values (e.g. 2 or 4) reduce MIDI traffic density but may sound
 				stepped at slow tempos.
-			shape: Easing curve — a name string (e.g. ``"ease_out"``) or any
+			shape: Easing curve - a name string (e.g. ``"ease_out"``) or any
 			       callable that maps [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			       See :mod:`subsequence.easing` for available shapes.
 		"""
@@ -312,7 +312,7 @@ class PatternMidiMixin:
 
 		"""Emit the two-CC parameter-select pair (NRPN: 99/98, RPN: 101/100).
 
-		Events are emitted on the pattern's channel — leaving ``CcEvent.channel``
+		Events are emitted on the pattern's channel - leaving ``CcEvent.channel``
 		unset (None) lets the sequencer fall through to ``pattern.channel``
 		at dispatch time, which is the normal behaviour for every other CC
 		method on this mixin.
@@ -436,7 +436,7 @@ class PatternMidiMixin:
 		Send a single NRPN parameter write at a beat position.
 
 		NRPN (Non-Registered Parameter Number) addresses synth-specific
-		parameters that don't fit into the 128 standard CC slots — Sequential,
+		parameters that don't fit into the 128 standard CC slots - Sequential,
 		Korg, Roland, Elektron and others use it heavily for filter cutoff,
 		envelope amounts, oscillator detune, and similar deep parameters.
 		Many such parameters need values beyond 0–127 (e.g. 0–1023, 0–254);
@@ -454,7 +454,7 @@ class PatternMidiMixin:
 			beat: Beat position within the pattern.
 			fine: If True, send 14-bit value via Data Entry MSB+LSB
 				(CC 6 + CC 38).  If False (default), send only Data Entry
-				MSB — sufficient for the common 0–127 range.
+				MSB - sufficient for the common 0–127 range.
 			null_reset: If True (default), follow with the RPN null sentinel
 				to deselect the active parameter and prevent stray later
 				CC 6 / 38 messages from hitting it.
@@ -493,8 +493,8 @@ class PatternMidiMixin:
 		Send a single RPN parameter write at a beat position.
 
 		RPN (Registered Parameter Number) addresses the small standardised
-		set of parameters defined by the MIDI specification — pitch bend
-		range, master tuning, modulation depth — supported by virtually any
+		set of parameters defined by the MIDI specification - pitch bend
+		range, master tuning, modulation depth - supported by virtually any
 		MIDI synth.  String names resolve via ``pymididefs.rpn.RPN_MAP``
 		out of the box, no map needed.
 
@@ -561,7 +561,7 @@ class PatternMidiMixin:
 		**Another ramp or one-shot in the window is safe** (#3070).  A second
 		``nrpn_ramp``, an ``rpn_ramp``, or a one-shot ``nrpn()``/``rpn()``
 		takes the channel's selection, which used to redirect every later step
-		of this ramp — a one-shot's default ``null_reset`` sent them to the NULL
+		of this ramp - a one-shot's default ``null_reset`` sent them to the NULL
 		parameter, where they did nothing at all.  The end of the build now
 		re-selects wherever the selection has drifted, and only there, so a ramp
 		on its own still emits exactly the messages described above.
@@ -588,7 +588,7 @@ class PatternMidiMixin:
 			beat_start: Beat position to begin the ramp.
 			beat_end: Beat position to end the ramp.  Defaults to pattern length.
 			resolution: Pulses between Data Entry messages (default 4).
-			shape: Easing curve — string name or callable [0, 1] → [0, 1].
+			shape: Easing curve - string name or callable [0, 1] → [0, 1].
 			fine: If True (default), use full 14-bit Data Entry MSB+LSB.
 			null_reset: If True (default), append the null sentinel at the
 				end of the ramp (not per step).
@@ -713,7 +713,7 @@ class PatternMidiMixin:
 			```python
 			@composition.pattern(channel=1, beats=4)
 			def strings (p):
-			    # GM — no bank needed
+			    # GM - no bank needed
 			    p.program_change(48)
 
 			    # Roland JV-1080 bank 1, patch 48
@@ -764,7 +764,7 @@ class PatternMidiMixin:
 		SysEx messages allow deep integration with synthesizers and other
 		hardware: patch dumps, parameter control, and vendor-specific commands.
 		The ``data`` argument should contain only the inner payload bytes,
-		without the surrounding ``0xF0`` / ``0xF7`` framing — mido adds those
+		without the surrounding ``0xF0`` / ``0xF7`` framing - mido adds those
 		automatically.
 
 		Parameters:
@@ -773,7 +773,7 @@ class PatternMidiMixin:
 
 		Example:
 			```python
-			# GM System On — reset a GM-compatible device to defaults
+			# GM System On - reset a GM-compatible device to defaults
 			p.sysex([0x7E, 0x7F, 0x09, 0x01])
 			```
 		"""
@@ -812,7 +812,7 @@ class PatternMidiMixin:
 
 		Parameters:
 			address: OSC address path (e.g. ``"/mixer/fader/1"``).
-			``*args``: OSC arguments — float, int, str, or bytes.
+			``*args``: OSC arguments - float, int, str, or bytes.
 			beat: Beat position within the pattern (default 0.0).
 
 		Example:
@@ -864,11 +864,11 @@ class PatternMidiMixin:
 			end: Ending float value.
 			beat_start: Beat position to begin the ramp (default 0.0).
 			beat_end: Beat position to end the ramp. Defaults to pattern length.
-			resolution: Pulses between OSC messages (default 4 — approximately
+			resolution: Pulses between OSC messages (default 4 - approximately
 				6 messages per beat at 120 BPM, which is smooth for fader
 				automation while keeping UDP traffic light). Use ``resolution=1``
 				for pulse-level precision.
-			shape: Easing curve — a name string (e.g. ``"ease_in"``) or any
+			shape: Easing curve - a name string (e.g. ``"ease_in"``) or any
 			       callable that maps [0, 1] → [0, 1]. Defaults to ``"linear"``.
 			       See :mod:`subsequence.easing` for available shapes.
 
@@ -914,7 +914,7 @@ class PatternMidiMixin:
 		Used by ``bend()``, ``portamento()``, and ``slide()``.  Delegates the
 		span/resolution walk (including the emit-the-endpoint rule) to
 		:meth:`_ramp_pulse_span` and contributes only the pitchwheel
-		conversion — normalised value scaled to 14-bit and clamped — appending
+		conversion - normalised value scaled to 14-bit and clamped - appending
 		events directly to ``self._pattern.cc_events``.
 
 		Parameters:
@@ -967,7 +967,7 @@ class PatternMidiMixin:
 				(0.0 = note onset, default).
 			end: Fraction of the note's duration at which the ramp ends
 				(1.0 = note end, default).
-			shape: Easing curve — a name string (e.g. ``"ease_in"``) or any
+			shape: Easing curve - a name string (e.g. ``"ease_in"``) or any
 			       callable mapping [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			resolution: Pulses between pitch bend messages.
 
@@ -1069,11 +1069,11 @@ class PatternMidiMixin:
 
 		Parameters:
 			time: Fraction of each note's duration used for the glide
-				(default 0.15 — last 15% of the note).
+				(default 0.15 - last 15% of the note).
 			shape: Easing curve.  Defaults to ``"linear"``.
 			resolution: Pulses between pitch bend messages.
 			bend_range: Instrument's pitch wheel range in semitones
-				(default 2.0 — standard ±2 st).  Pairs with intervals larger
+				(default 2.0 - standard ±2 st).  Pairs with intervals larger
 				than this value are skipped.  Pass ``None`` to disable range
 				checking and always generate the bend (large intervals are
 				clamped to ±1.0).
@@ -1091,7 +1091,7 @@ class PatternMidiMixin:
 			# Wide bend range (synth set to ±12 semitones)
 			p.portamento(time=0.2, bend_range=12)
 
-			# No range limit — bend as far as MIDI allows
+			# No range limit - bend as far as MIDI allows
 			p.portamento(time=0.1, bend_range=None)
 			```
 		"""
@@ -1216,7 +1216,7 @@ class PatternMidiMixin:
 			wrap: If ``True`` (default), include a wrap-around slide from the
 				last note back toward the first.
 			extend: If ``True`` (default), extend the preceding note's duration
-				to reach the slide target's onset — 303-style legato through
+				to reach the slide target's onset - 303-style legato through
 				the glide.
 
 		Raises:

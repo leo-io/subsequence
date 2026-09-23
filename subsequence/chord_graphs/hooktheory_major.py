@@ -32,7 +32,7 @@ class HooktheoryMajor (subsequence.chord_graphs.ChordGraph):
 
 	The same seven diatonic triads as :class:`DiatonicMajor`, but the
 	transition weights follow real songwriting frequencies (Hooktheory-informed)
-	rather than textbook function — so the walk gravitates to the four-chord
+	rather than textbook function - so the walk gravitates to the four-chord
 	loops that dominate popular music (I–V–vi–IV and its rotations) and uses
 	iii sparingly.  Optionally colours the dominant with a seventh.
 	"""

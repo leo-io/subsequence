@@ -324,13 +324,13 @@ def register_chord_quality (
 
 	"""Register a custom chord quality for use everywhere chords are used.
 
-	The counterpart to :func:`subsequence.intervals.register_scale` — it opens
+	The counterpart to :func:`subsequence.intervals.register_scale` - it opens
 	the quality table so quartal stacks, clusters, and extended chords become
 	first-class symbolic chords: they work in progressions, graphs, voice
 	leading, and ``describe()`` output.
 
 	Built-in qualities (e.g. ``"minor"``) cannot be overwritten.  Custom names
-	may be re-registered freely — live reload re-runs registration on every
+	may be re-registered freely - live reload re-runs registration on every
 	save, so this must not raise.
 
 	Parameters:
@@ -340,7 +340,7 @@ def register_chord_quality (
 			with 0, ascend strictly, and stay within 0–24 (extensions reach
 			past the octave).
 		suffix: Optional chord-name suffix.  When given, ``parse_chord()``
-			accepts ``"A" + suffix`` and ``Chord.name()`` prints it — so
+			accepts ``"A" + suffix`` and ``Chord.name()`` prints it - so
 			``register_chord_quality("minor_9th", [0, 3, 7, 10, 14], suffix="m9")``
 			makes ``"Am9"`` parse from then on.  Must not collide with a
 			built-in suffix.

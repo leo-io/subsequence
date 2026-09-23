@@ -1,11 +1,11 @@
 """
-MIDI device plumbing — discovering, opening, and registering hardware ports.
+MIDI device plumbing - discovering, opening, and registering hardware ports.
 
 Provides interactive/automatic output and input device selection, the
 multi-device registry used by the sequencer, and the ``bank_select()``
 helper for addressing synth banks beyond the first 128 programs.
 
-Device names are matched as globs — see :func:`match_device_names`.  Most
+Device names are matched as globs - see :func:`match_device_names`.  Most
 systems put a number in the name that moves between runs, so pinning the
 full name tends to break; a pattern like ``"*U6MIDI Pro *:0"`` survives.
 """
@@ -30,7 +30,7 @@ class DeviceSelectionError(RuntimeError):
 	Kept distinct from the plain ``RuntimeError`` that a failed port open raises,
 	because the two want opposite handling: a port that will not open is logged
 	and playback continues without it, whereas an unresolved pattern must reach
-	the caller — it means the wrong instrument (or no instrument) would play.
+	the caller - it means the wrong instrument (or no instrument) would play.
 	"""
 
 
@@ -39,7 +39,7 @@ class MidiDeviceRegistry:
 	"""Ordered registry of named MIDI ports (output or input).
 
 	Devices are stored in insertion order.  Index 0 is always the first
-	(or only) device — the default for all APIs that do not specify a device.
+	(or only) device - the default for all APIs that do not specify a device.
 	Devices can be looked up by integer index or by name string.
 	``None`` always resolves to index 0.
 
@@ -132,7 +132,7 @@ class MidiDeviceRegistry:
 
 		"""Set the physical output latency (milliseconds) for *device*.
 
-		*latency_ms* must be non-negative — a device cannot sound before it is
+		*latency_ms* must be non-negative - a device cannot sound before it is
 		triggered, so a negative output latency is meaningless.  Raises
 		``ValueError`` for a negative value or an unknown device.
 		"""
@@ -161,8 +161,8 @@ class MidiDeviceRegistry:
 
 		"""Return the name *device* is registered under, or ``None`` if unknown.
 
-		A placeholder has a name like any other device (#2997) — it is the port
-		that is missing, not the identity — so a recording can still label the
+		A placeholder has a name like any other device (#2997) - it is the port
+		that is missing, not the identity - so a recording can still label the
 		track a failed device's parts were written to (#3067).
 		"""
 
@@ -210,7 +210,7 @@ class MidiDeviceRegistry:
 		"""Iterate over ``(index, port)`` for the open ports; placeholders are skipped.
 
 		The counterpart to ``__iter__`` for anything that has to treat each
-		device differently — latency compensation needs the index to look the
+		device differently - latency compensation needs the index to look the
 		offset up, and a bare port cannot be turned back into one (#3069).
 		"""
 
@@ -261,8 +261,8 @@ def match_device_names (pattern: str, names: typing.Sequence[str]) -> typing.Lis
 
 	Device names carry a number that moves.  On Linux,
 	``U6MIDI Pro:U6MIDI Pro Port 1 16:0`` puts the ALSA sequencer client id
-	(``16``) in the middle — handed out in registration order, so it differs
-	between runs — while the port index after the colon (``0``) stays put.
+	(``16``) in the middle - handed out in registration order, so it differs
+	between runs - while the port index after the colon (``0``) stays put.
 	Virtual ports are the worst offenders, landing at 128 and upward in whatever
 	order things happened to start.  Wildcards let a pattern pin the part that
 	holds still and ignore the part that does not.
@@ -275,7 +275,7 @@ def match_device_names (pattern: str, names: typing.Sequence[str]) -> typing.Lis
 	device is chosen even if the pattern also appears inside longer names.  This
 	is what lets a full device name stay unambiguous forever.
 
-	Prefer ``*`` to ``?`` — ``?`` matches a single character, so a pattern written
+	Prefer ``*`` to ``?`` - ``?`` matches a single character, so a pattern written
 	for ``16:0`` quietly stops matching once ids reach three digits.
 
 	Keep the trailing port index.  A multi-port interface reports one name per
@@ -328,7 +328,7 @@ def _choose_device_interactively (
 
 	Raises when there is no terminal to ask.  A menu printed into a service
 	manager, a scheduled job, or an SSH session without a TTY waits for an answer
-	that can never arrive — an indefinite hang with nothing in the log — so an
+	that can never arrive - an indefinite hang with nothing in the log - so an
 	unattended run ends the call instead, carrying *hint* so the log says what to
 	pass next time.  Each caller decides whether that becomes a raise or its own
 	documented failure return.
@@ -382,8 +382,8 @@ def select_output_device (device_name: typing.Optional[str] = None) -> typing.Tu
 	- If multiple devices exist, prompts the user to choose one from the console.
 	- If no devices exist, logs an error and returns None.
 
-	Every failure — no match, no devices, or a choice that cannot be put to a
-	human on an unattended run — takes the same documented exit: log what went
+	Every failure - no match, no devices, or a choice that cannot be put to a
+	human on an unattended run - takes the same documented exit: log what went
 	wrong and how to fix it, then return ``(None, None)``.  Playback continues
 	without that port rather than raising.
 
@@ -476,7 +476,7 @@ def select_input_device (device_name: typing.Optional[str] = None, callback: typ
 	another input: MIDI input drives clock-follow and live note capture, so
 	silently listening to the wrong device would desynchronise or mis-record a
 	performance.  For the same reason a pattern matching several devices asks
-	which you meant rather than guessing — and says so plainly when there is no
+	which you meant rather than guessing - and says so plainly when there is no
 	terminal to ask.  The device actually opened is logged, so a pattern that
 	resolved to something unintended is visible in the session log.
 

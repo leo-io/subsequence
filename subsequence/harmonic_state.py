@@ -233,17 +233,17 @@ class HarmonicState:
 		"""
 		Combine three forces that shape chord transition probabilities:
 
-		1. **Key gravity** — blends functional pull (tonic, dominant) with
+		1. **Key gravity** - blends functional pull (tonic, dominant) with
 		   full diatonic pull, controlled by ``key_gravity_blend``.  The
 		   public spelling is ``harmony(key_pull=)``, which runs the other
 		   way: ``key_gravity_blend = 1 - key_pull``.  At a blend of 1.0 the
 		   boost is simply "is this chord diatonic?", which is true of every
-		   chord in a single-key style — so 1.0 is *no* pull, and that was
+		   chord in a single-key style - so 1.0 is *no* pull, and that was
 		   the old default.
-		2. **Melodic inertia (NIR)** — Narmour's cognitive expectation
+		2. **Melodic inertia (NIR)** - Narmour's cognitive expectation
 		   model favoring continuation after small steps and reversal
 		   after large leaps, controlled by ``nir_strength``.
-		3. **Root diversity** — exponential damping that discourages
+		3. **Root diversity** - exponential damping that discourages
 		   revisiting a root pitch class heard recently, controlled by
 		   ``root_diversity``. Each recent chord sharing the target's
 		   root multiplies the weight by ``root_diversity`` (default
@@ -277,7 +277,7 @@ class HarmonicState:
 
 		"""History bookkeeping for one transition: the outgoing chord enters history.
 
-		The first half of :meth:`step` — exposed so a constrained walk can
+		The first half of :meth:`step` - exposed so a constrained walk can
 		interleave it with its own draws (``before_choice``) and the NIR
 		weighting sees exactly the context it would live.
 		"""
@@ -292,15 +292,15 @@ class HarmonicState:
 
 		A pin, a cadence landed by fiat, a bound progression's span or a
 		borrowed chord can put the harmony somewhere the style never goes.
-		That chord sounds where it was placed — what it must not do is stop
+		That chord sounds where it was placed - what it must not do is stop
 		the piece, and it did: a node with no edges was walked to itself for
 		ever, so ``pin_chord(8, "E7")`` played E7 to the end of the song, and
 		``section_cadence("verse", "open")`` left dorian sitting on G (#2992).
 
-		Decision 1 of #2991 — same root, else home.  A foreign chord carries
+		Decision 1 of #2991 - same root, else home.  A foreign chord carries
 		on as the style's own chord on that root would: E7 continues like Em,
-		Fm like F.  Where the style has nothing on that root at all — A#7 in
-		C major — the next chord is home, with no draw to make.
+		Fm like F.  Where the style has nothing on that root at all - A#7 in
+		C major - the next chord is home, with no draw to make.
 		"""
 
 		current = self.current_chord
@@ -328,7 +328,7 @@ class HarmonicState:
 
 	def plan_next (self) -> subsequence.chords.Chord:
 
-		"""Choose the next chord without committing it — the horizon's pre-step.
+		"""Choose the next chord without committing it - the horizon's pre-step.
 
 		Draws from the RNG exactly as :meth:`step` would (the draw IS the
 		pre-commitment), but leaves ``current_chord`` and ``history``

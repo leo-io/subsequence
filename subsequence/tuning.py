@@ -245,7 +245,7 @@ class ChannelAllocator:
 	Channels are reclaimed once a note ends (pulse ≥ release_pulse).
 
 	A simple round-robin fallback is used when all channels are busy
-	(simultaneous voices exceed pool size) — accompanied by a warning log.
+	(simultaneous voices exceed pool size) - accompanied by a warning log.
 	"""
 
 	def __init__ (self, channels: typing.List[int]) -> None:

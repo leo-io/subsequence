@@ -43,7 +43,7 @@ class LinkClock:
 
 	Parameters:
 		bpm: Initial tempo in BPM (proposed to the Link session).
-		quantum: Beat cycle length — 4.0 means one bar in 4/4 time.
+		quantum: Beat cycle length - 4.0 means one bar in 4/4 time.
 		loop: The running asyncio event loop (required by aalink).
 	"""
 
@@ -95,15 +95,15 @@ class LinkClock:
 		"""Wait for the next Link beat that is a multiple of *period*, and return it.
 
 		**A period, not a position.**  aalink resumes at the next *multiple* of
-		its argument — aalink's own documentation gives ``sync(2)`` at beat 11.5
-		resuming at 12 — and this was called with an absolute beat instead, so every pulse
+		its argument - aalink's own documentation gives ``sync(2)`` at beat 11.5
+		resuming at 12 - and this was called with an absolute beat instead, so every pulse
 		waited for a multiple of itself.  Pulse 0 waited for beat ``2 × quantum``,
 		a bar late, and every pulse after it landed on a lattice twice as coarse
 		as the one intended: the piece played at exactly half tempo, while the
 		display went on showing the right BPM (#2993).
 
-		So the sequencer steps with ``await sync(1 / PPQN)`` — the next pulse
-		lattice point, wherever the session has got to — and reads the beat it
+		So the sequencer steps with ``await sync(1 / PPQN)`` - the next pulse
+		lattice point, wherever the session has got to - and reads the beat it
 		is handed rather than assuming which one it asked for.
 		"""
 		return float(await self._link.sync(period))
@@ -112,7 +112,7 @@ class LinkClock:
 		"""Wait for the next bar boundary and return the beat it fell on.
 
 		``sync(quantum)`` IS "the next multiple of a bar", which is what this
-		wants — no arithmetic of our own, and no boundary to get wrong.  The
+		wants - no arithmetic of our own, and no boundary to get wrong.  The
 		hand-computed one raised on aalink 0.2.3 for a zero or negative
 		boundary, and on 0.2.2 and earlier hung with the GIL held; aalink
 		returns 0.0 for it safely.

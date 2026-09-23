@@ -1,4 +1,4 @@
-"""Immutable note and pattern data types — the rendered output layer.
+"""Immutable note and pattern data types - the rendered output layer.
 
 Defines ``Note`` (a single scheduled MIDI event) alongside the control-event
 records (``CcEvent``, ``RawNoteEvent``, ``OscEvent``) and ``Pattern``, the
@@ -33,13 +33,13 @@ def check_midi_range (value: typing.Any, what: str, where: str, low: int = 0, hi
 
 	A pitch of 140, a velocity of 300 or a CC number of 200 used to be stored
 	happily and then rejected by mido on every single cycle, logged as "MIDI
-	send failed (device may be disconnected)" — so the composer looked at
+	send failed (device may be disconnected)" - so the composer looked at
 	their cables (#3004).  One run of ``hit_steps(velocity=(100, 160))`` dropped
 	five notes of eight that way.
 
 	It is refused where it is written instead, naming the value and the thing
 	it was meant to be.  A library generator folds its own output into range
-	rather than reaching here — see ``sequence_utils.fold_to_midi_range``.
+	rather than reaching here - see ``sequence_utils.fold_to_midi_range``.
 	"""
 
 	try:
@@ -165,7 +165,7 @@ class Step:
 class PlacedNote:
 
 	"""
-	One note read back off a pattern being built — see ``PatternBuilder.placed()``.
+	One note read back off a pattern being built - see ``PatternBuilder.placed()``.
 
 	A read-only copy rather than a view: a consumer diffing what a generator
 	added must not be able to reach through the answer and edit the pattern.
@@ -184,7 +184,7 @@ class PlacedNote:
 	``index`` exists so two notes that are otherwise identical stay distinct:
 	nothing stops a hand-placed kick and a generated one landing on the same
 	pulse, and without it a set difference would report the second as already
-	present.  It is an identity token, not a count — treat it as opaque.
+	present.  It is an identity token, not a count - treat it as opaque.
 	"""
 
 	position: int						# Pulse position within the pattern
@@ -221,7 +221,7 @@ class Pattern:
 				canonical form; the user-facing entry points (decorator and runtime
 				API on ``Composition``) translate the user's channel-numbering
 				convention before storing here.  An entry may carry an optional
-				third element — a ``drum_note_map`` — so a mirrored drum hit is
+				third element - a ``drum_note_map`` - so a mirrored drum hit is
 				re-resolved by name to that device's own note number (see
 				``Sequencer.schedule_pattern``).
 		"""
@@ -289,10 +289,10 @@ class Pattern:
 		``origin`` is the original drum-name string when the pitch was named
 		(e.g. ``"hi_hat_closed"``), or ``None`` for numeric pitches.  It is
 		carried on the Note so mirror destinations can re-resolve the name
-		through their own ``drum_note_map`` — see ``Sequencer.schedule_pattern``.
+		through their own ``drum_note_map`` - see ``Sequencer.schedule_pattern``.
 
 		``primary_unmapped`` marks a named hit whose ``origin`` is absent from
-		this pattern's own ``drum_note_map`` but present in a mirror's — the
+		this pattern's own ``drum_note_map`` but present in a mirror's - the
 		primary device can't voice it, so it stays silent and only the mapping
 		mirror(s) sound it.
 		"""

@@ -2,7 +2,7 @@
 
 Provides a background thread that reads individual keystrokes from stdin
 without requiring the user to press Enter.  Designed to work alongside
-:class:`subsequence.display.Display` without conflicts — the display writes
+:class:`subsequence.display.Display` without conflicts - the display writes
 to **stderr** while this module reads from **stdin**.
 
 **Platform support:** Linux and macOS.  Requires :mod:`tty` and :mod:`termios`,
@@ -58,7 +58,7 @@ def _detect_hotkey_support () -> typing.Tuple[bool, typing.Optional[str]]:
 
 	Reads the terminal's settings; it must never **write** them.  A process in
 	a background process group that writes its terminal's settings is sent
-	SIGTTOU, whose default action is to stop it — and this runs on every
+	SIGTTOU, whose default action is to stop it - and this runs on every
 	``import subsequence``, so an import-time ``tcsetattr`` here stopped
 	``python render_album.py &`` dead at the import, before the script ran a
 	line of its own (#3033).
@@ -144,7 +144,7 @@ class KeystrokeListener:
 		"""Start the background keystroke listener thread.
 
 		Puts stdin into cbreak mode and begins reading.  Call :meth:`stop`
-		to restore normal terminal behaviour.  Safe to call more than once —
+		to restore normal terminal behaviour.  Safe to call more than once -
 		a second call while already running is a no-op.
 
 		If :data:`HOTKEYS_SUPPORTED` is ``False``, logs a warning and returns
@@ -188,10 +188,10 @@ class KeystrokeListener:
 		"""Signal the listener to stop and restore the terminal.
 
 		Waits briefly for the background thread (it polls every ~0.1 s), then
-		restores the terminal settings directly if the thread has not done so —
+		restores the terminal settings directly if the thread has not done so -
 		a daemon thread killed at interpreter exit never runs its ``finally``
 		block, which used to leave the shell in cbreak mode (no echo) on most
-		clean exits.  Safe to call on an unsupported platform — it is a no-op.
+		clean exits.  Safe to call on an unsupported platform - it is a no-op.
 		"""
 
 		self._running = False

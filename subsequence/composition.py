@@ -1,4 +1,4 @@
-"""The top-level ``Composition`` — the object a whole piece is built on.
+"""The top-level ``Composition`` - the object a whole piece is built on.
 
 ``Composition`` is the single entry point: it owns the clock, the patterns,
 the harmony and form state, and the MIDI output.  You create one, decorate
@@ -100,11 +100,11 @@ def _derive_label (action: typing.Callable[[], None]) -> str:
 
 	Tried in order:
 
-	1. **Named function** — returns ``fn.__name__``.
-	2. **Lambda in a ``.py`` file** — uses :func:`inspect.getsource` to extract
+	1. **Named function** - returns ``fn.__name__``.
+	2. **Lambda in a ``.py`` file** - uses :func:`inspect.getsource` to extract
 	   the lambda body from the source line (works for compositions defined in
 	   files; falls back gracefully in REPLs and ``exec()`` contexts).
-	3. **Fallback** — returns ``"<action>"``.
+	3. **Fallback** - returns ``"<action>"``.
 
 	Args:
 		action: The callable registered as a hotkey action.
@@ -251,7 +251,7 @@ class _InjectedChord:
 	@property
 	def next (self) -> typing.Optional["_InjectedChord"]:
 
-		"""The chord after the current one — planned and revocable.
+		"""The chord after the current one - planned and revocable.
 
 		Sugar over the harmony window (``p.harmony.next_chord``), so
 		two-parameter builders get anticipation without learning a new
@@ -349,7 +349,7 @@ class _InjectedChord:
 
 		"""Return the chord's bass, shifted by a number of octaves.
 
-		A span's slash bass is the bass — ``C/G`` gives G, not C — so a bass
+		A span's slash bass is the bass - ``C/G`` gives G, not C - so a bass
 		line over a mix of plain and slash chords follows the changes it is
 		written under (#3007).  Without a root to shift, a PitchSet gives its
 		lowest pitch.
@@ -381,13 +381,13 @@ class _InjectedChord:
 
 class _HarmonyHorizon:
 
-	"""The published harmony window — realised chord spans on the absolute beat axis.
+	"""The published harmony window - realised chord spans on the absolute beat axis.
 
 	The harmonic clock commits one span per chord boundary (decorated chords
 	where the source span is spiced) and, where the future is data (a bound
 	or section progression), installs a *future* lookup so ``chord_at`` can
 	answer arbitrarily far ahead.  In live graph mode the window is
-	``[current, next]`` — one pre-committed step — and queries beyond it
+	``[current, next]`` - one pre-committed step - and queries beyond it
 	clamp to the last known chord with a one-time warning.
 
 	All beats are absolute (from playback start).  Read through
@@ -454,7 +454,7 @@ class _HarmonyHorizon:
 
 	def invalidate_future (self) -> None:
 
-		"""Drop everything not yet sounding — the next clock fire recomputes it.
+		"""Drop everything not yet sounding - the next clock fire recomputes it.
 
 		Called on every supported intervention: a ``harmony()`` re-call,
 		``form_jump``/``form_next``, a re-bind, a new pin.  ``next_chord``
@@ -486,7 +486,7 @@ class _HarmonyHorizon:
 
 	def chord_at (self, beat: float) -> typing.Optional[typing.Any]:
 
-		"""The chord sounding at *beat* — clamping to the last known chord beyond the window."""
+		"""The chord sounding at *beat* - clamping to the last known chord beyond the window."""
 
 		span = self.span_at(beat)
 
@@ -522,7 +522,7 @@ class _HarmonyHorizon:
 
 	def next_chord_after (self, beat: float) -> typing.Optional[typing.Any]:
 
-		"""The chord that follows the one sounding at *beat* — None when unknown (no clamping)."""
+		"""The chord that follows the one sounding at *beat* - None when unknown (no clamping)."""
 
 		boundary = self.boundary_after(beat)
 
@@ -545,7 +545,7 @@ class HarmonyView:
 	"""Read-only harmony context for one pattern cycle (``p.harmony``).
 
 	Anchored at the cycle's start beat, so all beat arguments are
-	cycle-relative — ``chord_at(0)`` is the chord at the cycle's first beat
+	cycle-relative - ``chord_at(0)`` is the chord at the cycle's first beat
 	(what the two-parameter ``chord`` convention injects), ``chord_at(3.5)``
 	the chord sounding under beat 3.5 of this cycle.
 
@@ -577,7 +577,7 @@ class HarmonyView:
 	@property
 	def next_chord (self) -> typing.Optional[typing.Any]:
 
-		"""The chord after the current one — for anticipation and approach tones."""
+		"""The chord after the current one - for anticipation and approach tones."""
 
 		return self._horizon.next_chord_after(self._origin)
 
@@ -599,7 +599,7 @@ class HarmonyView:
 
 def _span_chord (span: subsequence.progressions.ChordSpan) -> typing.Any:
 
-	"""The chord a span presents to patterns — decorated where spiced, bare otherwise."""
+	"""The chord a span presents to patterns - decorated where spiced, bare otherwise."""
 
 	if span.is_decorated:
 		return subsequence.progressions.DecoratedChord(span)
@@ -641,7 +641,7 @@ async def schedule_harmonic_clock (
 	register_rewind: typing.Optional[typing.Callable[[typing.Callable[[], None]], None]] = None,
 ) -> None:
 
-	"""Schedule the harmonic clock — a span walker over the bound harmony sources.
+	"""Schedule the harmonic clock - a span walker over the bound harmony sources.
 
 	Generalises the old fixed-cycle clock: chords last as long as their
 	spans say, the clock fires at ``min(next span boundary, next bar
@@ -653,7 +653,7 @@ async def schedule_harmonic_clock (
 	composition-bound progression > live ``step()``**.  A bound progression
 	loops on exhaustion when no live engine is configured (or when it
 	contains a :class:`~subsequence.progressions.PitchSet`); with a live
-	engine, exhaustion falls through to live stepping — the frozen-replay
+	engine, exhaustion falls through to live stepping - the frozen-replay
 	bridge.  In live mode the engine pre-commits one step so the window
 	always holds ``[current, next]``.
 
@@ -674,19 +674,19 @@ async def schedule_harmonic_clock (
 
 	``cadence_requests`` is the request-hook seam: a mutable ``{bar: name}``
 	dict (shared with ``Composition.request_cadence``) the live walk steers
-	toward — at the first boundary with a pending request, the remaining
+	toward - at the first boundary with a pending request, the remaining
 	changes up to its bar are planned as a constrained walk pinned to the
 	cadence formula (resolved by ``resolve_cadence``) and then committed
 	one boundary at a time.  ``get_section_cadence`` turns a section entry
 	into a request arriving at that section's final bar (live sections
 	only).  Requests whose bar passes unserved expire with a warning.
 
-	The clock fires ``reschedule_lookahead`` beats before each boundary —
+	The clock fires ``reschedule_lookahead`` beats before each boundary -
 	raised by the caller to the maximum pattern lookahead, so the window
 	always covers a pattern's next cycle before it rebuilds.
 
 	``horizon`` may be omitted for direct use without a :class:`Composition`
-	(a private window is created — ``p.harmony`` inside a Composition needs
+	(a private window is created - ``p.harmony`` inside a Composition needs
 	the composition's own horizon).  ``get_cycle_beats``, when given, is
 	re-read at every boundary so a mid-playback ``harmony(cycle_beats=…)``
 	re-call takes effect like the other getter-based parameters; the plain
@@ -732,7 +732,7 @@ async def schedule_harmonic_clock (
 		A live freeze-ahead: a constrained walk from the engine's current
 		chord to the request's bar, pinned to the cadence formula at the
 		tail, drawn through the engine's real weights on the play stream.
-		The engine's state is snapshot-restored — chords commit one by one
+		The engine's state is snapshot-restored - chords commit one by one
 		as their boundaries actually sound.  An unwalkable formula falls
 		back to fiat (live steps up to the approach, the formula committed
 		at its bars), loudly.
@@ -852,8 +852,8 @@ async def schedule_harmonic_clock (
 		"""A section's spans, stopping at the section's own edge (#3086).
 
 		``_data_future`` alone wraps a short progression inside its own length
-		for ever.  That is right INSIDE a section — a two-chord progression in
-		a four-bar section repeats — and wrong AT its end, where the chord that
+		for ever.  That is right INSIDE a section - a two-chord progression in
+		a four-bar section repeats - and wrong AT its end, where the chord that
 		follows is the next section's first, not a wrap back to this one's.
 		Unbounded, the window's ``next_chord`` said C at the verse's last bar
 		where Am, the chorus's first chord, actually followed.
@@ -861,7 +861,7 @@ async def schedule_harmonic_clock (
 		Past the edge this reports the next section's FIRST span and nothing
 		further: that is what anticipation needs, and it is the most the clock
 		can honestly claim.  Where the next section is unknowable (a graph or
-		generator form) or plays live chords, it reports ``None`` — the caller
+		generator form) or plays live chords, it reports ``None`` - the caller
 		then says "not known" rather than something false.
 		"""
 
@@ -1198,7 +1198,7 @@ async def schedule_harmonic_clock (
 
 		def _rewind () -> None:
 
-			"""Put the walk back where it started — an external Start (#3089).
+			"""Put the walk back where it started - an external Start (#3089).
 
 			The walk's whole position lives in this closure, so nothing outside
 			can reset it: the anchors, what the engine last saw, the planned
@@ -1344,11 +1344,11 @@ async def schedule_form (
 	Emits a ``"section"`` event on the sequencer's emitter at play start
 	and on every section change (one lookahead-beat early, like every form
 	decision), carrying the new :class:`~subsequence.form_state.SectionInfo`
-	(``None`` when the form finishes).  ``on_bar`` is the boundary hook —
+	(``None`` when the form finishes).  ``on_bar`` is the boundary hook -
 	called once per bar with ``(boundary_pulse, section_changed)`` after the
 	form advances; the transition machinery rides it.
 
-	``get_form_state``, when given, is re-read every bar — so a mid-playback
+	``get_form_state``, when given, is re-read every bar - so a mid-playback
 	``form()`` re-bind advances the NEW form state from the next bar instead
 	of silently driving the abandoned object forever.  ``form_state`` is the
 	fixed fallback for direct use.
@@ -1511,11 +1511,11 @@ class _Transition:
 		channel: Resolved 0-indexed channel for the fill.
 		beat: Beat offset of the fill within the final bar.
 		mute: Pattern names to mute over the boundary approach.
-		beats: Mute window in beats (rounded UP to whole bars — muting is
+		beats: Mute window in beats (rounded UP to whole bars - muting is
 			bar-granular).
 		drum_note_map: Explicit drum map for the fill (otherwise borrowed
 			from a registered pattern on the same channel).
-		device: Output device (index, name, or None) for the fill — kept raw and
+		device: Output device (index, name, or None) for the fill - kept raw and
 			resolved when the fill fires, since device names are not known until
 			play() opens the ports.
 	"""
@@ -1655,14 +1655,14 @@ class Composition:
 				``mido.get_output_names()``.  The name is treated as a
 				pattern: ``*`` stands for any run of characters and ``?``
 				for exactly one, matching is case-insensitive, and a name
-				with no wildcards is simply a substring — so a plain
+				with no wildcards is simply a substring - so a plain
 				``"Scarlett"`` finds the port without typing the rest.
 				An exact name always wins outright.
 
 				Wildcards matter on Linux/ALSA, where names carry the
 				client and port ids (e.g.
 				``"Scarlett 2i4 USB:Scarlett 2i4 USB MIDI 1 16:0"``).  The
-				client id — ``16`` here — is handed out in connection order
+				client id - ``16`` here - is handed out in connection order
 				and moves between reboots or when a virtual port is
 				recreated, while the port index after it (``0``) stays put.
 				Wildcard the one that moves and keep the one that does not::
@@ -1673,7 +1673,7 @@ class Composition:
 				reports one name per port, so ``"*U6MIDI Pro*"`` matches
 				all three ports of a 3-port unit and asks which you meant
 				at every launch, while ``"*U6MIDI Pro *:0"`` names one for
-				good.  Prefer ``*`` to ``?`` — ``?`` matches a single
+				good.  Prefer ``*`` to ``?`` - ``?`` matches a single
 				character, so a pattern written for ``16:0`` quietly stops
 				matching once ids reach three digits.  To look up the
 				current names::
@@ -1681,7 +1681,7 @@ class Composition:
 				    import mido
 				    for n in mido.get_output_names(): print(n)
 
-				If ``None``, Subsequence auto-discovers — uses the only
+				If ``None``, Subsequence auto-discovers - uses the only
 				available device, or prompts to choose if several exist.
 			bpm: Initial tempo in beats per minute (default 120).
 			time_signature: The metre as ``(beats, unit)``, default ``(4, 4)``.
@@ -1903,9 +1903,9 @@ class Composition:
 	def _resolve_input_device_id (self, device: subsequence.midi_utils.DeviceId) -> typing.Optional[int]:
 		"""Resolve an input device id (None/int/str) to an integer index.
 
-		``None`` → ``None`` (matches any input device — existing behaviour).
+		``None`` → ``None`` (matches any input device - existing behaviour).
 		``int`` → returned as-is.  ``str`` → looked up in ``_input_device_names``;
-		logs a warning and returns ``-1`` if the name is unknown — an index no
+		logs a warning and returns ``-1`` if the name is unknown - an index no
 		real device carries, so the mapping matches NOTHING (returning None
 		here would silently fail OPEN and listen to every device).
 		Called after all input devices are opened in ``_run()``.
@@ -1934,8 +1934,8 @@ class Composition:
 		"""Where a part added mid-flight comes in: the next whole multiple of its own length.
 
 		Counted on the song's timeline, the same counting a groove's slot uses
-		(#2788) — a one-bar part starts on the next bar, a four-bar part on
-		the next four-bar line — so a part added by a save, ``load_patterns``
+		(#2788) - a one-bar part starts on the next bar, a four-bar part on
+		the next four-bar line - so a part added by a save, ``load_patterns``
 		or the REPL sits on the grid instead of wherever the save landed, for
 		ever after (#3000, decision 4 of #2991).
 
@@ -1970,7 +1970,7 @@ class Composition:
 
 		A new pattern comes in on the next whole multiple of its own length
 		(see :meth:`_next_start_pulse`), not at the pulse the save happened to
-		land on — so a bar-long part starts on a bar line and a four-bar part
+		land on - so a bar-long part starts on a bar line and a four-bar part
 		on a four-bar line, however the timing of the save fell (#3000).
 		"""
 
@@ -2043,8 +2043,8 @@ class Composition:
 		"""
 		Validate and normalise a list of mirror destinations.
 
-		Each entry is a 2- or 3-element sequence — ``(device_idx, channel)`` or
-		``(device_idx, channel, drum_note_map)`` — as a tuple, list, or any such
+		Each entry is a 2- or 3-element sequence - ``(device_idx, channel)`` or
+		``(device_idx, channel, drum_note_map)`` - as a tuple, list, or any such
 		iterable.  ``channel`` is expressed in the user's channel-numbering
 		convention (1-16 by default, 0-15 when ``zero_indexed_channels=True``);
 		this method converts it to canonical 0-indexed form and rejects
@@ -2056,7 +2056,7 @@ class Composition:
 
 		If ``primary=(device, channel)`` is supplied (canonical 0-indexed
 		form), a mirror entry whose ``(device, channel)`` matches it triggers a
-		``logger.warning`` — this is almost always a user error (every event
+		``logger.warning`` - this is almost always a user error (every event
 		would double-fire on the same destination).  The optional map is ignored
 		for this comparison.  Skipped when ``primary`` is ``None``, since the
 		runtime API call site supplies its own check.
@@ -2123,7 +2123,7 @@ class Composition:
 
 		Reads the harmony window at the current pulse, so it stays accurate
 		under variable harmonic rhythm and clock lookahead (the engine's
-		``current_chord`` flips *lookahead* beats early — this does not).
+		``current_chord`` flips *lookahead* beats early - this does not).
 		Falls back to the engine's chord before playback starts.  The chord
 		may be a decorated wrapper (``Am9``, ``C/G``) when the sounding span
 		is spiced; it duck-types the ``Chord`` voicing protocol either way.
@@ -2165,7 +2165,7 @@ class Composition:
 		``Composition.key``, and likewise for scale.  This is the one place
 		the tier order lives; every placement site routes through it so the
 		section key reaches every compositional element uniformly (the
-		three-intent model: only *key-relative* content reads this — absolute
+		three-intent model: only *key-relative* content reads this - absolute
 		content ignores it, chord-relative content tracks the chord).
 		"""
 
@@ -2197,7 +2197,7 @@ class Composition:
 
 		Concrete progressions (names, ``PitchSet``, frozen captures) are
 		returned unchanged.  Key-relative ones resolve against the section's
-		effective key+scale — memoised per ``(name, key, scale)`` so a stable
+		effective key+scale - memoised per ``(name, key, scale)`` so a stable
 		section reuses one realisation and span identity is stable across
 		ticks.  If no key is resolvable at this moment the section is skipped
 		(returns ``None`` → falls through to the bound/live source) with a
@@ -2283,7 +2283,7 @@ class Composition:
 		Binding freezes one realisation (the value type's identity), so
 		key-relative content resolves here, at bind time, against the
 		composition's key and scale.  Used by the *global* bound progression
-		(``harmony(progression=)``) — which is not section-scoped, so it has
+		(``harmony(progression=)``) - which is not section-scoped, so it has
 		nothing to re-key against.
 		"""
 
@@ -2306,7 +2306,7 @@ class Composition:
 		Section harmony re-keys per occurrence (the section/form/composition
 		key in force when the section plays), so a key-relative progression is
 		stored relative and resolved late, in the clock, against the section's
-		effective key+scale — unlike the global bound progression, which
+		effective key+scale - unlike the global bound progression, which
 		freezes at bind.  Concrete content (chord names, frozen captures,
 		``PitchSet``) is already absolute and never moves.
 		"""
@@ -2330,7 +2330,7 @@ class Composition:
 		"""
 		Configure the harmonic logic and chord change intervals.
 
-		Two sources, combinable: a **bound progression** (``progression=`` — a
+		Two sources, combinable: a **bound progression** (``progression=`` - a
 		:class:`Progression` value, an element list like ``[1, 6, 3, "bVII7"]``,
 		or chord names) walked span by span on the global clock; and/or a
 		**graph style** stepping live chords.  With only a progression bound,
@@ -2343,7 +2343,7 @@ class Composition:
 		value the last call gave it, so ``harmony(key_pull=0.4)`` after
 		``harmony(style="aeolian_minor", cycle_beats=8, nir_strength=0.9)``
 		leaves the style, the harmonic rhythm and the inertia where they were.
-		Pass ``progression=None`` to **unbind** a bound progression — the walk
+		Pass ``progression=None`` to **unbind** a bound progression - the walk
 		falls back to live stepping at the next chord boundary.
 
 		Parameters:
@@ -2371,7 +2371,7 @@ class Composition:
 				during playback takes effect from the next chord boundary;
 				a FIRST harmony() call mid-playback starts the clock itself.
 			dominant_7th: Whether to include V7 chords (default True).
-			key_pull: How strongly the walk is drawn to the key's own centres —
+			key_pull: How strongly the walk is drawn to the key's own centres -
 				I, ii and V (0.0 to 1.0).  ``0.0`` (the default) leaves the
 				style's own weights alone, which is what every piece written
 				so far sounds like; ``1.0`` is the strongest pull.  Replaces
@@ -2396,7 +2396,7 @@ class Composition:
 			# A moody minor progression that changes every 8 beats
 			comp.harmony(style="aeolian_minor", cycle_beats=8, key_pull=0.6)
 
-			# Manual harmony driving everything — loops forever
+			# Manual harmony driving everything - loops forever
 			comp.harmony(progression=subsequence.progression([1, 6, 3, 7]))
 			```
 		"""
@@ -2512,18 +2512,18 @@ class Composition:
 
 	async def _rewind_to_the_top (self) -> None:
 
-		"""Put the composition back to its opening — an external MIDI Start.
+		"""Put the composition back to its opening - an external MIDI Start.
 
 		Decision of 2026-09-21: a Start rewinds the **whole piece**, not only
-		the transport.  The MIDI specification is the argument — Start means
+		the transport.  The MIDI specification is the argument - Start means
 		"start at the beginning of the song", and Continue is the message that
-		resumes where a Stop left off — and it is what a DAW does.  Before
+		resumes where a Stop left off - and it is what a DAW does.  Before
 		this, a Start put every part back on bar 1 while the harmony and the
 		form carried on, so the piece was heard from the top over whatever
 		chord happened to be sounding, in whatever section it had reached.
 
 		The form is rebuilt from what ``form()`` was given, on the same stream
-		salt, so a seeded graph walks the same path it walked the first time —
+		salt, so a seeded graph walks the same path it walked the first time -
 		a restart is the same piece again, not a different one.
 		"""
 
@@ -2651,7 +2651,7 @@ class Composition:
 
 			``section_info_at_bar`` answers for sequence forms only and returns
 			``None`` for graphs and generators, whose layout past the playhead
-			is not decided yet — which is exactly the case where the window
+			is not decided yet - which is exactly the case where the window
 			should admit it does not know (#3086).
 			"""
 			if self._form_state is None:
@@ -2698,7 +2698,7 @@ class Composition:
 		With ``section_chords()`` on some sections and no ``harmony()`` at
 		all, the sections left out have nothing to play and nothing to
 		generate.  They hold the last chord (decision 2 of #2991), which is a
-		reasonable sound and almost never the intended one — so it is worth a
+		reasonable sound and almost never the intended one - so it is worth a
 		line naming them rather than leaving somebody to wonder why the
 		bridge is a held F.
 		"""
@@ -2730,7 +2730,7 @@ class Composition:
 
 	def _harmonic_clock_stopped (self) -> None:
 
-		"""The clock gave up its slot — let a later harmony() start a new one.
+		"""The clock gave up its slot - let a later harmony() start a new one.
 
 		The sequencer drops a callback sequence that returns None, so without
 		this the flag stayed True for the rest of the performance and a
@@ -2769,7 +2769,7 @@ class Composition:
 		chord, and returns it as a :class:`Progression` that can be bound to a
 		form section with :meth:`section_chords`.
 
-		The engine state **advances** — successive ``freeze()`` calls produce a
+		The engine state **advances** - successive ``freeze()`` calls produce a
 		continuing compositional journey so section progressions feel like parts
 		of a whole rather than isolated islands.
 
@@ -2780,17 +2780,17 @@ class Composition:
 		resolve against the composition key and scale.  A backward
 		feasibility pass guarantees satisfiability before any chord is drawn;
 		the forward walk keeps the engine's real history-dependent weighting.
-		Bar 1 is always the engine's current chord — the journey continues —
+		Bar 1 is always the engine's current chord - the journey continues -
 		so ``pins={1: ...}`` may only name it redundantly.
 
 		Parameters:
 			bars: Number of chords to capture (one per harmony cycle).
-			end: The chord at the final bar — ``end="V"`` is the cadential
+			end: The chord at the final bar - ``end="V"`` is the cadential
 				major dominant in minor.
-			pins: ``{bar: chord}`` — 1-based fiat positions.
+			pins: ``{bar: chord}`` - 1-based fiat positions.
 			avoid: Chords excluded from the walk.
 			cadence: A cadence name (``"strong"``/``"soft"``/``"open"``/
-				``"fakeout"``, theory aliases accepted) — its formula pins
+				``"fakeout"``, theory aliases accepted) - its formula pins
 				the final bars, so the walk approaches the close.
 				Conflicts with ``end=`` or pins on those bars.
 
@@ -2892,7 +2892,7 @@ class Composition:
 
 		Every time *section_name* plays, the harmonic clock walks the
 		progression's spans instead of calling the live engine.  Sections
-		without a bound progression generate live chords — **when there is a
+		without a bound progression generate live chords - **when there is a
 		live engine to generate them**.  With no :meth:`harmony` on the piece
 		there is nothing to generate from, so a section left out holds the
 		chord before it for its whole length, and a line at startup names
@@ -2901,7 +2901,7 @@ class Composition:
 
 		Accepts a :class:`Progression` value (from :meth:`freeze`, the
 		``progression()`` factory, or hand-built) or anything the factory
-		accepts — an element list like ``[1, 6, 3, "bVII7"]`` or chord
+		accepts - an element list like ``[1, 6, 3, "bVII7"]`` or chord
 		names.
 
 		**Key-relative content re-keys per occurrence.**  A progression
@@ -2909,15 +2909,15 @@ class Composition:
 		late, each time the section plays, against that section's effective
 		key and scale (``Section.key`` > form key > composition key, with
 		mode following the same chain).  So a ``Section(key="A")`` plays the
-		same numbered progression a tone higher — its chords and its degrees
-		share one tonic.  *Absolute* content — chord names (``"Am"``),
+		same numbered progression a tone higher - its chords and its degrees
+		share one tonic.  *Absolute* content - chord names (``"Am"``),
 		:class:`~subsequence.progressions.PitchSet`, and frozen captures from
-		:meth:`freeze` — names exact chords and is never transposed by a key.
+		:meth:`freeze` - names exact chords and is never transposed by a key.
 
 		On exhaustion mid-section the progression loops when no graph style
 		is configured (and always when it contains a ``PitchSet``); with a
 		live engine, exhaustion **falls through to live stepping in the
-		COMPOSITION key** — the live graph engine does not transpose for a
+		COMPOSITION key** - the live graph engine does not transpose for a
 		section (a stateful walk does not modulate mid-stream), so a
 		re-keyed section that runs out of written chords hands off to
 		composition-key harmony.  Bind a full-length progression (or set
@@ -2939,7 +2939,7 @@ class Composition:
 
 			composition.section_chords("verse",  verse_progression)
 			composition.section_chords("chorus", [1, 6, 3, 7])
-			# "bridge" is not bound — it generates live chords
+			# "bridge" is not bound - it generates live chords
 		"""
 
 		if (
@@ -2959,14 +2959,14 @@ class Composition:
 
 	def pin_chord (self, bar: int, chord: typing.Optional[typing.Any]) -> None:
 
-		"""Force the chord sounding at a bar — fiat over live generation.
+		"""Force the chord sounding at a bar - fiat over live generation.
 
 		Whatever the harmonic source (live walk, bound progression, section
 		progression) produces for *bar*, the pinned chord overrides it.
 		Pass ``None`` to remove a pin.
 
 		Pin a chord the style would never reach and the walk carries on from
-		the style's own chord on that root — ``E7`` continues the way ``Em``
+		the style's own chord on that root - ``E7`` continues the way ``Em``
 		does.  Where the style has nothing on that root at all, the bar after
 		the pin is the tonic.  Either way the pin sounds, and one bar later
 		the piece is walking again.
@@ -3084,7 +3084,7 @@ class Composition:
 		"""Ask the live engine to approach a cadence arriving at a bar.
 
 		The request hook: where :meth:`pin_chord` is fiat, this is a
-		*steered approach* — at the next chord boundary the clock plans the
+		*steered approach* - at the next chord boundary the clock plans the
 		remaining changes up to *bar* as a constrained walk through the
 		engine's real weights, pinned to the cadence formula at the tail
 		(``"strong"`` arrives V→I, ``"soft"`` IV→I, ``"open"`` IV→V,
@@ -3092,7 +3092,7 @@ class Composition:
 		commit one boundary at a time, so the journey continues through the
 		close.
 
-		One-shot: the request is consumed when planned.  Live harmony only —
+		One-shot: the request is consumed when planned.  Live harmony only -
 		bound/section progressions are data and cannot be steered; a request
 		whose bar passes unserved expires with a warning.  If the formula is
 		not walkable from where the harmony stands, the arrival lands by
@@ -3102,7 +3102,7 @@ class Composition:
 		Parameters:
 			cadence: The cadence name.
 			bar: The 1-based bar the cadence's final chord arrives at
-				(required; in practice ≥ 2 — bar 1 cannot be approached).
+				(required; in practice ≥ 2 - bar 1 cannot be approached).
 
 		Example::
 
@@ -3119,13 +3119,13 @@ class Composition:
 
 	def section_cadence (self, section_name: str, cadence: typing.Optional[str] = "strong") -> None:
 
-		"""Close every pass of a section with a cadence — the standing request.
+		"""Close every pass of a section with a cadence - the standing request.
 
 		Each time *section_name* is entered, the clock registers a
 		:meth:`request_cadence` arriving at the section's final bar, so the
 		harmony approaches the close as the section ends.  Live harmony
 		only: a section with bound chords (:meth:`section_chords`) is data
-		and ignores the registration — its closes are written, not steered.
+		and ignores the registration - its closes are written, not steered.
 		Pass ``None`` to unregister.
 
 		Example::
@@ -3148,7 +3148,7 @@ class Composition:
 
 		Patterns read the binding back with ``p.section_motif(part)`` (or use
 		the one-call :meth:`phrase_part`); a section with no binding for the
-		part is silent for that part — bind material or don't, no fallback
+		part is silent for that part - bind material or don't, no fallback
 		guessing.  Re-binding is idempotent, so the call is safe in a live
 		file: re-executing on save is the desired rebind.
 
@@ -3213,7 +3213,7 @@ class Composition:
 		background thread reads single keystrokes from stdin without requiring
 		Enter.  The ``?`` key is always reserved and lists all active bindings.
 
-		Hotkeys have zero impact on playback when disabled — the listener
+		Hotkeys have zero impact on playback when disabled - the listener
 		thread is never started.
 
 		Args:
@@ -3241,8 +3241,8 @@ class Composition:
 
 		The listener must be enabled first with :meth:`hotkeys`.
 
-		Most actions — form jumps, ``composition.data`` writes, and
-		:meth:`tweak` calls — should use ``quantize=0`` (the default).  Their
+		Most actions - form jumps, ``composition.data`` writes, and
+		:meth:`tweak` calls - should use ``quantize=0`` (the default).  Their
 		musical effect is naturally delayed to the next pattern rebuild cycle,
 		which provides automatic musical quantization without extra configuration.
 
@@ -3267,14 +3267,14 @@ class Composition:
 
 		    composition.hotkeys()
 
-		    # Immediate — musical effect happens at next pattern rebuild
+		    # Immediate - musical effect happens at next pattern rebuild
 		    composition.hotkey("a", lambda: composition.form_jump("chorus"))
 		    composition.hotkey("1", lambda: composition.data.update({"mode": "chill"}))
 
 		    # Explicit 4-bar phrase boundary
 		    composition.hotkey("s", lambda: composition.mute("drums"), quantize=4)
 
-		    # Named function — label is derived automatically
+		    # Named function - label is derived automatically
 		    def drop_to_breakdown ():
 		        composition.form_jump("breakdown")
 		        composition.mute("lead")
@@ -3305,19 +3305,19 @@ class Composition:
 		"""Jump the form to a named section immediately.
 
 		Delegates to :meth:`subsequence.form_state.FormState.jump_to`.  Works with a graph form (a dict
-		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` —
+		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` -
 		in list and ``Form`` modes the jump lands on the next occurrence of
 		the name, searching forward and wrapping.  Only a generator form cannot
 		be navigated.
 
-		The musical effect is heard at the *next pattern rebuild cycle* — already-
+		The musical effect is heard at the *next pattern rebuild cycle* - already-
 		queued MIDI notes are unaffected.  This natural delay means ``form_jump``
 		is effective without needing explicit quantization.  During playback a
 		jump is a section change like any other: ``on_section`` callbacks hear
 		the section it lands on, and parts muted by ``transition()`` for the
 		boundary it skipped play again.  A jump part-way
 		through a bar gives the rest of that bar to the new section as its bar 0,
-		so its first full bar is bar 1 — see
+		so its first full bar is bar 1 - see
 		:meth:`subsequence.form_state.FormState.jump_to` (#2484).
 
 		Args:
@@ -3373,7 +3373,7 @@ class Composition:
 
 	def form_next (self, section_name: str) -> None:
 
-		"""Queue the next section — takes effect when the current section ends.
+		"""Queue the next section - takes effect when the current section ends.
 
 		Unlike :meth:`form_jump`, this does not interrupt the current section.
 		The queued section replaces the automatically pre-decided next section
@@ -3381,7 +3381,7 @@ class Composition:
 		change their mind by calling ``form_next`` again before the boundary.
 
 		Delegates to :meth:`subsequence.form_state.FormState.queue_next`.  Works with a graph form (a dict
-		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` —
+		passed to :meth:`form`), a list, or a :class:`~subsequence.forms.Form` -
 		in list and ``Form`` modes the queued section lands on the next occurrence of
 		the name, searching forward and wrapping.  Only a generator form cannot
 		be navigated.
@@ -3500,7 +3500,7 @@ class Composition:
 
 			comp.seed = 42
 
-		(Formerly the method ``comp.seed(42)`` — the call form is a hard
+		(Formerly the method ``comp.seed(42)`` - the call form is a hard
 		break per the pre-1.0 rename policy.)
 		"""
 
@@ -3513,7 +3513,7 @@ class Composition:
 
 		Warns when something has already dealt its stream.  ``harmony()``,
 		``form()`` and ``freeze()`` draw at the moment they are called, so a
-		seed set after one of them never reaches it — and the piece is then
+		seed set after one of them never reaches it - and the piece is then
 		reproducible in some parts and not in others, which is worse than
 		either.  Nothing can be un-drawn, so the honest answer is to say so
 		rather than to appear to work.
@@ -3544,8 +3544,8 @@ class Composition:
 		"""
 		Derive the effective integer seed for a named random stream.
 
-		The derivation is ``zlib.crc32(f"{seed}:{name}")`` — crc32 rather
-		than ``hash()`` because it is stable across processes — plus the
+		The derivation is ``zlib.crc32(f"{seed}:{name}")`` - crc32 rather
+		than ``hash()`` because it is stable across processes - plus the
 		per-name nonce when ``reroll()`` has been called.  A seed given back
 		with ``reroll(name, seed=)`` takes the place of all of that, seeded
 		composition or not.  Otherwise returns None when the composition is
@@ -3605,7 +3605,7 @@ class Composition:
 		pins a stream for the session.  Refuses on locked names.
 
 		Parameters:
-			name: The stream name — usually a pattern name.
+			name: The stream name - usually a pattern name.
 			seed: A seed ``reroll()`` printed, to bring that variation back.
 
 		Example:
@@ -3659,7 +3659,7 @@ class Composition:
 		``reroll()`` refuses with a message until ``unlock()``.
 
 		Parameters:
-			name: The stream name — usually a pattern name.
+			name: The stream name - usually a pattern name.
 		"""
 
 		self._locked_names.add(name)
@@ -3887,11 +3887,11 @@ class Composition:
 		note data) to any connected browser clients.
 
 		Both servers bind to localhost by default.  Pass ``http_host`` / ``ws_host``
-		(e.g. "0.0.0.0") to opt into LAN exposure — the dashboard is read-only but
+		(e.g. "0.0.0.0") to opt into LAN exposure - the dashboard is read-only but
 		broadcasts full composition state, so only do so on a trusted network.
 
 		``http_port`` and ``ws_port`` move the dashboard when something else
-		already holds 8080 or 8765 — another Subsequence piece, most often::
+		already holds 8080 or 8765 - another Subsequence piece, most often::
 
 			composition.web_ui(http_port=8090, ws_port=8775)
 		"""
@@ -3914,7 +3914,7 @@ class Composition:
 
 		Parameters:
 			device: Which MIDI input port to use, matched against
-				``mido.get_input_names()``.  Treated as a pattern — ``*``
+				``mido.get_input_names()``.  Treated as a pattern - ``*``
 				and ``?`` are wildcards, matching is case-insensitive, and a
 				name without wildcards is a substring.  See
 				``Composition.__init__`` for why a pattern like
@@ -3960,12 +3960,12 @@ class Composition:
 		Register an additional MIDI output device.
 
 		The first output device is always the one passed to
-		``Composition(output_device=…)`` — that is device 0.
+		``Composition(output_device=…)`` - that is device 0.
 		Each call to ``midi_output()`` adds the next device (1, 2, …).
 
 		Parameters:
 			device: Which MIDI output port to add, matched against
-				``mido.get_output_names()``.  Treated as a pattern —
+				``mido.get_output_names()``.  Treated as a pattern -
 				``*`` and ``?`` are wildcards, matching is
 				case-insensitive, and a name without wildcards is a
 				substring.  See ``Composition.__init__`` for the lookup
@@ -3987,7 +3987,7 @@ class Composition:
 			```python
 			comp = subsequence.Composition(bpm=120, output_device="MOTU Express")
 
-			# Returns 1 — use as device=1 or device="integra"
+			# Returns 1 - use as device=1 or device="integra"
 			comp.midi_output("Roland Integra", name="integra")
 
 			# A software sampler that sounds 20ms late
@@ -4010,8 +4010,8 @@ class Composition:
 
 		"""Warn if delay compensation adds a large whole-rig latency.
 
-		The slowest device defines the alignment point — every faster device is
-		delayed up to that amount — so a large maximum means the whole rig
+		The slowest device defines the alignment point - every faster device is
+		delayed up to that amount - so a large maximum means the whole rig
 		responds late to live input.  Emitted once at startup.
 		"""
 
@@ -4063,8 +4063,8 @@ class Composition:
 
 		When enabled, Subsequence joins the local Link session and slaves its
 		clock to the shared network tempo and beat phase.  All other Link-enabled
-		apps on the same LAN — Ableton Live, iOS synths, other Subsequence
-		instances — will automatically stay in time.
+		apps on the same LAN - Ableton Live, iOS synths, other Subsequence
+		instances - will automatically stay in time.
 
 		Playback starts on the next bar boundary aligned to the Link quantum,
 		so downbeats stay in sync across all participants.
@@ -4131,8 +4131,8 @@ class Composition:
 				Uses the same numbering convention as ``pattern()`` (1-16
 				by default, or 0-15 with ``zero_indexed_channels=True``).
 				``None`` matches any channel (default).
-			min_val: Scaled minimum — written when CC value is 0 (default 0.0).
-			max_val: Scaled maximum — written when CC value is 127 (default 1.0).
+			min_val: Scaled minimum - written when CC value is 0 (default 0.0).
+			max_val: Scaled maximum - written when CC value is 127 (default 1.0).
 			input_device: Only respond to CC messages from this input device
 				(index or name).  ``None`` responds to any input device (default).
 
@@ -4170,7 +4170,7 @@ class Composition:
 		"""Track notes held on a MIDI keyboard for live arpeggiation.
 
 		Incoming note-on/note-off messages build a live "currently held" set
-		that any pattern reads via ``p.held_notes()`` — typically fed straight
+		that any pattern reads via ``p.held_notes()`` - typically fed straight
 		to ``p.arpeggio()``.  The composition still authors the rhythm and
 		motion; the player's hands supply the pitch set.  This is a live
 		*performance* layer over the deterministic, seeded composition: when
@@ -4191,7 +4191,7 @@ class Composition:
 				``latch`` is True.
 			latch: When True, the held set persists after you lift your hands
 				until you play a new chord (the first key after every key is up
-				replaces it) — like a hardware arp's latch.
+				replaces it) - like a hardware arp's latch.
 			input_device: Only track notes from this input device (index or
 				name).  ``None`` tracks any input device (default).
 
@@ -4297,7 +4297,7 @@ class Composition:
 
 		Unlike ``cc_map()`` which writes incoming CC values to ``composition.data``
 		for use at pattern rebuild time, ``cc_forward()`` routes the signal
-		directly to the MIDI output — bypassing the pattern cycle entirely.
+		directly to the MIDI output - bypassing the pattern cycle entirely.
 
 		Both ``cc_map()`` and ``cc_forward()`` may be registered for the same CC
 		number; they operate independently.
@@ -4306,9 +4306,9 @@ class Composition:
 			cc: Incoming CC number to listen for (0–127).
 			output: What to send. Either a **preset string**:
 
-				- ``"cc"`` — identity forward, same CC number and value.
-				- ``"cc:N"`` — forward as CC number N (e.g. ``"cc:74"``).
-				- ``"pitchwheel"`` — scale 0–127 to -8192..8191 and send as pitch bend.
+				- ``"cc"`` - identity forward, same CC number and value.
+				- ``"cc:N"`` - forward as CC number N (e.g. ``"cc:74"``).
+				- ``"pitchwheel"`` - scale 0–127 to -8192..8191 and send as pitch bend.
 
 				Or a **callable** with signature
 				``(value: int, channel: int) -> Optional[mido.Message]``.
@@ -4319,17 +4319,17 @@ class Composition:
 				``None`` matches any channel (default).
 			output_channel: Override the output channel. ``None`` uses the
 				incoming channel. Uses the same numbering convention as ``pattern()``.
-			input_device: Only respond to CC from this input device — an index,
+			input_device: Only respond to CC from this input device - an index,
 				a registered name, or ``None`` for any input (default), the
 				same convention as ``cc_map()``.
-			output_device: Send to this output device — an index, a registered
+			output_device: Send to this output device - an index, a registered
 				name, or ``None`` for the primary output (default).
 			mode: Dispatch mode:
 
-				- ``"instant"`` *(default)* — send immediately on the MIDI input
+				- ``"instant"`` *(default)* - send immediately on the MIDI input
 				  callback thread. Lowest latency (~1–5 ms). Instant forwards are
 				  **not** recorded when recording is enabled.
-				- ``"queued"`` — inject into the sequencer event queue and send at
+				- ``"queued"`` - inject into the sequencer event queue and send at
 				  the next pulse boundary (~0–20 ms at 120 BPM). Queued forwards
 				  **are** recorded when recording is enabled.
 
@@ -4346,11 +4346,11 @@ class Composition:
 			# CC 1 → CC 74, custom channel
 			comp.cc_forward(1, "cc:74", output_channel=2)
 
-			# Custom transform — remap CC range 0–127 to CC 74 range 40–100
+			# Custom transform - remap CC range 0–127 to CC 74 range 40–100
 			import subsequence.midi as midi
 			comp.cc_forward(1, lambda v, ch: midi.cc(74, int(v / 127 * 60) + 40, channel=ch))
 
-			# Forward AND map to data simultaneously — both active on the same CC
+			# Forward AND map to data simultaneously - both active on the same CC
 			comp.cc_map(1, "mod_wheel")
 			comp.cc_forward(1, "cc:74")
 			```
@@ -4397,7 +4397,7 @@ class Composition:
 		``unregister()`` is how you take a typed part out again.
 
 		Security:
-			The server executes arbitrary Python in this process — it is **not** a
+			The server executes arbitrary Python in this process - it is **not** a
 			sandbox.  It binds to localhost only and is opt-in, but any process on
 			the same machine that can reach the port gains full code execution here.
 			Do not enable it on shared or multi-user hosts, and never expose the
@@ -4421,7 +4421,7 @@ class Composition:
 		unregistered automatically on the next reload (notes stopped,
 		removed from the running-pattern set).
 
-		An **initial synchronous load** happens here — if the file has a
+		An **initial synchronous load** happens here - if the file has a
 		``SyntaxError`` or doesn't exist at this moment, the exception
 		propagates so the user knows immediately.  Subsequent reloads
 		happen on the composition's event loop and tolerate transient
@@ -4447,8 +4447,8 @@ class Composition:
 		a pattern moves to a new device when the composition restarts.
 
 		A part the save *adds* comes in on the next whole multiple of its own
-		length — a one-bar part on the next bar, a four-bar part on the next
-		four-bar line — so it sits on the grid however the timing of the save
+		length - a one-bar part on the next bar, a four-bar part on the next
+		four-bar line - so it sits on the grid however the timing of the save
 		fell, and stays there.
 
 		Parameters:
@@ -4457,7 +4457,7 @@ class Composition:
 
 		Example::
 
-			# live_init.py — runs once
+			# live_init.py - runs once
 			composition = subsequence.Composition(bpm=120, key="E")
 			composition.harmony(style="aeolian_minor")
 			composition.watch("live_patterns.py")
@@ -4496,7 +4496,7 @@ class Composition:
 
 		"""Return ``__file__`` of the module that invoked the caller, if available.
 
-		Walks one frame up the call stack — the immediate caller is
+		Walks one frame up the call stack - the immediate caller is
 		``watch()``, so ``f_back`` is the user's code.  Returns the
 		module-level ``__file__`` of that frame's globals; ``None`` when
 		the caller has no ``__file__`` (REPL, exec'd context, etc.).
@@ -4528,7 +4528,7 @@ class Composition:
 		* ``@composition.pattern`` decorators in the source hot-swap their
 		  corresponding running patterns in place.
 		* Patterns currently running but **not** declared in the source are
-		  unregistered — the source is treated as the full new truth.
+		  unregistered - the source is treated as the full new truth.
 		* If the composition is already playing, the swap happens on the
 		  event loop thread; the call blocks until it completes.
 		* If the composition has not yet called ``play()``, the source runs
@@ -4540,15 +4540,15 @@ class Composition:
 		* ``SyntaxError`` if ``source`` fails to compile.
 		* The exception raised inside ``exec()`` for any runtime error.
 		* ``RuntimeError`` if called from inside the composition's own
-		  event loop thread (would deadlock — see Threading below).
+		  event loop thread (would deadlock - see Threading below).
 
-		In either failure case, existing composition state is preserved —
+		In either failure case, existing composition state is preserved -
 		the diff-and-unregister phase is skipped if exec raised, so a
 		half-broken upload cannot tear down working patterns.
 
 		Threading:
 			Designed to be called from a thread DIFFERENT from the
-			composition's event loop — typically a web-handler worker.
+			composition's event loop - typically a web-handler worker.
 			Cannot be called from inside the loop itself (a pattern
 			callback, an asyncio task spawned by the composition).  From
 			there, ``await composition._apply_source_async(...)`` directly.
@@ -4631,12 +4631,12 @@ class Composition:
 		Runs on the event loop thread.  Performs ``exec()``, graduates any
 		newly-decorated patterns into ``_running_patterns``, then unregisters
 		any patterns that *this source* declared on its previous exec but no
-		longer declares (keyed by ``source_key`` — a watched file's path or a
+		longer declares (keyed by ``source_key`` - a watched file's path or a
 		``load_patterns`` label).  Patterns registered by the wrapper script
 		or by another source are never this source's to tear down.
 
 		Raises whatever ``exec()`` raises.  When that happens, the diff-and-
-		unregister phase is skipped — the namespace is incomplete, so any
+		unregister phase is skipped - the namespace is incomplete, so any
 		patterns the source failed to reach would be misinterpreted as
 		deletions and torn down.
 
@@ -4689,13 +4689,13 @@ class Composition:
 		Also injects two dunder globals that make the single-file live-coding
 		workflow ergonomic:
 
-		* ``__name__ = "__live_reload__"`` — so ``if __name__ == "__main__":``
+		* ``__name__ = "__live_reload__"`` - so ``if __name__ == "__main__":``
 		  blocks in the watched file are *skipped* during live reload.  The
 		  same file run directly with ``python my_session.py`` sees
 		  ``__name__ == "__main__"`` and runs setup; saves trigger reload
 		  with ``__name__ == "__live_reload__"``, skipping setup and only
 		  re-running pattern definitions.
-		* ``__file__ = source_label`` — so ``composition.watch(__file__)``
+		* ``__file__ = source_label`` - so ``composition.watch(__file__)``
 		  and any user code referencing ``__file__`` works inside the live
 		  namespace.  Set to the file path for ``LiveReloader``, the
 		  user-supplied ``source_label`` for ``Composition.load_patterns``,
@@ -4707,7 +4707,7 @@ class Composition:
 		entry point.
 
 		The blocklist prevents calls that would stall the async event loop
-		running the sequencer.  It is **not** a security sandbox — exec'd
+		running the sequencer.  It is **not** a security sandbox - exec'd
 		code can still do anything Python allows.
 
 		Parameters:
@@ -4744,7 +4744,7 @@ class Composition:
 			receive_port: Port to listen for incoming OSC messages (default 9000).
 			send_port: Port to send state updates to (default 9001).
 			send_host: The IP address to send updates to (default "127.0.0.1").
-			receive_host: Interface to listen on (default "127.0.0.1" — this
+			receive_host: Interface to listen on (default "127.0.0.1" - this
 				machine only, as for ``live()`` and ``web_ui()``).  Pass
 				``receive_host="0.0.0.0"`` to let an OSC controller elsewhere
 				on the network reach it.  A listener can change tempo, mute
@@ -4825,7 +4825,7 @@ class Composition:
 			```
 
 		Note:
-			Ignored while Ableton Link is active — the shared session tempo is
+			Ignored while Ableton Link is active - the shared session tempo is
 			authoritative.  Use ``set_bpm()`` to propose a tempo to the Link network.
 		"""
 
@@ -4887,7 +4887,7 @@ class Composition:
 
 		The clock stops advancing, sounding notes are released, and MIDI Stop
 		is sent to any hardware following the clock output.  :meth:`resume`
-		continues from the same pulse, beat and bar — where stopping and
+		continues from the same pulse, beat and bar - where stopping and
 		playing again would start the piece over.
 
 		Bar and cycle counters hold too, so patterns resume mid-phrase rather
@@ -4895,7 +4895,7 @@ class Composition:
 		resume; it returns on its pattern's next cycle.
 
 		Idempotent and safe to call from any thread.  Ignored, with a log line,
-		when the transport is not ours to hold — under ``clock_follow=True`` or
+		when the transport is not ours to hold - under ``clock_follow=True`` or
 		an active Ableton Link session.
 		"""
 
@@ -4932,7 +4932,7 @@ class Composition:
 		cycle, on every destination it plays to.  It has to be: its builder is
 		what would have turned the drone off, and a muted builder does not run,
 		so the note used to ring until the performance stopped.  Unmuting does
-		not strike it again — what sounds is the builder's decision, and it
+		not strike it again - what sounds is the builder's decision, and it
 		will place a fresh one if it wants one.  The same goes for a part the
 		energy gate closes or a transition holds quiet.
 
@@ -4983,7 +4983,7 @@ class Composition:
 		patterns.
 
 		Another pattern sharing the channel keeps playing.  Its notes are
-		its own to end, and cutting them is what used to happen — a pad's
+		its own to end, and cutting them is what used to happen - a pad's
 		four-beat note stopped 0.08 of a beat in when an arp beside it was
 		unregistered (#2996).  A note with no pattern behind it, from
 		``trigger()`` or sent straight to a port, is still released: nothing
@@ -4992,7 +4992,7 @@ class Composition:
 		Its own note-ons still waiting in the queue are dropped, so a drone
 		struck inside the reschedule lookahead does not play after the
 		release pass and ring for the rest of the piece.  Everything else
-		queued plays out — note_offs are paired with their note_ons at queue
+		queued plays out - note_offs are paired with their note_ons at queue
 		time, so ordinary notes end at their natural duration.
 
 		Idempotent: silently logs a ``debug`` and returns if the pattern
@@ -5058,8 +5058,8 @@ class Composition:
 
 		Every note, CC, pitch bend, NRPN/RPN, program change, SysEx, and drone
 		event the pattern emits will also be sent to ``(device, channel)``,
-		starting from the next cycle rebuild.  Idempotent on ``(device, channel)``
-		— calling with the same destination twice does not double-fan; calling
+		starting from the next cycle rebuild.  Idempotent on ``(device, channel)`` -
+		calling with the same destination twice does not double-fan; calling
 		again with a different ``drum_note_map`` re-points it in place.
 
 		Parameters:
@@ -5116,7 +5116,7 @@ class Composition:
 		"""
 		Remove a single mirror destination from a running pattern.
 
-		Matches on ``(device, channel)`` only — any attached ``drum_note_map`` is
+		Matches on ``(device, channel)`` only - any attached ``drum_note_map`` is
 		ignored.  Idempotent: silently does nothing if the destination is not
 		currently mirrored.  The change applies on the next cycle rebuild.
 		"""
@@ -5237,7 +5237,7 @@ class Composition:
 				repeating call to just before the second cycle boundary.
 
 		Raises:
-			RuntimeError: If called after ``play()`` has started — scheduled
+			RuntimeError: If called after ``play()`` has started - scheduled
 				tasks register at startup, so a late registration would be
 				silently ignored otherwise.
 		"""
@@ -5268,10 +5268,10 @@ class Composition:
 		You can define form in four ways:
 
 		1. **Form value**: a frozen :class:`~subsequence.forms.Form` of
-		   :class:`~subsequence.forms.Section` values — the payload home
+		   :class:`~subsequence.forms.Section` values - the payload home
 		   (energy, key per section); editable, navigable.
 		2. **Sequence (List)**: a fixed order of ``(name, bars)`` tuples
-		   or Sections (lists coerce — they are the same form).
+		   or Sections (lists coerce - they are the same form).
 		3. **Graph (Dict)**: dynamic transitions based on weights.
 		4. **Generator**: a Python generator that yields ``(name, bars)`` pairs.
 
@@ -5279,7 +5279,7 @@ class Composition:
 		``form_next()`` work on them (the jump lands on the next occurrence
 		of the name, wrapping).
 
-		Re-binding ``form()`` during playback takes effect at the next bar —
+		Re-binding ``form()`` during playback takes effect at the next bar -
 		the clock reads the current form state on every bar, so the new form
 		advances from there (its first section plays from its first bar).
 
@@ -5287,12 +5287,12 @@ class Composition:
 			sections: The form definition (Form, List, Dict, or Generator).
 			loop: Sugar for ``at_end="loop"``.
 			start: The section to start with (Graph mode only).
-			at_end: What happens when a sequence form runs out —
+			at_end: What happens when a sequence form runs out -
 				``"stop"`` (the form finishes and patterns see no section;
 				default), ``"hold"`` (the final section repeats until
 				navigated away from), or ``"loop"`` (start over).  Graphs
 				end via their terminal sections instead.
-			key: A form-level key — the **form tier** of the key-source
+			key: A form-level key - the **form tier** of the key-source
 				chain (``Section.key`` overrides it; it overrides the
 				composition key).  Re-anchors key-relative content for the
 				whole form.  When *sections* is a ``Form`` value carrying its
@@ -5379,8 +5379,8 @@ class Composition:
 
 		"""Freeze the graph form's walk into an editable :class:`~subsequence.forms.Form`.
 
-		Walks a **clone** of the live form state — the same RNG state, so the
-		frozen path is exactly the path the live graph would have played —
+		Walks a **clone** of the live form state - the same RNG state, so the
+		frozen path is exactly the path the live graph would have played -
 		and returns it as a Form value: inspect it, edit it
 		(``path.replace(3, bars=16)``), and rebind it with
 		``composition.form(path, at_end=...)``.  The live form state is
@@ -5450,16 +5450,16 @@ class Composition:
 
 	def energy (self, energies: typing.Dict[str, typing.Union[float, typing.Tuple[float, float]]]) -> None:
 
-		"""Set per-section energy — the arranging dial, as one plain dict.
+		"""Set per-section energy - the arranging dial, as one plain dict.
 
-		``{"verse": 0.5, "chorus": 0.9, "build": (0.3, 1.0)}`` — a float is
+		``{"verse": 0.5, "chorus": 0.9, "build": (0.3, 1.0)}`` - a float is
 		the section's level; a ``(start, end)`` tuple interpolates across the
 		section (a build).  Patterns read ``p.energy`` (0.5 when nothing is
 		configured) and gate themselves, or declare ``min_energy=`` on
 		``pattern()`` for automatic muting.
 
 		The dict **overrides** any energy payload carried by bound
-		:class:`~subsequence.forms.Section` values — it is the later,
+		:class:`~subsequence.forms.Section` values - it is the later,
 		performance-level dial.  Re-calling replaces the whole mapping
 		(idempotent, live-reload friendly).
 
@@ -5523,8 +5523,8 @@ class Composition:
 
 		The callback receives the new :class:`~subsequence.form_state.SectionInfo`
 		(or ``None`` when the form finishes).  It fires from the form clock,
-		one lookahead-beat **early** — in time to affect the new section's
-		first patterns — once at play start for the opening section, and when
+		one lookahead-beat **early** - in time to affect the new section's
+		first patterns - once at play start for the opening section, and when
 		``form_jump()`` moves to a section.
 
 		Because it fires *from* the clock, it must be an ordinary ``def``: an
@@ -5534,7 +5534,7 @@ class Composition:
 			def on_section (info):
 			    asyncio.get_running_loop().create_task(tell_the_lighting_desk(info))
 
-		A callback that raises is logged and the others still run — one broken
+		A callback that raises is logged and the others still run - one broken
 		listener never stops the music.
 
 		Example::
@@ -5556,7 +5556,7 @@ class Composition:
 		device: subsequence.midi_utils.DeviceId = None,
 	) -> None:
 
-		"""Declare boundary material — the automatic fill or mute, one line.
+		"""Declare boundary material - the automatic fill or mute, one line.
 
 		``before`` names the incoming section (``"chorus"``), or ``"*"`` for
 		any *different* section (repeats don't fire it).  Two actions,
@@ -5571,7 +5571,7 @@ class Composition:
 		  existing rule), so ``beats`` rounds up to whole bars.  Performer
 		  mutes win: a pattern you muted yourself stays muted.
 
-		Transitions stack — call once per rule.  Registration is additive
+		Transitions stack - call once per rule.  Registration is additive
 		and idempotent per identical rule.
 
 		Example::
@@ -5693,7 +5693,7 @@ class Composition:
 		Called once per bar (lookahead-early, with the bar-line pulse).
 		Fill rules fire when the current bar is the section's last before a
 		matching boundary; mute rules close over the approach window
-		(rounded up to whole bars — muting is bar-granular) and reopen at
+		(rounded up to whole bars - muting is bar-granular) and reopen at
 		the boundary.  Performer mutes are never touched.
 		"""
 
@@ -5763,7 +5763,7 @@ class Composition:
 		- ``steps`` cannot be combined with ``beats`` or ``bars``.
 
 		Returns:
-			(beat_length, default_grid) — beat_length in beats (quarter notes);
+			(beat_length, default_grid) - beat_length in beats (quarter notes);
 			default_grid the number of grid steps (16th-notes in beat mode, or the
 			explicit ``steps`` value directly in step mode).
 		"""
@@ -5827,7 +5827,7 @@ class Composition:
 				Set ``zero_indexed_channels=True`` on the ``Composition`` to use
 				0-based numbering (0-15), matching the raw MIDI protocol, instead.
 			beats: Duration in beats (quarter notes). ``beats=4`` = 1 bar.
-			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8). ``bars=2`` = 8 beats in 4/4.
+			bars: Duration in bars (a bar is ``composition.bar_beats`` - 4 beats in 4/4, 3 in 6/8). ``bars=2`` = 8 beats in 4/4.
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats (e.g. ``dur.SIXTEENTH``).
 				Requires ``steps=``.
@@ -5836,7 +5836,7 @@ class Composition:
 				Enables string-based CC names in ``p.cc()`` and ``p.cc_ramp()``.
 			nrpn_name_map: Optional mapping of NRPN parameter names (strings) to
 				14-bit parameter numbers (0–16383).  Enables string-based names
-				in ``p.nrpn()`` and ``p.nrpn_ramp()`` — typically a
+				in ``p.nrpn()`` and ``p.nrpn_ramp()`` - typically a
 				device-specific dictionary (e.g. Sequential Take 5's
 				``Osc1FreqFine`` → 9).
 			reschedule_lookahead: Beats in advance to compute the next cycle.
@@ -5852,7 +5852,7 @@ class Composition:
 				``device`` is the integer index returned by ``midi_output()`` (0 =
 				primary).  ``channel`` follows this composition's channel-numbering
 				convention.  See also ``mirror()`` / ``unmirror()`` for live toggling.
-			min_energy: Automatic energy gating — the pattern is silent while
+			min_energy: Automatic energy gating - the pattern is silent while
 				the current section's energy (``composition.energy()`` dict,
 				or the bound Section payload) is below this threshold.
 				Composes with ``mute()``: a performer mute always wins.
@@ -6051,7 +6051,7 @@ class Composition:
 			builder_fns: One or more pattern builder functions.
 			channel: MIDI channel (1-16, or 0-15 with ``zero_indexed_channels=True``).
 			beats: Duration in beats (quarter notes).
-			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8).
+			bars: Duration in bars (a bar is ``composition.bar_beats`` - 4 beats in 4/4, 3 in 6/8).
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats. Requires ``steps=``.
 			drum_note_map: Optional mapping for drum instruments.
@@ -6166,26 +6166,26 @@ class Composition:
 
 		"""Declare a self-contained chord part: a progression at a chosen harmonic rhythm.
 
-		The one-call form of ``p.progression()`` — it registers a pattern on
+		The one-call form of ``p.progression()`` - it registers a pattern on
 		*channel* that plays *progression* across *bars* (or *beats*), each chord
 		lasting a length drawn from *harmonic_rhythm* (the musical term for how often
 		the chords change).  It needs no ``composition.harmony()`` call and, with an
-		explicit chord list or a ``key=``, no composition key either — so a
+		explicit chord list or a ``key=``, no composition key either - so a
 		drums-plus-one-chord-part sketch stays simple.
 
 		The progression is realised once, up front, and the same timeline plays every
 		cycle (a stable phrase).  That timeline is returned so you can see exactly what
-		was chosen — ``print(comp.chords(...))``.
+		was chosen - ``print(comp.chords(...))``.
 
 		Parameters:
 			channel: MIDI channel for the chord part.
 			progression: A chord-graph style name to generate from, or an explicit list
 				of chords (``Chord`` objects or names like ``["Cm7", "Dbmaj7"]``).
-			harmonic_rhythm: How long each chord lasts — a number, a list of lengths,
+			harmonic_rhythm: How long each chord lasts - a number, a list of lengths,
 				or ``between(low, high, step=...)``.  See ``p.progression()``.
 			bars / beats: Length of the part (defaults to 4 beats if neither is given).  ``bars`` uses the
 				composition's time signature.
-			voicing: Notes per chord — an int, or a ``(low, high)`` range (e.g. ``(3, 4)``).
+			voicing: Notes per chord - an int, or a ``(low, high)`` range (e.g. ``(3, 4)``).
 			velocity: MIDI velocity, or a ``(low, high)`` tuple for per-voice humanisation.
 			detached: Beats of silence before each next chord (``duration = length - detached``).
 			root: MIDI root the voicings are centred on (e.g. 48 = C3).
@@ -6283,11 +6283,11 @@ class Composition:
 
 		"""Declare a part that plays each section's bound Motif/Phrase.
 
-		The one-call consumer for :meth:`section_motifs` — it registers a
+		The one-call consumer for :meth:`section_motifs` - it registers a
 		pattern on *channel* that walks whatever value is bound to the
 		current section for *part* (stateless position from the cycle
 		counter, via ``p.phrase()``).  A section with no binding for the
-		part is **silent** for that part — bind material or don't; no
+		part is **silent** for that part - bind material or don't; no
 		fallback guessing.
 
 		Parameters:
@@ -6405,7 +6405,7 @@ class Composition:
 			fn: The pattern builder function (same signature as ``@comp.pattern``).
 			channel: MIDI channel (1-16, or 0-15 with ``zero_indexed_channels=True``).
 			beats: Duration in beats (quarter notes, default 1).
-			bars: Duration in bars (a bar is ``composition.bar_beats`` — 4 beats in 4/4, 3 in 6/8).
+			bars: Duration in bars (a bar is ``composition.bar_beats`` - 4 beats in 4/4, 3 in 6/8).
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats. Requires ``steps=``.
 			quantize: Snap the trigger to a beat boundary: ``0`` = immediate (default),
@@ -6428,7 +6428,7 @@ class Composition:
 				channel=1
 			)
 
-			# Quantized fill (next bar) — channel 10 is the GM drum channel
+			# Quantized fill (next bar) - channel 10 is the GM drum channel
 			import subsequence.constants.durations as dur
 			composition.trigger(
 				lambda p: p.euclidean("snare", pulses=7, velocity=90),
@@ -6437,7 +6437,7 @@ class Composition:
 				quantize=dur.WHOLE
 			)
 
-			# With chord context — the builder receives the chord as a second
+			# With chord context - the builder receives the chord as a second
 			# argument when chord=True.
 			composition.trigger(
 				lambda p, chord: p.arpeggio(chord.tones(root=60), spacing=dur.SIXTEENTH),
@@ -6594,7 +6594,7 @@ class Composition:
 
 		A Composition runs once: the performance closes its ports and takes
 		its patterns with it, so a second ``play()`` or ``render()`` raises.
-		Build a new Composition per take — see :meth:`render` for the shape.
+		Build a new Composition per take - see :meth:`render` for the shape.
 
 		Raises:
 			RuntimeError: If this Composition has already played or rendered.
@@ -6620,7 +6620,7 @@ class Composition:
 		its end is released there.
 
 		All patterns, scheduled callbacks, and harmony logic run exactly as
-		they would during live playback — BPM transitions, generative fills,
+		they would during live playback - BPM transitions, generative fills,
 		and probabilistic gates all work in render mode.  The only differences
 		are that time is simulated rather than wall-clock driven, and that each
 		call of a function given to ``schedule()`` finishes before the render
@@ -6633,7 +6633,7 @@ class Composition:
 			filename: Output MIDI filename (default ``"render.mid"``).
 			max_minutes: Safety cap on the length of rendered MIDI in minutes
 			             (default ``60.0``).  Pass ``None`` to disable the time
-			             cap — you must then provide an explicit *bars* value.
+			             cap - you must then provide an explicit *bars* value.
 
 		Raises:
 			ValueError: If both *bars* and *max_minutes* are ``None``, which
@@ -6650,12 +6650,12 @@ class Composition:
 			# Render up to 5 minutes of an infinite generative composition.
 			composition.render(max_minutes=5, filename="five_min.mid")
 
-			# Remove the time cap — must supply bars instead.
+			# Remove the time cap - must supply bars instead.
 			composition.render(bars=128, max_minutes=None, filename="long.mid")
 			```
 
 			A Composition renders once.  For several takes, build one each
-			time — a function that returns a fresh Composition is the whole
+			time - a function that returns a fresh Composition is the whole
 			trick, and it keeps each take's seed honest:
 
 			```python

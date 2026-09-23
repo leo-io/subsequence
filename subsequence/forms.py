@@ -1,16 +1,16 @@
-"""Forms — the governing values for compositional structure.
+"""Forms - the governing values for compositional structure.
 
 :class:`Section` is the payload home: a frozen ``(name, bars, energy, key)``
-leaf.  :class:`Form` is a frozen tuple of Sections — constructible from
+leaf.  :class:`Form` is a frozen tuple of Sections - constructible from
 Sections or plain ``(name, bars)`` tuples (lists coerce), editable by slot
 (:meth:`Form.replace` / :meth:`Form.insert` / :meth:`Form.with_energy`),
 and concatenable with ``+``.  Repetition is Python:
-``[verse, verse, chorus] == [verse] * 2 + [chorus]`` — no letters DSL.
+``[verse, verse, chorus] == [verse] * 2 + [chorus]`` - no letters DSL.
 
 Bind a Form with ``composition.form(form, at_end="stop"|"hold"|"loop")``;
 generate one from a graph form with ``composition.form_freeze()``.
 
-Sections compose as plain Python lists that Form coerces — ``Section`` is a
+Sections compose as plain Python lists that Form coerces - ``Section`` is a
 leaf, not an operator algebra.
 """
 
@@ -21,7 +21,7 @@ import typing
 @dataclasses.dataclass(frozen=True)
 class Section:
 
-	"""One section of a form — the payload home.
+	"""One section of a form - the payload home.
 
 	Attributes:
 		name: The section name (``"verse"``).
@@ -30,17 +30,17 @@ class Section:
 			Read by ``p.energy`` and ``min_energy=`` gating; a
 			``composition.energy()`` dict overrides it (the dict is the
 			later, performance-level dial).
-		key: Optional key override — re-anchors *key-relative* content
+		key: Optional key override - re-anchors *key-relative* content
 			(degrees, romans, generated material, and key-relative section
 			progressions bound with ``section_chords``) to this section's
 			tonic.  *Absolute* content (note names, MIDI pitches, frozen
 			chords) is never moved, and *chord-relative* content
 			(``ChordTone``, ``Approach``) tracks the sounding chord rather
-			than the key — see the three-intent model in the docs.  The
+			than the key - see the three-intent model in the docs.  The
 			live graph engine (``harmony(style=...)``) stays in the
 			composition key by design (a stateful walk does not transpose
 			mid-stream).
-		scale: Optional scale/mode override (e.g. ``"minor"``) — moves the
+		scale: Optional scale/mode override (e.g. ``"minor"``) - moves the
 			mode as well as the tonic, so a section can genuinely change
 			to the relative or parallel minor.  Falls back to the form's
 			scale, then the composition's.
@@ -68,7 +68,7 @@ class Section:
 
 def _coerce_section (element: typing.Any) -> Section:
 
-	"""Coerce a Form element — a Section passes through, a (name, bars) tuple converts."""
+	"""Coerce a Form element - a Section passes through, a (name, bars) tuple converts."""
 
 	if isinstance(element, Section):
 		return element
@@ -85,14 +85,14 @@ def _coerce_section (element: typing.Any) -> Section:
 @dataclasses.dataclass(frozen=True)
 class Form:
 
-	"""A frozen sequence of Sections — the editable, bindable form value.
+	"""A frozen sequence of Sections - the editable, bindable form value.
 
 	List-friendly: the constructor coerces ``("name", bars)`` tuples, so
 	``Form([("verse", 8), ("chorus", 8)])`` and
 	``Form([Section("verse", 8), Section("chorus", 8)])`` are the same value.
 	Repetition is Python list arithmetic before construction.
 
-	A form may carry its own ``key``/``scale`` — the **form tier** of the
+	A form may carry its own ``key``/``scale`` - the **form tier** of the
 	key-source chain (``Section.key`` overrides it; it overrides the
 	composition key).  A whole AABA in one key with one section borrowing
 	another is ``Form([...], key="A")`` plus a ``Section(..., key="F")``.
@@ -146,7 +146,7 @@ class Form:
 		The **left** operand's form-tier ``key``/``scale`` survives (a single
 		value cannot hold two form keys); the right form's form-tier key is
 		dropped.  Per-section ``Section.key``/``scale`` on either side is
-		preserved — the sections concatenate intact.
+		preserved - the sections concatenate intact.
 		"""
 
 		if not isinstance(other, Form):
@@ -161,7 +161,7 @@ class Form:
 		**changes: typing.Any,
 	) -> "Form":
 
-		"""Replace the section at a 1-based slot — whole, or by field.
+		"""Replace the section at a 1-based slot - whole, or by field.
 
 		``form.replace(3, bars=16)`` stretches slot 3;
 		``form.replace(3, Section("drop", 16, energy=1.0))`` swaps it out.
@@ -195,12 +195,12 @@ class Form:
 
 	def with_energy (self, energies: typing.Dict[str, float]) -> "Form":
 
-		"""Set the energy payload on named sections — ``{"chorus": 0.9}``.
+		"""Set the energy payload on named sections - ``{"chorus": 0.9}``.
 
 		Every section whose name appears in the mapping takes the new value;
 		naming a section the form does not contain raises.  Energy *ramps*
 		(``(start, end)`` tuples) live in ``composition.energy()``, not in
-		the payload — a Section carries one number.
+		the payload - a Section carries one number.
 		"""
 
 		names = {section.name for section in self.sections}

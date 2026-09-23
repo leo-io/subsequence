@@ -1,4 +1,4 @@
-"""Harmony helpers — diatonic chords without the chord-graph engine.
+"""Harmony helpers - diatonic chords without the chord-graph engine.
 
 Standalone convenience functions (``diatonic_chords``, ``diatonic_chord``,
 ``diatonic_chord_sequence``) for building chords from a key and mode.  For
@@ -23,7 +23,7 @@ def diatonic_chords (key: str, mode: str = "ionian") -> typing.List[subsequence.
 		key: Note name for the key (e.g., ``"C"``, ``"Eb"``, ``"F#"``).
 		mode: A mode with chord qualities defined (e.g. ``"ionian"``,
 			``"dorian"``, ``"minor"``). Scales without chord qualities
-			(e.g. ``"hirajoshi"``) will raise ``ValueError`` — use
+			(e.g. ``"hirajoshi"``) will raise ``ValueError`` - use
 			``p.snap_to_scale()`` for pitch snapping instead.
 
 	Returns:
@@ -117,7 +117,7 @@ def diatonic_chord_sequence (
 	that chord's root. Pass both directly to ``p.chord(chord, root=midi_root)``.
 
 	Counts larger than the number of scale degrees wrap into higher octaves
-	automatically. The sequence always steps upward — reverse the list for
+	automatically. The sequence always steps upward - reverse the list for
 	a falling sequence.
 
 	Parameters:

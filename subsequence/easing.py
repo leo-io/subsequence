@@ -11,18 +11,18 @@ Pass a name string or a plain callable to any ``shape`` parameter:
 	composition.target_bpm(140, bars=8, shape="s_curve")
 	p.cc_ramp(74, 0, 127, shape="exponential")
 
-	# Custom callable — receives and returns a float in [0, 1]:
+	# Custom callable - receives and returns a float in [0, 1]:
 	p.cc_ramp(74, 0, 127, shape=lambda t: t ** 0.5)
 
 Available shapes:
 
 	"linear"      Constant rate (default).
-	"ease_in"     Slow start, accelerates — fade-ins, building tension.
-	"ease_out"    Fast start, decelerates — fade-outs, natural decay.
-	"ease_in_out" Smooth S-curve (Hermite smoothstep) — BPM changes, crossfades.
-	"exponential" Very slow start, rapid end (cubic) — filter sweeps.
-	"logarithmic" Rapid start, very gradual end (cubic) — volume fades.
-	"s_curve"     Smoother S-curve (Perlin smootherstep) — long, gentle transitions.
+	"ease_in"     Slow start, accelerates - fade-ins, building tension.
+	"ease_out"    Fast start, decelerates - fade-outs, natural decay.
+	"ease_in_out" Smooth S-curve (Hermite smoothstep) - BPM changes, crossfades.
+	"exponential" Very slow start, rapid end (cubic) - filter sweeps.
+	"logarithmic" Rapid start, very gradual end (cubic) - volume fades.
+	"s_curve"     Smoother S-curve (Perlin smootherstep) - long, gentle transitions.
 
 All functions satisfy f(0) = 0 and f(1) = 1 and are monotonically non-decreasing.
 Input outside [0, 1] is not defined.
@@ -37,7 +37,7 @@ import typing
 
 
 def linear (t: float) -> float:
-	"""No transformation — constant rate of change."""
+	"""No transformation - constant rate of change."""
 	return t
 
 
@@ -221,8 +221,8 @@ class EasedValue:
 
 	"""Smoothly interpolates between discrete data updates.
 
-	When external data arrives in snapshots — API polls, sensor readings,
-	OSC messages — jumping instantly to each new value often sounds jarring.
+	When external data arrives in snapshots - API polls, sensor readings,
+	OSC messages - jumping instantly to each new value often sounds jarring.
 	``EasedValue`` remembers the previous value and provides a smooth,
 	eased interpolation to the new one over a normalised progress window.
 

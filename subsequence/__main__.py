@@ -1,5 +1,5 @@
 """
-Entry point for ``python -m subsequence`` — confirms the install and points to the docs.
+Entry point for ``python -m subsequence`` - confirms the install and points to the docs.
 """
 
 import logging

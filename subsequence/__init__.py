@@ -71,7 +71,7 @@ Composition tools:
   weighting, range gravity, and pitch-diversity penalty.  History persists
   across bar rebuilds for natural phrase continuity.
 - **Chord parts.** ``comp.chords()`` and ``p.progression()`` play a chord
-  progression — generated from a chord-graph style or given explicitly — at a
+  progression - generated from a chord-graph style or given explicitly - at a
   declared *harmonic rhythm*: a fixed length, a shaped ``[WHOLE, HALF, HALF]``
   sequence, or ``between(WHOLE, 3 * WHOLE, step=WHOLE)`` for chords of varying,
   quantized length.  Voicing density, ``detached`` articulation, and a seed for
@@ -100,7 +100,7 @@ Composition tools:
 - **Randomness tools.** Weighted choice, no-repeat shuffle, random
   walk, probability gates. Deterministic seeding makes every decision
   repeatable: set it composition-wide (``seed=42``) or per generator
-  (``seed=`` on any generator, with ``rng=`` for an explicit instance —
+  (``seed=`` on any generator, with ``rng=`` for an explicit instance -
   precedence ``rng`` > ``seed`` > the pattern's ``p.rng``).
 - **Pattern transforms.** Legato, detached, fixed gate (``p.duration()``),
   reverse, time-stretch, rotate, transpose, invert, randomize, and
@@ -119,10 +119,10 @@ Integration:
 - **MIDI mirroring with per-device drum maps.** Fan a pattern out to
   extra ``(device, channel)`` destinations; an entry can carry its own
   ``drum_note_map`` so one named drum hit re-resolves to the right voice
-  on each device — a DRM1 and a General MIDI sampler alike.
+  on each device - a DRM1 and a General MIDI sampler alike.
 - **Shared project definitions.** ``load_definitions("project.yaml")``
   reads a small per-project YAML file naming notes, CCs, channels,
-  programs, and NRPNs — the same file the Subsample sampler reads — so
+  programs, and NRPNs - the same file the Subsample sampler reads - so
   both tools use identical names and a renumber is a single edit.
 - **Hardware control.** CC input mapping from knobs/faders to
   ``composition.data``; patterns read and write the same dict via
@@ -151,8 +151,8 @@ Integration:
   grids in a reactive HTTP/WebSocket browser dashboard.
 - **Ableton Link.** Industry-standard wireless tempo/phase sync
   (``comp.link()``; requires ``pip install subsequence[link]``).
-  Any Link-enabled app on the same LAN — Ableton Live, iOS synths,
-  other Subsequence instances — stays in time automatically.
+  Any Link-enabled app on the same LAN - Ableton Live, iOS synths,
+  other Subsequence instances - stays in time automatically.
 - **Recording.** Record to standard MIDI file. Render to file without
   waiting for real-time playback.
 

@@ -182,15 +182,15 @@ def displace (sequence: typing.List[T], amount: int) -> typing.List[T]:
 	"""Phase-shift a per-step pattern by a whole number of steps, wrapping.
 
 	Moves every element of ``sequence`` along by ``amount`` positions and wraps
-	the steps that fall off one end back round to the other — the classic rhythm
+	the steps that fall off one end back round to the other - the classic rhythm
 	*necklace* rotation (metric displacement).  A **positive** ``amount`` pushes
 	the pattern **later** (to the right): the hit at step 0 in ``[1, 0, 0, 0]``
 	lands on step 1.  A negative ``amount`` pulls it earlier.  ``amount`` is taken
 	modulo the length, so a whole revolution (or zero) returns the pattern
 	unchanged and an over-length shift simply wraps.
 
-	Works on any per-step data — a 0/1 rhythm, a density profile, a velocity or
-	note list — since it only reorders the existing values.  This is a different
+	Works on any per-step data - a 0/1 rhythm, a density profile, a velocity or
+	note list - since it only reorders the existing values.  This is a different
 	operation from :func:`rotate`, which adds ``shift`` to the integer *values*
 	of a step-index list; ``displace`` moves the *positions* within a value list.
 
@@ -244,11 +244,11 @@ def tile (sequence: typing.List[T], length: int) -> typing.List[T]:
 	"""Cycle a sequence to an exact length.
 
 	Repeats ``sequence`` end-to-end and truncates so the result is exactly
-	``length`` items long — ``tile([1, 0, 0], 8)`` gives ``[1, 0, 0, 1, 0, 0, 1,
+	``length`` items long - ``tile([1, 0, 0], 8)`` gives ``[1, 0, 0, 1, 0, 0, 1,
 	0]``.  Reach for it when the target length is not a whole multiple of the
 	pattern; for an exact multiple, plain ``[1, 0, 0] * 3`` reads more clearly.
 
-	Works on any per-step data — a rhythm, a density profile, notes, velocities.
+	Works on any per-step data - a rhythm, a density profile, notes, velocities.
 
 	Parameters:
 		sequence: The pattern to repeat.  Must be non-empty when ``length > 0``.
@@ -258,7 +258,7 @@ def tile (sequence: typing.List[T], length: int) -> typing.List[T]:
 		A new list of exactly ``length`` items, or ``[]`` when ``length <= 0``.
 
 	Raises:
-		ValueError: If ``sequence`` is empty and ``length > 0`` — there is
+		ValueError: If ``sequence`` is empty and ``length > 0`` - there is
 			nothing to cycle.
 
 	Example:
@@ -323,13 +323,13 @@ def mask (
 	selector is **active** and replacing every other step with ``zero``.  Give the
 	selector as **exactly one** of:
 
-		- ``against`` — a parallel part, active where ``against[i]`` is truthy
+		- ``against`` - a parallel part, active where ``against[i]`` is truthy
 			(non-zero).  Shorter than ``sequence`` it repeats its last value; an
 			empty one is inactive everywhere.
-		- ``steps`` — a collection of step indices, active at exactly those
+		- ``steps`` - a collection of step indices, active at exactly those
 			positions.  Indices outside the sequence are ignored.
 
-	Works on any per-step data — densities, 0/1 gates, notes, velocities — since
+	Works on any per-step data - densities, 0/1 gates, notes, velocities - since
 	the kept steps keep their value.  Off steps take ``zero`` (default ``0``); pass
 	``zero=0.0`` to keep a float density profile float.
 
@@ -372,7 +372,7 @@ def choke (
 
 	The complement of :func:`mask`: replaces ``sequence[i]`` with ``floor`` where
 	the selector is **active**, and keeps it everywhere else.  This is the classic
-	drum *choke* — one voice silences another on the steps it sounds.  Give the
+	drum *choke* - one voice silences another on the steps it sounds.  Give the
 	selector as **exactly one** of ``against`` (a parallel part, active where
 	truthy) or ``steps`` (a collection of active step indices), with the same
 	repeat-last / ignore-out-of-range / empty rules as :func:`mask`.
@@ -456,7 +456,7 @@ def shuffled_choices (pool: typing.List[T], n: int, rng: random.Random) -> typin
 	Across reshuffles, the last item of one pass is never the first of the next.
 	Similar to Max/MSP's ``urn`` object.
 
-	The no-immediate-repeat guarantee assumes the pool values are distinct —
+	The no-immediate-repeat guarantee assumes the pool values are distinct -
 	a pool containing duplicates (e.g. ``[100, 100, 80]``) can still place
 	equal values back to back.
 
@@ -601,7 +601,7 @@ def density_to_steps (
 	"""Roll each step against its density and return the fired step indices.
 
 	Walks the grid and, for each step, draws a fresh random number and keeps
-	that step when the draw falls below the step's density — an independent
+	that step when the draw falls below the step's density - an independent
 	weighted coin per step.  Returns the **list of fired step indices**, ready
 	to feed ``p.sequence(steps=...)`` or ``hit_steps`` and per-step
 	comprehensions over those indices.  This is the named form of the
@@ -611,11 +611,11 @@ def density_to_steps (
 	is the deterministic gate, :func:`probability_gate` thins an already-binary
 	sequence and returns a parallel 0/1 list, and ``density_to_steps`` takes a
 	pure density profile (floats in ``[0, 1]``) and emits the sparse set of
-	survivors as indices — no ``[1] * n`` base and no :func:`sequence_to_indices`
+	survivors as indices - no ``[1] * n`` base and no :func:`sequence_to_indices`
 	bridge needed.
 
 	``density`` may be a per-step list (its length sets the grid) or a single
-	float applied uniformly, in which case ``length`` is **required** — a bare
+	float applied uniformly, in which case ``length`` is **required** - a bare
 	probability has no grid of its own.  A density at or above ``1.0`` always
 	fires; at or below ``0.0`` never fires.  Pass a seeded ``random.Random`` (or
 	the pattern's ``p.rng``) for reproducible output.
@@ -623,16 +623,16 @@ def density_to_steps (
 	Parameters:
 		density: A per-step density list (floats in ``[0, 1]``), or a single
 			float applied to every step (then ``length`` is required).
-		rng: The seeded random generator — pass the pattern's ``p.rng``.
+		rng: The seeded random generator - pass the pattern's ``p.rng``.
 		length: The grid size when ``density`` is a scalar.  Ignored for a list
 			density (the list's own length is used).
 
 	Returns:
-		The fired step indices in ascending order — possibly empty.  An empty
+		The fired step indices in ascending order - possibly empty.  An empty
 		result is normal: a sparse profile may fire nothing on a given cycle.
 
 	Raises:
-		ValueError: If ``density`` is a scalar and ``length`` is not given —
+		ValueError: If ``density`` is a scalar and ``length`` is not given -
 			there is no grid to roll against.
 
 	Example:
@@ -701,7 +701,7 @@ def density_warp (
 	the identity and returns ``value`` unchanged; above 0.5 thickens, below 0.5
 	thins.  The output is always in ``[0, 1]``.
 
-	The map is ``W = (value*amount) / (value*amount + (1-value)*(1-amount))`` —
+	The map is ``W = (value*amount) / (value*amount + (1-value)*(1-amount))`` -
 	the logistic of ``logit(value) + logit(amount)``.  Because the log-odds add,
 	warps **stack**: two warps equal one whose knobs combine by summing their
 	log-odds.  ``amount = 1`` forces a full ``1.0`` and ``amount = 0`` a full
@@ -716,7 +716,7 @@ def density_warp (
 
 	Parameters:
 		value: A probability/density in ``[0, 1]``, or a list of them.
-		amount: The warp knob in ``[0, 1]`` — ``0.5`` is identity, ``>0.5``
+		amount: The warp knob in ``[0, 1]`` - ``0.5`` is identity, ``>0.5``
 			denser, ``<0.5`` sparser.  A float warps every element uniformly;
 			a list warps per step.
 
@@ -728,7 +728,7 @@ def density_warp (
 		# A per-step kick profile, thickened by one density knob.
 		profile = [0.9, 0.1, 0.5, 0.1, 0.8, 0.1, 0.4, 0.1]
 		dense = subsequence.sequence_utils.density_warp(profile, 0.7)
-		# dense is a list in [0, 1] — use as per-step probabilities or velocities.
+		# dense is a list in [0, 1] - use as per-step probabilities or velocities.
 		```
 	"""
 
@@ -824,7 +824,7 @@ def density_spread (
 	"""Expand or contract a probability/density about a fixed anchor.
 
 	Where :func:`density_warp` *shifts* a value denser or sparser, this *scales*
-	the spread of values around an anchor ``midpoint`` — the contrast twin of the
+	the spread of values around an anchor ``midpoint`` - the contrast twin of the
 	warp.  ``amount = 0.5`` is the identity; above 0.5 **expands** the spread
 	(pushes values away from the anchor, toward 0 and 1); below 0.5 **contracts**
 	it (pulls values toward the anchor).  A ``value`` equal to ``midpoint`` never
@@ -850,7 +850,7 @@ def density_spread (
 
 	Parameters:
 		value: A probability/density in ``[0, 1]``, or a list of them.
-		amount: The spread knob in ``[0, 1]`` — ``0.5`` is identity, ``>0.5``
+		amount: The spread knob in ``[0, 1]`` - ``0.5`` is identity, ``>0.5``
 			expands, ``<0.5`` contracts.  A float spreads every element
 			uniformly; a list spreads per step.
 		midpoint: The fixed anchor in ``(0, 1)`` that the spread pivots around
@@ -869,7 +869,7 @@ def density_spread (
 		# Sharpen the contrast of a per-step accent profile around 0.5.
 		accents = [0.55, 0.3, 0.7, 0.45, 0.8, 0.25, 0.6, 0.4]
 		sharp = subsequence.sequence_utils.density_spread(accents, 0.75)
-		# values above 0.5 pushed up, below pushed down — same centre, wider spread.
+		# values above 0.5 pushed up, below pushed down - same centre, wider spread.
 		```
 	"""
 
@@ -900,7 +900,7 @@ def density_spread (
 
 def _combine_geomean (values: typing.List[float]) -> float:
 
-	"""Geometric mean of ``values`` — the Nth root of their product."""
+	"""Geometric mean of ``values`` - the Nth root of their product."""
 
 	return math.prod(values) ** (1.0 / len(values))
 
@@ -920,19 +920,19 @@ def combine_densities (
 
 	"""Blend several density layers into one consensus density.
 
-	Takes a list of density ``layers`` — each a single value in ``[0, 1]`` or a
-	per-step list in ``[0, 1]`` — and reduces them, step by step, to one density
+	Takes a list of density ``layers`` - each a single value in ``[0, 1]`` or a
+	per-step list in ``[0, 1]`` - and reduces them, step by step, to one density
 	value or list.  This is the "agree on how busy this bar should be" stage; its
 	output is meant to feed the ``amount`` of :func:`density_warp`.
 
 	The ``strategy`` picks the reducer (all preserve ``[0, 1]`` for valid inputs,
 	so no clamping is applied):
 
-		- ``"geomean"`` (default) — the geometric mean, ``prod(values) ** (1/N)``.
+		- ``"geomean"`` (default) - the geometric mean, ``prod(values) ** (1/N)``.
 			A gentle consensus where any near-zero layer pulls the result down.
-		- ``"min"`` — the most restrictive layer wins (a strict gate).
-		- ``"mean"`` — the plain arithmetic average (a balanced vote).
-		- ``"product"`` — multiply them all (stacks toward sparse fast).
+		- ``"min"`` - the most restrictive layer wins (a strict gate).
+		- ``"mean"`` - the plain arithmetic average (a balanced vote).
+		- ``"product"`` - multiply them all (stacks toward sparse fast).
 
 	Broadcasting generalises the rule in :func:`density_warp`: if every layer is
 	a single value the result is a single value; if any layer is a list the
@@ -943,7 +943,7 @@ def combine_densities (
 	Parameters:
 		layers: The density layers to blend.  Each entry is a value in
 			``[0, 1]`` or a per-step list of such values.  Must be non-empty.
-		strategy: Reducer name — ``"geomean"`` (default), ``"min"``, ``"mean"``,
+		strategy: Reducer name - ``"geomean"`` (default), ``"min"``, ``"mean"``,
 			or ``"product"``.
 
 	Returns:
@@ -1027,7 +1027,7 @@ def warp_stack (
 
 	Stacking saturates fast: every knob above ``0.5`` pushes harder toward
 	``1.0`` (and below toward ``0.0``), so a few strong knobs can pin a sequence
-	almost fully on or off.  Treat it like gain-staging — prefer a few gentle
+	almost fully on or off.  Treat it like gain-staging - prefer a few gentle
 	knobs, or blend control layers first with :func:`combine_densities` and apply
 	the consensus as one knob.
 
@@ -1106,10 +1106,10 @@ def flip (
 	high: float = 1.0,
 ) -> typing.Union[float, typing.List[float]]:
 
-	"""Reflect a value within a range — its complement about the mid-point.
+	"""Reflect a value within a range - its complement about the mid-point.
 
 	Returns ``low + high - value``, mirroring ``value`` to the opposite side of the
-	range ``[low, high]``.  With the default ``[0, 1]`` this is ``1 - value`` — the
+	range ``[low, high]``.  With the default ``[0, 1]`` this is ``1 - value`` - the
 	density/probability complement, and a logical NOT for a 0/1 list.  Being
 	range-aware it also flips other scales: ``flip(100, 0, 127)`` is ``27``,
 	mirroring a velocity within the MIDI range.
@@ -1160,7 +1160,7 @@ def clamp (
 	"""Bound a value (or list) to the range ``[low, high]``.
 
 	Returns ``max(low, min(high, value))`` element-wise.  This is the plain,
-	list-aware clamp — distinct from :func:`scale_clamp`, which *rescales* from one
+	list-aware clamp - distinct from :func:`scale_clamp`, which *rescales* from one
 	range to another before clamping.  Defaults to ``[0, 1]``, the usual
 	density range; pass ``low``/``high`` for any other scale.  Assumes
 	``low <= high``.
@@ -1196,7 +1196,7 @@ def threshold (sequence: typing.List[float], cutoff: float = 0.5) -> typing.List
 
 	"""Gate a per-step field into a deterministic 0/1 sequence.
 
-	Returns ``1`` where ``sequence[i] > cutoff`` (strict) and ``0`` otherwise — the
+	Returns ``1`` where ``sequence[i] > cutoff`` (strict) and ``0`` otherwise - the
 	deterministic counterpart to :func:`probability_gate`'s random roll, matching
 	the idiom ``cutoff < x``.  Pair with :func:`sequence_to_indices` to turn the
 	result into the firing step indices.
@@ -1228,14 +1228,14 @@ def fold (sequence: typing.Sequence[int], low: int, high: int, mode: str = "wrap
 	"""Bring out-of-range whole numbers back into a range, keeping their movement.
 
 	Where :func:`clamp` flattens everything beyond the bounds onto the bounds, ``fold``
-	keeps travelling — so a line that runs off the top comes back in rather than
+	keeps travelling - so a line that runs off the top comes back in rather than
 	sticking.  That matters for generators whose values grow without limit (Recamán's
 	sequence, raw Fibonacci): clamping turns their shape into a held note, folding
 	preserves it.  Two ways to come back:
 
-		- ``"wrap"`` — reappear at the opposite end, the octave-style ``%`` most
+		- ``"wrap"`` - reappear at the opposite end, the octave-style ``%`` most
 			musicians expect.  Yields ``[low, high)``: ``high`` itself lands on ``low``.
-		- ``"reflect"`` — turn around at the boundary and travel back, so movement
+		- ``"reflect"`` - turn around at the boundary and travel back, so movement
 			reverses instead of jumping.  Yields ``[low, high]`` inclusive, and is
 			:func:`flip` applied over and over rather than once.
 
@@ -1246,7 +1246,7 @@ def fold (sequence: typing.Sequence[int], low: int, high: int, mode: str = "wrap
 	Parameters:
 		sequence: The whole numbers to bring into range.
 		low: Lower bound (always reachable).
-		high: Upper bound — reachable under ``"reflect"``, excluded under ``"wrap"``.
+		high: Upper bound - reachable under ``"reflect"``, excluded under ``"wrap"``.
 		mode: ``"wrap"`` or ``"reflect"`` (default ``"wrap"``).
 
 	Returns:
@@ -1290,8 +1290,8 @@ def fold_to_midi_range (pitch: int, low: int = 0, high: int = 127) -> int:
 
 	"""Bring a pitch inside 0–127 by octaves, keeping its pitch class.
 
-	A generator that computes pitches can run off either end — ``branch_sequence``
-	transposing a trunk upward, a chord stacked past the top of the keyboard —
+	A generator that computes pitches can run off either end - ``branch_sequence``
+	transposing a trunk upward, a chord stacked past the top of the keyboard -
 	and a pitch MIDI cannot carry is dropped at every send, logged as a device
 	fault (#3004).  Moving it by octaves keeps the note it is and puts it where
 	it can sound; the alternative, clamping, turns a melody into a wall at 127.
@@ -1316,7 +1316,7 @@ def _noise_hash (*values: int) -> int:
 	"""Mix lattice coordinates and a seed into 32 well-spread bits.
 
 	The Perlin functions used ``(a*pos + b*seed + 12345) & 0x7FFFFFFF``, which
-	is not a hash — it is a straight line.  Every multiplier was ≡ 1 (mod 4),
+	is not a hash - it is a straight line.  Every multiplier was ≡ 1 (mod 4),
 	so the bottom two bits of the result were the bottom two bits of the
 	input.  ``perlin_2d`` picks its gradient with ``h & 3``, so the whole
 	field was decided by ``seed % 4``: four fields in total, and the same
@@ -1325,7 +1325,7 @@ def _noise_hash (*values: int) -> int:
 	half-integer steps (#3011).
 
 	Each value is folded in with a multiply by an odd constant, then the whole
-	thing goes through murmur3's finaliser — shift, multiply, xor, twice.  The
+	thing goes through murmur3's finaliser - shift, multiply, xor, twice.  The
 	finaliser is the part that earns its keep: a multiply only carries bits
 	*upward*, so without it the top bit of an input moves one output bit on
 	average instead of sixteen, and the bottom bits stay a copy of the input's.
@@ -1351,13 +1351,13 @@ def perlin_1d (x: float, seed: int = 0) -> float:
 	"""Generate smooth 1D noise at position *x*.
 
 	Returns a value in [0.0, 1.0] that varies smoothly as *x* changes.
-	Both ends are genuinely reached — the value is exactly 0.5 at every whole
-	*x* and swings furthest between them — and the values cluster around the
+	Both ends are genuinely reached - the value is exactly 0.5 at every whole
+	*x* and swings furthest between them - and the values cluster around the
 	middle, so about one in a hundred is above 0.92.  Pick a threshold with
 	that in mind: 0.65 fires often, 0.92 rarely.
 	Same *x* and *seed* always produce the same output.  Use to drive
 	density, velocity, or probability parameters that should wander
-	organically over time — the "parameter wandering within boundaries"
+	organically over time - the "parameter wandering within boundaries"
 	quality of generative electronic music systems.
 
 	Parameters:
@@ -1411,7 +1411,7 @@ def perlin_2d (x: float, y: float, seed: int = 0) -> float:
 
 	Returns a value in [0.0, 1.0] that varies smoothly as *x* and *y* change.
 	Both ends are genuinely reached, at a cell centre whose four corners all
-	slope away from it, and the values cluster around the middle — about one
+	slope away from it, and the values cluster around the middle - about one
 	in a hundred is above 0.9.
 	Same coordinates and *seed* always produce the same output. Use to drive
 	correlated parameters that should weave around each other organically over time,
@@ -1487,7 +1487,7 @@ def perlin_1d_sequence (start: float, spacing: float, count: int, seed: int = 0)
 			Typically ``p.bar * p.grid * scale`` to anchor the sequence
 			to an absolute position in the piece.
 		spacing: Distance between consecutive samples.  Matches the
-			``scale`` factor used in single calls — e.g. ``0.1`` gives
+			``scale`` factor used in single calls - e.g. ``0.1`` gives
 			the same per-sample change as ``perlin_1d(i * 0.1, seed)``.
 		count: Number of values to return.
 		seed: Noise field seed.  Same seed as a matching :func:`perlin_1d`
@@ -1539,7 +1539,7 @@ def perlin_2d_grid (
 
 	Example:
 		```python
-		# 4x4 noise grid — rows are bars, columns are steps
+		# 4x4 noise grid - rows are bars, columns are steps
 		grid = subsequence.sequence_utils.perlin_2d_grid(
 		    x_start = p.bar * 0.1,
 		    y_start = 0.0,
@@ -1572,7 +1572,7 @@ def logistic_map (r: float, steps: int, x0: float = 0.5) -> typing.List[float]:
 	periodic oscillations (period-2, -4, -8…); ``r > 3.57`` enters chaos.
 	At ``r ≈ 3.83`` a stable period-3 window briefly returns.
 
-	Complements :func:`perlin_1d` — use Perlin for smooth organic
+	Complements :func:`perlin_1d` - use Perlin for smooth organic
 	wandering and logistic_map when you need controllable order-to-chaos
 	behaviour.  Feeding logistic_map values into ``hit_steps`` probability
 	or ghost note velocity gives ghost notes that are "the same but never
@@ -1611,7 +1611,7 @@ def pink_noise (steps: int, sources: int = 16, seed: int = 0) -> typing.List[flo
 
 	"""Generate a 1/f (pink) noise sequence using the Voss-McCartney algorithm.
 
-	Pink noise has equal energy per octave — it contains both slow drift
+	Pink noise has equal energy per octave - it contains both slow drift
 	and fast jitter in a single signal, matching how musical parameters
 	naturally vary.  Voss and Clarke (1978) showed that pitch and loudness
 	fluctuations in real music follow 1/f statistics.
@@ -1692,7 +1692,7 @@ def _lsystem_expand_reporting (
 	An L-system rewrites every symbol in the current string simultaneously,
 	each generation replacing symbols according to ``rules``.  After enough
 	generations the string exhibits self-similarity: its large-scale structure
-	mirrors its small-scale structure — the same property found in natural
+	mirrors its small-scale structure - the same property found in natural
 	music, where motifs recur at phrase, section, and movement level.
 
 	Symbols not present in ``rules`` pass through unchanged (identity rule).
@@ -1710,18 +1710,18 @@ def _lsystem_expand_reporting (
 	Parameters:
 		axiom: Initial string (e.g. ``"A"``).
 		rules: Production rules.  Deterministic: ``{"A": "AB", "B": "A"}``.
-			Stochastic: ``{"A": [("AB", 3), ("BA", 1)]}`` — weights are
+			Stochastic: ``{"A": [("AB", 3), ("BA", 1)]}`` - weights are
 			relative and do not need to sum to 1.
 		generations: Number of rewriting iterations.
 		rng: Random number generator.  Required when any rule is stochastic;
 			ignored for fully deterministic rule sets.
 		max_length: Stop early rather than produce a string longer than this.
 			The result is then the last *whole* generation that fits, which is
-			still a well-formed L-system string — a truncated one would not be.
+			still a well-formed L-system string - a truncated one would not be.
 			None (the default) expands exactly ``generations`` times.
 
 	Returns:
-		The expanded string, and how many generations were actually applied —
+		The expanded string, and how many generations were actually applied -
 		fewer than asked when ``max_length`` stopped it.  A caller that wants
 		to say so needs to be told; deriving it from the length would mean
 		knowing the rules' growth rate, which stochastic rules do not have.
@@ -1731,13 +1731,13 @@ def _lsystem_expand_reporting (
 
 	Example:
 		```python
-		# Fibonacci-word rhythm — evenly spaced hits that never quite repeat
+		# Fibonacci-word rhythm - evenly spaced hits that never quite repeat
 		expanded = subsequence.sequence_utils.lsystem_expand(
 		    axiom="A", rules={"A": "AB", "B": "A"}, generations=6
 		)
 		# expanded is "ABAABABAABAABABAABABA" (length 21, the gen-6 Fibonacci word)
 
-		# Stochastic — different output each bar
+		# Stochastic - different output each bar
 		expanded = subsequence.sequence_utils.lsystem_expand(
 		    axiom="A",
 		    rules={"A": [("AB", 3), ("BA", 1)]},
@@ -1801,7 +1801,7 @@ def lsystem_expand (
 
 	"""Expand an L-system string by applying production rules.
 
-	See :func:`_lsystem_expand_reporting`, which this wraps — identical, but
+	See :func:`_lsystem_expand_reporting`, which this wraps - identical, but
 	returning only the string, which is what a caller usually wants.
 	"""
 
@@ -1901,10 +1901,10 @@ def generate_cellular_automaton_1d (steps: int, rule: int = 30, generation: int 
 
 	Evolves a 1D CA from an initial state for the specified number of
 	generations, returning the final state as a binary rhythm.  Each
-	generation the pattern evolves — use ``p.cycle`` as the generation
+	generation the pattern evolves - use ``p.cycle`` as the generation
 	to get a rhythm that changes every bar.
 
-	Rule 30 produces "structured chaos" — patterns that look random but
+	Rule 30 produces "structured chaos" - patterns that look random but
 	have hidden self-similarity.  Rule 90 produces fractal (Sierpiński
 	triangle) patterns.  Rule 110 is Turing-complete.
 
@@ -1978,7 +1978,7 @@ def _parse_life_rule (rule: str) -> typing.Tuple[typing.Set[int], typing.Set[int
 		      ``"B3/S23"`` for Conway's Life or ``"B368/S245"`` for Morley.
 
 	Returns:
-		``(birth_set, survival_set)`` — sets of neighbour counts that
+		``(birth_set, survival_set)`` - sets of neighbour counts that
 		trigger birth or survival respectively.
 
 	Raises:
@@ -2163,7 +2163,7 @@ def thue_morse (n: int) -> typing.List[int]:
 	Generate the Thue-Morse sequence.
 
 	The Thue-Morse sequence is an infinite aperiodic binary sequence defined
-	by ``t(i) = popcount(i) mod 2`` — the parity of the number of 1-bits in
+	by ``t(i) = popcount(i) mod 2`` - the parity of the number of 1-bits in
 	``i``.  It is perfectly balanced (equal density of 0s and 1s over any
 	power-of-two window) and overlap-free: no subsequence occurs three times
 	consecutively.  It is self-similar but never strictly periodic, making it
@@ -2177,7 +2177,7 @@ def thue_morse (n: int) -> typing.List[int]:
 
 	Example:
 		```python
-		# 16-step Thue-Morse rhythm — first 8 values: 0 1 1 0 1 0 0 1
+		# 16-step Thue-Morse rhythm - first 8 values: 0 1 1 0 1 0 0 1
 		seq = subsequence.sequence_utils.thue_morse(16)
 		```
 	"""
@@ -2215,7 +2215,7 @@ def morse_code (
 	"""
 	Translate text into an International Morse Code rhythm.
 
-	Encodes ``text`` as Morse and lays it out as a per-step duration list — the
+	Encodes ``text`` as Morse and lays it out as a per-step duration list - the
 	same shape as :func:`generate_legato_durations`, where ``0.0`` marks a rest.
 	Each dot becomes a note of length ``dot`` and each dash a note of length
 	``dash``; the gaps between elements, characters and words are spans of rests.
@@ -2223,7 +2223,7 @@ def morse_code (
 	The ``dot`` is the base time unit: every element and gap occupies
 	``round(duration / dot)`` cells, so the genuine 1:3 dot/dash ratio and the
 	1/3/7-unit gaps fall straight out of the defaults.  Place the result on a
-	grid whose step equals ``dot`` for authentic timing — a dash then sustains
+	grid whose step equals ``dot`` for authentic timing - a dash then sustains
 	across its three cells.
 
 	Pair it with :func:`sequence_to_indices` to get the note positions, then read
@@ -2231,24 +2231,24 @@ def morse_code (
 	:func:`thue_morse`, the unrelated Thue-Morse mathematical sequence.)
 
 	The full International Morse alphabet is supported: A-Z, 0-9 and the standard
-	punctuation.  Input is normalised first — folded to one case (Morse is
+	punctuation.  Input is normalised first - folded to one case (Morse is
 	caseless), runs of whitespace collapsed to a single word gap and trimmed from
-	the ends, and any unencodable character dropped — so arbitrary text is safe.
+	the ends, and any unencodable character dropped - so arbitrary text is safe.
 
 	Parameters:
 		text: The message to encode.
 		dot: Note length of a dot, and the base time unit (default ``0.25``).
-		dash: Note length of a dash (default ``0.75`` — three units).
+		dash: Note length of a dash (default ``0.75`` - three units).
 		symbol_gap: Rest between elements within a character (default ``0.25``).
-		letter_gap: Rest between characters (default ``0.75`` — three units).
-		word_gap: Rest between words (default ``1.75`` — seven units).
+		letter_gap: Rest between characters (default ``0.75`` - three units).
+		word_gap: Rest between words (default ``1.75`` - seven units).
 
 	Returns:
 		A per-step duration list with ``0.0`` for rests, or ``[]`` when the text
 		has no encodable characters.
 
 	Raises:
-		ValueError: If ``dot`` is not positive — it is the base time unit.
+		ValueError: If ``dot`` is not positive - it is the base time unit.
 
 	Example:
 		```python
@@ -2356,18 +2356,18 @@ def de_bruijn (k: int, n: int) -> typing.List[int]:
 
 def recaman (count: int, start: int = 0, skip: int = 0) -> typing.List[int]:
 
-	"""Generate Recamán's sequence — a line that never settles and never repeats.
+	"""Generate Recamán's sequence - a line that never settles and never repeats.
 
 	The rule is simply *step back if you can, otherwise step forward*: at step *n*
 	move back by *n* if that lands on a positive number you have not already visited,
-	and forward by *n* if it does not.  The steps therefore grow — the gap between
-	consecutive values is always exactly *n* — which makes the line lurch further and
+	and forward by *n* if it does not.  The steps therefore grow - the gap between
+	consecutive values is always exactly *n* - which makes the line lurch further and
 	further as it goes.
 
 	Musically the interest is that the back-and-forth splits into **two voices**.  Take
-	terms 8 to 17 from the default start: ``12, 21, 11, 22, 10, 23, 9, 24, 8, 25`` — the
+	terms 8 to 17 from the default start: ``12, 21, 11, 22, 10, 23, 9, 24, 8, 25`` - the
 	alternate values fall away (12, 11, 10, 9, 8) while the ones between them climb
-	(21, 22, 23, 24, 25).  One line of notes, heard as two — the wedge that Baroque solo
+	(21, 22, 23, 24, 25).  One line of notes, heard as two - the wedge that Baroque solo
 	writing uses.  It is at its most characterful over roughly 16 to 32 values; much
 	beyond that it spreads out and starts to sound like a random walk.
 
@@ -2380,7 +2380,7 @@ def recaman (count: int, start: int = 0, skip: int = 0) -> typing.List[int]:
 		start: The first value.  Anything from 2 upward gives genuinely different
 			material, and the higher it is the longer the opening descent (40 opens
 			with eight falling steps).  Note ``0`` and ``1`` differ only by
-			transposition — they are the same shape.
+			transposition - they are the same shape.
 		skip: Discard this many leading values, to take a window further along the
 			sequence.  Later windows sit higher up, so normalise against the window's
 			own lowest value rather than assuming it starts near zero.
@@ -2431,18 +2431,18 @@ def fibonacci (
 	"""Generate Fibonacci numbers, optionally folded into a repeating pitch cycle.
 
 	Each number is the sum of the previous two.  Left unmodulated the values grow
-	exponentially and climb out of hearing almost at once — only eleven of the first
-	twenty fit inside MIDI's range — so as raw pitch this is a single rising gesture.
+	exponentially and climb out of hearing almost at once - only eleven of the first
+	twenty fit inside MIDI's range - so as raw pitch this is a single rising gesture.
 
 	The musical form is ``modulus``.  Taken modulo *m* the sequence repeats, and the
-	length it repeats after (its Pisano period) is fixed by *m* alone — so the size of
+	length it repeats after (its Pisano period) is fixed by *m* alone - so the size of
 	the pitch space you fold into *chooses the phrase length for you*:
 
-		- 3 (a triad) — 8 steps
-		- 5 (pentatonic) — 20 steps
-		- 7 (a diatonic scale) — 16 steps
-		- 8 (octatonic) — 12 steps
-		- 12 (chromatic) — 24 steps
+		- 3 (a triad) - 8 steps
+		- 5 (pentatonic) - 20 steps
+		- 7 (a diatonic scale) - 16 steps
+		- 8 (octatonic) - 12 steps
+		- 12 (chromatic) - 24 steps
 
 	This is the counterpart to :func:`recaman`, which never repeats, and is unrelated
 	to :func:`golden_rhythm`, which places events in time via the golden ratio.
@@ -2451,13 +2451,13 @@ def fibonacci (
 		count: How many numbers to generate.  Omit to return exactly one full cycle,
 			which requires a ``modulus`` (an unmodulated sequence never repeats).
 		a: The first number.  Defaults to 1.
-		b: The second number.  Defaults to 1.  ``(2, 1)`` gives the Lucas numbers — a
+		b: The second number.  Defaults to 1.  ``(2, 1)`` gives the Lucas numbers - a
 			genuinely different cycle through the same pool.  Many other pairs are the
 			same cycle entered at a different point: ``(1, 3)`` is Lucas one step along.
 		modulus: Fold the values into ``[0, modulus)``, making the sequence repeat.
 
 	Returns:
-		A list of whole numbers — the full sequence, or ``[]`` when ``count`` is zero
+		A list of whole numbers - the full sequence, or ``[]`` when ``count`` is zero
 		or negative.
 
 	Raises:
@@ -2466,7 +2466,7 @@ def fibonacci (
 
 	Example:
 		```python
-		# One complete cycle over a seven-note scale — 16 steps, chosen by the maths.
+		# One complete cycle over a seven-note scale - 16 steps, chosen by the maths.
 		degrees = subsequence.sequence_utils.fibonacci(modulus=7)
 		```
 	"""
@@ -2517,8 +2517,8 @@ def golden_rhythm (count: int, length: float = 4.0) -> typing.List[float]:
 
 	Uses the golden angle method: ``position_i = frac(i * φ) * length``, where
 	``φ = (1 + √5) / 2 ≈ 1.618``.  The result is sorted into ascending order.
-	This distributes events with the maximum possible spread — analogous to
-	how sunflower seeds are arranged — producing a quasi-random but
+	This distributes events with the maximum possible spread - analogous to
+	how sunflower seeds are arranged - producing a quasi-random but
 	aesthetically pleasing timing distribution that is distinct from both
 	even grids (Euclidean) and pure randomness.
 
@@ -2571,7 +2571,7 @@ def lorenz_attractor (
 	originally derived to model atmospheric convection.  Its trajectories
 	orbit a butterfly-shaped strange attractor: deterministic yet sensitive to
 	initial conditions, never exactly repeating.  The three axes provide
-	independent but correlated modulation sources — ideal for simultaneously
+	independent but correlated modulation sources - ideal for simultaneously
 	shaping pitch, velocity, and duration from a single generative process.
 
 	Integration uses the Euler method with step ``dt``.  Each axis is
@@ -2649,8 +2649,8 @@ def reaction_diffusion_1d (
 	The Gray-Scott model describes two interacting chemicals U and V
 	on a 1D ring.  V is introduced as a small seed in the centre; the
 	simulation evolves until a stable spatial pattern forms.  The resulting
-	V-concentration profile — spots, stripes, or travelling waves depending
-	on the feed/kill parameters — is returned as a normalised float sequence.
+	V-concentration profile - spots, stripes, or travelling waves depending
+	on the feed/kill parameters - is returned as a normalised float sequence.
 
 	This is fundamentally different from cellular automata: the state is
 	continuous, the update rule is a PDE (not a binary function), and the
@@ -2672,7 +2672,7 @@ def reaction_diffusion_1d (
 
 	Example:
 		```python
-		# Use as a rhythm grid — threshold to place notes
+		# Use as a rhythm grid - threshold to place notes
 		conc = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=2000)
 		hits = [i for i, v in enumerate(conc) if v > 0.5]
 		p.hit_steps("kick_1", hits, velocity=90)
@@ -2745,7 +2745,7 @@ def self_avoiding_walk (
 	one neighbour is always already visited, so every step after it is forced
 	and the walk is a deterministic bounce between the ends.  Measured over
 	500 seeds, the old version produced exactly **two** distinct melodies for
-	any given range and length — the only randomness in it was the direction
+	any given range and length - the only randomness in it was the direction
 	of the first step.  Remembering a window instead keeps what the constraint
 	was for (no repeats nearby, step-wise motion) and leaves a real choice at
 	every step.
@@ -2856,7 +2856,7 @@ def self_avoiding_walk (
 
 def _branch_retrograde (seq: typing.List[int], root: int, interval: int) -> typing.List[int]:
 
-	"""Reverse the pitch order (rhythm untouched — callers own timing)."""
+	"""Reverse the pitch order (rhythm untouched - callers own timing)."""
 
 	return list(reversed(seq))
 
@@ -2925,7 +2925,7 @@ def branch_sequence (
 	The ``pitches`` sequence is the trunk.  At each of ``depth`` levels two
 	transforms are assigned deterministically (derived from the pitch content
 	itself, so the tree is identical for the same trunk regardless of any
-	seed), and ``path`` selects left or right per level — ``2 ** depth``
+	seed), and ``path`` selects left or right per level - ``2 ** depth``
 	variations before the index wraps.  The transforms are order and interval
 	operations (retrograde, inversion, transposition, rotation, interval
 	compression/expansion): deliberately rhythm-free, so the caller owns
@@ -2933,7 +2933,7 @@ def branch_sequence (
 	or let ``p.branch()`` place it directly.
 
 	Parameters:
-		pitches: The trunk — absolute MIDI pitches.  All variations derive
+		pitches: The trunk - absolute MIDI pitches.  All variations derive
 			from this.
 		depth: Branching levels (``2 ** depth`` variations).
 		path: Which variation (0-based; wraps modulo ``2 ** depth``).
@@ -2985,7 +2985,7 @@ def branch_sequence (
 def build_metric_weights (time_signature: typing.Tuple[int, int] = (4, 4), grid: int = 16) -> typing.List[float]:
 
 	"""
-	Per-step metric weights for one bar — how "strong" each grid position is.
+	Per-step metric weights for one bar - how "strong" each grid position is.
 
 	In a simple metre, each written unit is a beat.  The downbeat is 1.0, the
 	half-bar (even beat counts only) is 0.75, other beats are 0.5, halfway
@@ -3056,7 +3056,7 @@ def vl_distance (
 	The smallest total semitone movement that turns *source* into *target*,
 	minimised over every way of assigning source notes to target notes.  When
 	the chords have different sizes, notes of the smaller chord may be doubled
-	(every note of both chords takes part — nothing is dropped).
+	(every note of both chords takes part - nothing is dropped).
 
 	Parameters:
 		source: Pitches of the first chord.
@@ -3064,7 +3064,7 @@ def vl_distance (
 		pitch_classes: When True (default), pitches are reduced mod 12 and each
 			voice moves by the shortest path around the pitch-class circle (a
 			tritone is 6).  When False, pitches are absolute MIDI notes and
-			each voice moves by its literal semitone interval — use this to
+			each voice moves by its literal semitone interval - use this to
 			score concrete voicings rather than abstract chords.
 
 	Returns:
@@ -3138,17 +3138,17 @@ def constrained_walk (
 	after_choice: typing.Optional[typing.Callable[[T], None]] = None,
 ) -> typing.List[T]:
 
-	"""Walk a weighted graph under constraints — the shared hybrid kernel.
+	"""Walk a weighted graph under constraints - the shared hybrid kernel.
 
 	A backward **feasibility** pass (boolean reachability of every pin, so
 	unsatisfiability is known before a note is emitted) followed by a forward
 	walk through the graph's **real, possibly history-dependent** weights
 	masked to surviving candidates.  This guarantees *satisfaction*, not an
-	exact conditional distribution — history-dependent weighting (NIR,
+	exact conditional distribution - history-dependent weighting (NIR,
 	gravity, diversity) keeps its character rather than being flattened.
 
 	Positions are **1-based** (the musician count); position 1 is *start*,
-	which is fixed — pins may name it only redundantly.  ``avoid`` applies
+	which is fixed - pins may name it only redundantly.  ``avoid`` applies
 	to the chosen positions (2..length); the start is exempt.
 
 	With no constraints, the walk consumes the RNG exactly as repeated
@@ -3160,17 +3160,17 @@ def constrained_walk (
 		start: The node at position 1.
 		length: Total walk length, including *start*.
 		rng: Random stream for the weighted draws.
-		pins: ``{position: node}`` — the node that MUST sound at a 1-based
+		pins: ``{position: node}`` - the node that MUST sound at a 1-based
 			position.
-		end: The node at the final position — sugar for ``pins[length]``.
+		end: The node at the final position - sugar for ``pins[length]``.
 		avoid: Nodes excluded from every chosen position.  Naming a node
 			the graph does not contain is allowed (trivially satisfied).
-		weight_modifier: ``fn(source, target, weight) -> float`` — the
+		weight_modifier: ``fn(source, target, weight) -> float`` - the
 			engine's soft weighting, applied inside the feasible mask.  If
 			it suppresses every feasible candidate at some step (all
 			modifiers <= 0), the step falls back to the unmodified weights
-			(stall detection) — satisfaction beats character.
-		before_choice: Called with the source node before each draw — the
+			(stall detection) - satisfaction beats character.
+		before_choice: Called with the source node before each draw - the
 			seam for history bookkeeping (append the source to history, as
 			the live engine's ``step()`` does, so *weight_modifier* sees
 			the same context it would live).
@@ -3180,7 +3180,7 @@ def constrained_walk (
 		The walked nodes, ``[start, ...]``, exactly *length* long.
 
 	Raises:
-		ValueError: If the constraints are contradictory or unsatisfiable —
+		ValueError: If the constraints are contradictory or unsatisfiable -
 			before any RNG draw, naming the failing position.
 	"""
 
@@ -3339,7 +3339,7 @@ def csim (a: typing.Sequence[float], b: typing.Sequence[float]) -> float:
 	"""Contour similarity between two equal-length lines (Marvin/Laprade CSIM).
 
 	The fraction of pairwise order relations (above/below/equal) the two
-	contours share — 1.0 for identical shapes, regardless of exact pitch.
+	contours share - 1.0 for identical shapes, regardless of exact pitch.
 
 	Raises ``ValueError`` for mismatched lengths (similarity between
 	different-length contours is not defined here).
@@ -3385,7 +3385,7 @@ def sieve (
 	A sieve (Xenakis's *crible*) is a logical formula over **residual
 	classes** that denotes a subset of the integers.  This primary form takes
 	a list of ``(modulus, residue)`` pairs and returns their **union** over a
-	bounded range — every ``x`` in ``[lo, hi)`` with ``x % modulus == residue``
+	bounded range - every ``x`` in ``[lo, hi)`` with ``x % modulus == residue``
 	for at least one class.  The integers index *any* ordered parameter, so
 	one kernel builds custom scales (over 0–11 semitones), non-octave pitch
 	pools, rhythm grids, and bar-selection masks.
@@ -3408,8 +3408,8 @@ def sieve (
 	Example:
 		```python
 		sieve([(12, 0), (12, 2), (12, 4), (12, 5), (12, 7), (12, 9), (12, 11)], hi=12)
-		# → [0, 2, 4, 5, 7, 9, 11]  — the major scale as a sieve
-		sieve([(2, 0)], hi=12)          # → [0, 2, 4, 6, 8, 10]  — whole-tone
+		# → [0, 2, 4, 5, 7, 9, 11]  - the major scale as a sieve
+		sieve([(2, 0)], hi=12)          # → [0, 2, 4, 6, 8, 10]  - whole-tone
 		sieve([(5, 0), (7, 1)], lo=60, hi=96)   # a non-octave pitch pool
 		```
 	"""
@@ -3430,7 +3430,7 @@ def sieve (
 
 class Sieve:
 
-	"""A composable Xenakis sieve — residual classes under ``&`` ``|`` ``~``.
+	"""A composable Xenakis sieve - residual classes under ``&`` ``|`` ``~``.
 
 	The full algebra layer over :func:`sieve`: build a :class:`Sieve` with
 	:func:`residual_class` and combine with union (``|``), intersection
@@ -3462,19 +3462,19 @@ class Sieve:
 
 	def __or__ (self, other: "Sieve") -> "Sieve":
 
-		"""Union — in either sieve."""
+		"""Union - in either sieve."""
 
 		return Sieve(lambda x: self._predicate(x) or other._predicate(x))
 
 	def __and__ (self, other: "Sieve") -> "Sieve":
 
-		"""Intersection — in both sieves."""
+		"""Intersection - in both sieves."""
 
 		return Sieve(lambda x: self._predicate(x) and other._predicate(x))
 
 	def __invert__ (self) -> "Sieve":
 
-		"""Complement — every integer NOT in this sieve."""
+		"""Complement - every integer NOT in this sieve."""
 
 		return Sieve(lambda x: not self._predicate(x))
 
@@ -3513,7 +3513,7 @@ def rhythmic_evenness (onsets: typing.Sequence[int], grid: int, normalize: bool 
 
 	Places the *grid* pulses as equally spaced points on a unit circle and
 	sums the chord lengths between every pair of onsets (``2·sin(π·d/grid)``
-	for a pulse distance ``d``).  A maximally even rhythm (a regular polygon —
+	for a pulse distance ``d``).  A maximally even rhythm (a regular polygon -
 	the Euclidean rhythms) maximises this sum; clustered onsets minimise it.
 
 	Parameters:
@@ -3529,8 +3529,8 @@ def rhythmic_evenness (onsets: typing.Sequence[int], grid: int, normalize: bool 
 
 	Example:
 		```python
-		rhythmic_evenness([0, 3, 6], 8)     # tresillo — near 1.0
-		rhythmic_evenness([0, 1, 2], 8)     # clustered — much lower
+		rhythmic_evenness([0, 3, 6], 8)     # tresillo - near 1.0
+		rhythmic_evenness([0, 1, 2], 8)     # clustered - much lower
 		```
 	"""
 
@@ -3565,7 +3565,7 @@ def offbeatness (onsets: typing.Sequence[int], grid: int) -> int:
 
 	The on-beat pulses are the vertices of every regular sub-polygon of the
 	cycle (the divisor meters); the off-beat pulses are exactly those coprime
-	to *grid*.  Off-beatness counts onsets landing on coprime positions — a
+	to *grid*.  Off-beatness counts onsets landing on coprime positions - a
 	meter-independent syncopation flavour (high for rhythms that fight every
 	even subdivision).
 
@@ -3578,8 +3578,8 @@ def offbeatness (onsets: typing.Sequence[int], grid: int) -> int:
 
 	Example:
 		```python
-		offbeatness([0, 4, 8, 12], 16)   # 0 — all on the strong polygon
-		offbeatness([0, 3, 6, 10, 13], 16)   # 2 — bossa, off-beats on pulses 3 and 13
+		offbeatness([0, 4, 8, 12], 16)   # 0 - all on the strong polygon
+		offbeatness([0, 3, 6, 10, 13], 16)   # 2 - bossa, off-beats on pulses 3 and 13
 		```
 	"""
 
@@ -3623,9 +3623,9 @@ def syncopation (
 
 	Example:
 		```python
-		syncopation([0], 16)             # 0.0 — the downbeat only
-		syncopation([0, 4, 8, 12], 16)   # low — on the beats, but beat 1 is strongest
-		syncopation([3, 7, 11, 15], 16)  # high — every onset on a weak pulse
+		syncopation([0], 16)             # 0.0 - the downbeat only
+		syncopation([0, 4, 8, 12], 16)   # low - on the beats, but beat 1 is strongest
+		syncopation([3, 7, 11, 15], 16)  # high - every onset on a weak pulse
 		```
 	"""
 

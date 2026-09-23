@@ -1,11 +1,11 @@
-"""Progressions — chord sequences laid out in time, as a governing value.
+"""Progressions - chord sequences laid out in time, as a governing value.
 
-The one progression type: a frozen tuple of :class:`ChordSpan` — replacing the
+The one progression type: a frozen tuple of :class:`ChordSpan` - replacing the
 old engine ``Progression`` (the ``freeze()`` capture) and ``ChordTimeline``
 (the realised iterable) with a single value that is constructible, queryable,
 transformable, and bindable to the harmonic clock.
 
-Construction (the standard form — lists, parsed per element):
+Construction (the standard form - lists, parsed per element):
 
 	subsequence.progression([1, 6, 3, 7])                    # diatonic degrees
 	subsequence.progression([1, 6, 3, "bVII7"])              # romans where chromatic
@@ -14,7 +14,7 @@ Construction (the standard form — lists, parsed per element):
 	subsequence.progression(style="aeolian_minor", key="A", bars=8, seed=3)
 
 Key-relative content (ints and romans) stays relative inside the value and
-resolves at query time — change the key once, everything follows.  Spice
+resolves at query time - change the key once, everything follows.  Spice
 transforms (``extend``, ``inversions``, ``spread``, ``over``, ``borrow``)
 decorate the spans, never the chords: the engine's currency stays the bare
 ``(root_pc, quality)`` triad, and decoration travels with the span to the
@@ -98,8 +98,8 @@ class ChordEvent (typing.NamedTuple):
 	"""One chord on a realised timeline: which chord, when it starts, and how long
 	it lasts (in beats from the start of the part).
 
-	A ``NamedTuple``, so it unpacks positionally as ``(chord, start, length)`` — the
-	idiom for looping a progression — while also offering ``.chord`` / ``.start`` /
+	A ``NamedTuple``, so it unpacks positionally as ``(chord, start, length)`` - the
+	idiom for looping a progression - while also offering ``.chord`` / ``.start`` /
 	``.length`` attribute access.
 	"""
 
@@ -116,7 +116,7 @@ class ChordEvent (typing.NamedTuple):
 @dataclasses.dataclass(frozen=True)
 class PitchSet:
 
-	"""A nameless sonority — a frozen set of absolute MIDI pitches.
+	"""A nameless sonority - a frozen set of absolute MIDI pitches.
 
 	The escape hatch for chords with no root or quality: clusters, spectral
 	stacks, found objects.  It duck-types ``.tones()`` so every placement verb
@@ -125,7 +125,7 @@ class PitchSet:
 	diatonically), and a progression containing one loops on exhaustion
 	rather than falling through to live graph stepping.
 
-	Pitches are absolute: ``tones()`` ignores its ``root`` argument — you
+	Pitches are absolute: ``tones()`` ignores its ``root`` argument - you
 	chose the register when you chose the pitches.
 	"""
 
@@ -144,7 +144,7 @@ class PitchSet:
 
 	def tones (self, root: int = 60, inversion: int = 0, count: typing.Optional[int] = None) -> typing.List[int]:
 
-		"""Return the pitches (absolute — *root* is ignored by design).
+		"""Return the pitches (absolute - *root* is ignored by design).
 
 		``inversion`` rotates pitches up an octave; ``count`` cycles the set
 		into higher octaves, matching the ``Chord.tones`` contract.
@@ -177,18 +177,18 @@ class PitchSet:
 
 def _parallel_mode (scale: str) -> str:
 
-	"""The mode a borrowed degree resolves against — the other side of the third.
+	"""The mode a borrowed degree resolves against - the other side of the third.
 
 	``borrow()`` is modal interchange, and what it interchanges with is the
 	parallel mode: same tonic, opposite third.  This used to be decided by
-	comparing the scale's NAME with ``"minor"``, so ``scale="aeolian"`` — a
-	literal alias of minor — borrowed *from* minor and changed nothing at all,
+	comparing the scale's NAME with ``"minor"``, so ``scale="aeolian"`` - a
+	literal alias of minor - borrowed *from* minor and changed nothing at all,
 	and dorian and phrygian borrowed from natural minor, which they already
 	nearly are (#3008).
 
 	A scale with a minor third borrows from ionian; one with a major third
-	borrows from aeolian.  A scale with no third to speak of — a pentatonic,
-	a two-note scale — has no parallel, and keeps the major-side default.
+	borrows from aeolian.  A scale with no third to speak of - a pentatonic,
+	a two-note scale - has no parallel, and keeps the major-side default.
 	"""
 
 	pitch_classes = subsequence.intervals.scale_pitch_classes(0, scale)
@@ -200,7 +200,7 @@ def _parallel_mode (scale: str) -> str:
 @dataclasses.dataclass(frozen=True)
 class RomanChord:
 
-	"""A key-relative chord — a scale degree with optional explicit quality.
+	"""A key-relative chord - a scale degree with optional explicit quality.
 
 	Internal: users only ever meet it as an int or roman string element inside
 	a progression list.  It stays relative inside the value and resolves to a
@@ -211,20 +211,20 @@ class RomanChord:
 		degree: 1-based scale degree.
 		accidental: -1 for a ``b`` prefix, +1 for ``#``.  An accidental-
 			prefixed degree reads against the **major** scale, the universal
-			roman convention — ``bVII`` is always the whole step below the
+			roman convention - ``bVII`` is always the whole step below the
 			tonic (Bb in C major, G in A minor); unprefixed degrees read the
 			current scale (``VII`` in A minor is already G).
 		quality: Explicit quality name, or ``None`` to infer diatonically
 			from the key and scale (the bare-int path).
-		of: Secondary-function target degree (``V/x`` — one level only).
+		of: Secondary-function target degree (``V/x`` - one level only).
 			The numeral resolves against the major scale on the target's
 			root, the common-practice reading.
 		borrowed: When True, the degree resolves against the parallel scale
-			(modal interchange) — set by :meth:`Progression.borrow`.
+			(modal interchange) - set by :meth:`Progression.borrow`.
 		source_text: The element as written, for unbound ``describe()``.
 		major_relative: When True, the degree always reads the major scale
 			(with the accidental applied), whatever scale ``resolve()`` is
-			given — the scale-proof spelling :meth:`Progression.generate`
+			given - the scale-proof spelling :meth:`Progression.generate`
 			emits, where quality is always explicit and the resolve scale
 			must not re-interpret the root.
 	"""
@@ -337,7 +337,7 @@ class RomanChord:
 		``extend(7)`` on V in C major yields F natural (a dominant seventh),
 		where the colour rule on a concrete G chord would yield F#.
 
-		A 9/11/13 implies every seventh-family tone below it — ``extend(9)``
+		A 9/11/13 implies every seventh-family tone below it - ``extend(9)``
 		stacks the diatonic seventh AND the ninth, so a degree yields the
 		same chord class as the concrete-chord path (a ninth chord, not an
 		``add9``).
@@ -424,7 +424,7 @@ def resolve_constraint (spec: typing.Any, key_pc: int, scale: str, what: str) ->
 
 	Specs follow the progression-element grammar: ints are diatonic degrees
 	(quality inferred from *scale*), strings are chord names or romans,
-	``Chord`` objects pass through.  ``PitchSet`` objects are rejected — generation
+	``Chord`` objects pass through.  ``PitchSet`` objects are rejected - generation
 	needs rooted chords.
 	"""
 
@@ -449,7 +449,7 @@ def cadence_pins (
 
 	The shared translation for ``Progression.generate(cadence=)`` and
 	``Composition.freeze(cadence=)``: the formula occupies the last bars,
-	merged with the caller's own pins.  Conflicts raise loudly — ``end=``
+	merged with the caller's own pins.  Conflicts raise loudly - ``end=``
 	and a pin on a formula bar both name what the cadence already fixes.
 	"""
 
@@ -530,7 +530,7 @@ _SPREAD_STYLES: typing.FrozenSet[str] = frozenset({"close", "open", "wide"})
 @dataclasses.dataclass(frozen=True)
 class ChordSpan:
 
-	"""One chord with a duration and its decoration — the unit of harmonic time.
+	"""One chord with a duration and its decoration - the unit of harmonic time.
 
 	Decoration (extensions, slash bass, inversion, spread) lives HERE, never
 	on :class:`~subsequence.chords.Chord`: the engine's graph identity stays
@@ -540,12 +540,12 @@ class ChordSpan:
 		chord: A concrete ``Chord``, a key-relative :class:`RomanChord`, or a
 			:class:`PitchSet`.
 		beats: Span length in beats.
-		extensions: Extension markers — ints (``7``, ``9``, ``11``, ``13``)
+		extensions: Extension markers - ints (``7``, ``9``, ``11``, ``13``)
 			or names (``"sus2"``, ``"sus4"``, ``"add9"``, ``"6"``).
-		bass: Slash/pedal bass — a pitch class int, a note name, or
+		bass: Slash/pedal bass - a pitch class int, a note name, or
 			``"tonic"`` (resolved against the key at query time).
 		inversion: Chord inversion for the voicing (0 = root position).
-		spread: Voicing spread — ``"close"`` (default), ``"open"`` (drop-2),
+		spread: Voicing spread - ``"close"`` (default), ``"open"`` (drop-2),
 			or ``"wide"`` (drop-2-and-4).
 		extension_intervals: Pre-computed semitone offsets for the
 			extensions, set by :meth:`Progression.resolve` for diatonic
@@ -648,14 +648,14 @@ class ChordSpan:
 		"""The chord's printed name when a stacked extension changes which chord it is.
 
 		``extend(7)`` deepens a chord in its own colour, so C major gains a
-		*major* seventh — and has to print ``Cmaj7``, because ``C7`` names a
+		*major* seventh - and has to print ``Cmaj7``, because ``C7`` names a
 		dominant seventh, a different chord.  Naming the result rather than
 		gluing the number onto the triad also keeps the leading-tone chord
 		honest: its diatonic seventh is half-diminished (``Bm7b5``), not the
 		fully diminished ``Bdim7``.
 
-		Returns ``None`` for shapes this cannot identify — a registered custom
-		quality, a pitch set — so the caller falls back to the plain suffix
+		Returns ``None`` for shapes this cannot identify - a registered custom
+		quality, a pitch set - so the caller falls back to the plain suffix
 		rather than inventing a name.
 		"""
 
@@ -740,9 +740,9 @@ class ChordSpan:
 
 		"""Semitone offsets of the decorated voicing (before inversion/spread/bass).
 
-		A numeric extension deepens the chord in its own colour — a minor third
+		A numeric extension deepens the chord in its own colour - a minor third
 		gets a minor seventh, a major third a major seventh, a diminished triad
-		a diminished seventh — so ``extend(9)`` on a plain C gives Cmaj9.  The
+		a diminished seventh - so ``extend(9)`` on a plain C gives Cmaj9.  The
 		chord *symbol* ``"C9"`` is a dominant, as a chart means it; write
 		``"Cmaj9"`` for the major seventh.  Diatonic degrees extended with
 		``extend(...)`` carry pre-computed scale-true intervals instead, so V
@@ -750,7 +750,7 @@ class ChordSpan:
 
 		Everything below an extension sounds with it: an 11th carries the 9, a
 		13th carries the 9 and the 11.  Two jazz rules then shape it, on both
-		paths — over a major third the natural 11 is left out of a 13th (G13 is
+		paths - over a major third the natural 11 is left out of a 13th (G13 is
 		G B D F A E), and a dominant 11th drops the third the 11 sits a
 		semitone above (G11 is G D F A C).  A minor chord keeps both (Dm11 is
 		D F A C E G).
@@ -871,7 +871,7 @@ class DecoratedChord:
 	decoration: ``tones()`` voices the extensions/inversion/spread/bass,
 	``intervals()`` reports the decorated intervals (so per-pattern voice
 	leading works over them), and ``name()`` prints the decorated name
-	(``Am9``, ``C/G``).  The engine itself never sees this — graph identity
+	(``Am9``, ``C/G``).  The engine itself never sees this - graph identity
 	stays the bare triad underneath (:attr:`base`).
 	"""
 
@@ -942,8 +942,8 @@ class DecoratedChord:
 
 		"""The chord root shifted by octaves (the slash bass pc when one is set).
 
-		The slash bass uses the same register as the plain root bass — an octave
-		below the chord at the default ``octave_offset=-1`` — so a bass line over
+		The slash bass uses the same register as the plain root bass - an octave
+		below the chord at the default ``octave_offset=-1`` - so a bass line over
 		a mix of plain and slash chords doesn't jump up an octave on the slash
 		ones.
 		"""
@@ -1115,7 +1115,7 @@ def parse_element (element: typing.Any, beats: float = DEFAULT_SPAN_BEATS) -> Ch
 
 def _dominant_where_the_symbol_says_nothing (base: str) -> str:
 
-	"""``"C"`` under a 9, 11 or 13 means C7 — ``"C9"`` is the chart's dominant.
+	"""``"C"`` under a 9, 11 or 13 means C7 - ``"C9"`` is the chart's dominant.
 
 	A base that names its own quality is left as written, so ``"Cmaj9"`` keeps
 	its major seventh and ``"Cm9"`` its minor one.  Only the bare root is read
@@ -1134,7 +1134,7 @@ def _parse_chord_name (name: str, beats: float) -> ChordSpan:
 
 	"""Parse a chord-name element, splitting a trailing extension onto the span.
 
-	``"Dm9"`` is D minor decorated with a 9 — the quality table holds bare
+	``"Dm9"`` is D minor decorated with a 9 - the quality table holds bare
 	qualities, and the 9/11/13 ride the span as extensions (decoration lives
 	on spans, never chords).  ``"Dm7"`` stays a plain quality (m7 is in the
 	table); the split only happens when the full name does not parse.
@@ -1172,7 +1172,7 @@ def _check_slot (slot: int, count: int) -> int:
 @dataclasses.dataclass(frozen=True)
 class Progression:
 
-	"""A frozen sequence of :class:`ChordSpan` — the governing harmony value.
+	"""A frozen sequence of :class:`ChordSpan` - the governing harmony value.
 
 	Always a realised value: binding it to the clock freezes one realisation;
 	``p.progression()`` keeps its breathing behaviour by re-realising a fresh
@@ -1181,12 +1181,12 @@ class Progression:
 	placement loops keep working unchanged.
 
 	The governing family supports ``+`` (concatenate) and ``*`` (tile) but
-	never ``&`` — there is one current chord (P1, the type law).
+	never ``&`` - there is one current chord (P1, the type law).
 
 	Attributes:
 		spans: The chord spans, in order.
 		trailing_history: Engine continuity metadata set by
-			:meth:`Composition.freeze` — the NIR history at capture time,
+			:meth:`Composition.freeze` - the NIR history at capture time,
 			restored on each frozen replay.  Empty for hand-built values.
 	"""
 
@@ -1248,7 +1248,7 @@ class Progression:
 
 	def __iter__ (self) -> typing.Iterator[ChordEvent]:
 
-		"""Yield ``(chord, start, length)`` events — decorated chords where spiced."""
+		"""Yield ``(chord, start, length)`` events - decorated chords where spiced."""
 
 		self._require_concrete("iterate")
 
@@ -1323,18 +1323,18 @@ class Progression:
 		root_diversity: float = subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
 	) -> "Progression":
 
-		"""Generate a progression from a chord-graph walk — the hybrid generator.
+		"""Generate a progression from a chord-graph walk - the hybrid generator.
 
 		Full parameter pass-through to the engine (no more throwaway default
 		engines), plus the hybrid constraints: ``pins`` fix chords at 1-based
 		bars, ``end`` fixes the last bar, ``avoid`` excludes chords
-		everywhere.  Constraints compile into the walk — a backward
+		everywhere.  Constraints compile into the walk - a backward
 		feasibility pass guarantees satisfiability before any chord is
 		drawn (unsatisfiable constraints raise immediately), then a forward
 		walk samples through the engine's real history-dependent weights
 		(NIR, gravity, diversity keep their character).
 
-		**Without** ``key=`` the result is key-relative — the walk runs
+		**Without** ``key=`` the result is key-relative - the walk runs
 		against a reference tonic and the spans store scale-proof
 		major-relative romans, so the value prints meaningfully unbound and
 		resolves wherever it is bound (the walk itself is key-invariant).
@@ -1343,25 +1343,25 @@ class Progression:
 		Parameters:
 			style: A chord-graph style name (or ``ChordGraph`` instance).
 			bars: How many chords to generate.
-			beats: Span length per chord — a scalar, or a list cycled.
+			beats: Span length per chord - a scalar, or a list cycled.
 			key: Key for a concrete result; omit for a key-relative value.
 			scale: Scale for int constraints' quality inference (e.g.
 				``end=1``).  Defaults from the style (aeolian_minor →
 				minor); explicit strings (``"V"``, ``"bVII7"``) never
 				need it.
 			seed: Seed for the walk.  A standalone generated value without
-				a seed warns — module-level nondeterminism breaks live
+				a seed warns - module-level nondeterminism breaks live
 				reload.
 			rng: An explicit random stream (overrides ``seed``).
-			pins: ``{bar: chord}`` — 1-based; values parse like progression
+			pins: ``{bar: chord}`` - 1-based; values parse like progression
 				elements (ints, romans, names, ``Chord``).
-			end: The chord at the final bar — ``end="V"`` is the cadential
+			end: The chord at the final bar - ``end="V"`` is the cadential
 				major dominant in minor (a string because it is chromatic;
 				no int can ask for it).
 			avoid: Chords excluded from the walk.  Naming a chord outside
 				the style's vocabulary is allowed (trivially satisfied).
 			cadence: A cadence name (``"strong"``/``"soft"``/``"open"``/
-				``"fakeout"``, theory aliases accepted) — its formula
+				``"fakeout"``, theory aliases accepted) - its formula
 				becomes pins on the final bars, so the walk *approaches*
 				the close.  Conflicts with ``end=`` or pins on those bars.
 			dominant_7th / gravity / nir_strength / minor_turnaround_weight /
@@ -1477,7 +1477,7 @@ class Progression:
 
 	def __and__ (self, other: typing.Any) -> "Progression":
 
-		"""Parallel merge is a type error for governing values — by design."""
+		"""Parallel merge is a type error for governing values - by design."""
 
 		raise TypeError(
 			"Progressions cannot be merged with & — there is one current chord. "
@@ -1505,7 +1505,7 @@ class Progression:
 
 	def inversions (self, spec: typing.Union[int, typing.List[int]]) -> "Progression":
 
-		"""Set chord inversions — a single int for all spans, or a list cycled per span."""
+		"""Set chord inversions - a single int for all spans, or a list cycled per span."""
 
 		values = [spec] if isinstance(spec, int) else list(spec)
 
@@ -1529,7 +1529,7 @@ class Progression:
 
 	def over (self, bass: typing.Union[int, str], only: typing.Optional[typing.List[int]] = None) -> "Progression":
 
-		"""Put the progression over a slash/pedal bass — *the* trance/techno move.
+		"""Put the progression over a slash/pedal bass - *the* trance/techno move.
 
 		*bass* is a pitch class int, a note name (``"G"``), or ``"tonic"``.  A
 		note name is key-independent, so it resolves to its pitch class right
@@ -1557,14 +1557,14 @@ class Progression:
 		"""Borrow the chord(s) at the given 1-based slot(s) from the parallel scale.
 
 		Modal interchange for key-relative content: the degree re-resolves
-		against the parallel mode — the one sharing the tonic and differing in
+		against the parallel mode - the one sharing the tonic and differing in
 		its third, so a minor-third scale borrows from ionian and a
 		major-third scale from aeolian.  The borrowed degree takes the
 		borrowed mode's own quality, whatever its numeral was written with, so
-		``vi`` in C comes back as ``G#`` — the parallel minor's sixth — and not
+		``vi`` in C comes back as ``G#`` - the parallel minor's sixth - and not
 		as a ``G#m`` belonging to neither key.
 
-		Concrete chords raise — there is nothing relative to borrow.
+		Concrete chords raise - there is nothing relative to borrow.
 
 		Two kinds of numeral have no parallel to borrow from, and are left
 		alone with a warning rather than silently doing nothing: an
@@ -1615,21 +1615,21 @@ class Progression:
 
 	def cadence (self, name: str = "strong") -> "Progression":
 
-		"""Substitute a cadence formula into the tail — the close, named.
+		"""Substitute a cadence formula into the tail - the close, named.
 
 		The final spans take the formula's chords (``"strong"`` is V→I,
-		``"soft"`` IV→I, ``"open"`` IV→V, ``"fakeout"`` V→vi; theory names —
-		authentic, plagal, half, deceptive — work as aliases).  Each replaced
+		``"soft"`` IV→I, ``"open"`` IV→V, ``"fakeout"`` V→vi; theory names -
+		authentic, plagal, half, deceptive - work as aliases).  Each replaced
 		span keeps its beats; its old chord and decorations go.  Formula
 		chords are key-relative (ints follow the bound scale's qualities,
 		``"V"`` is the major dominant by convention), so the tail resolves
-		wherever the progression is bound — a concrete progression becomes
+		wherever the progression is bound - a concrete progression becomes
 		mixed and resolves its tail at bind time, like any roman content.
 
 		Example::
 
 			verse = subsequence.progression(["Am", "F", "C", "G"]).cadence("open")
-			# Bound in A minor: Am F Dm E — the half close, hanging on the dominant
+			# Bound in A minor: Am F Dm E - the half close, hanging on the dominant
 
 		Raises:
 			ValueError: If the cadence name is unknown, or the progression
@@ -1654,7 +1654,7 @@ class Progression:
 
 	def with_rhythm (self, beats: typing.Union[float, typing.List[float]]) -> "Progression":
 
-		"""Reshape the harmonic rhythm — a scalar for all spans, or a list cycled per span."""
+		"""Reshape the harmonic rhythm - a scalar for all spans, or a list cycled per span."""
 
 		if isinstance(beats, bool):
 			raise TypeError(f"with_rhythm takes beats or a list of beats, got bool: {beats!r}")
@@ -1673,7 +1673,7 @@ class Progression:
 
 	def elaborate (self, depth: int = 1, seed: typing.Optional[int] = None) -> "Progression":
 
-		"""Steedman-inspired chord elaboration — approach each chord by fifths.
+		"""Steedman-inspired chord elaboration - approach each chord by fifths.
 
 		Implements the heart of Mark Steedman's generative grammar for
 		jazz/blues chord sequences: every chord is **approached** by a chain
@@ -1682,19 +1682,19 @@ class Progression:
 		chord's own span (Rule 1, metric subdivision).  ``depth`` is literally
 		how many fifth-steps back the chain extends:
 
-		- ``depth=0`` — identity (the bare progression).
-		- ``depth=1`` — a secondary dominant before each chord: ``[X]`` →
+		- ``depth=0`` - identity (the bare progression).
+		- ``depth=1`` - a secondary dominant before each chord: ``[X]`` →
 		  ``[V7/X, X]`` (e.g. a bar of C becomes G7 C).
-		- ``depth=2`` — a secondary ii–V: ``[ii/X, V7/X, X]`` (Dm7 G7 C).
-		- ``depth≥3`` — the chain extends (…V7/V7/X), the furthest-back chord
-		  is made minor — the ``ii`` of *its own local dominant* (the next
+		- ``depth=2`` - a secondary ii–V: ``[ii/X, V7/X, X]`` (Dm7 G7 C).
+		- ``depth≥3`` - the chain extends (…V7/V7/X), the furthest-back chord
+		  is made minor - the ``ii`` of *its own local dominant* (the next
 		  link in the chain), forming a ii–V into that link, not the
-		  target's own ii — and dominants are recoloured by **tritone
+		  target's own ii - and dominants are recoloured by **tritone
 		  substitution** with even odds (Rule 4) for chromatic descents.
 		  This tritone choice is the only nondeterministic part, so ``seed``
 		  is taken (or warned) at depth ≥ 3.
 
-		Its flagship is the 12-bar blues with depth-per-chorus — elaborate a
+		Its flagship is the 12-bar blues with depth-per-chorus - elaborate a
 		``"twelve_bar_blues"`` more each chorus and the ii–V turnarounds and
 		tritone subs accumulate.
 
@@ -1704,7 +1704,7 @@ class Progression:
 		inserted approach chords are bare dominant/minor sevenths.  Note that
 		each span is divided into ``depth + 1`` equal sub-spans, so deep
 		elaboration of a short harmonic rhythm can drop sub-spans below the
-		harmony clock's lookahead floor — which raises at ``play()``/
+		harmony clock's lookahead floor - which raises at ``play()``/
 		``render()`` if the result is bound to the global clock (it is free
 		of that floor at the part level, ``p.progression()``).
 
@@ -1813,7 +1813,7 @@ class Progression:
 
 def _span_lengths (beats: typing.Union[float, typing.List[float]], count: int) -> typing.List[float]:
 
-	"""Resolve a beats= spec into per-span lengths — a scalar for all, or a list cycled."""
+	"""Resolve a beats= spec into per-span lengths - a scalar for all, or a list cycled."""
 
 	if isinstance(beats, bool):
 		raise TypeError(f"beats takes a number or a list of lengths, got bool: {beats!r}")
@@ -1850,7 +1850,7 @@ def progression (
 	root_diversity: float = subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
 ) -> Progression:
 
-	"""Build a :class:`Progression` — the lowercase factory.
+	"""Build a :class:`Progression` - the lowercase factory.
 
 	Dispatch by argument type: a **list** parses per element (ints where
 	diatonic, name/roman strings where nominal/chromatic,
@@ -1861,14 +1861,14 @@ def progression (
 	Parameters:
 		source: The element list, preset name, or an existing Progression
 			(returned unchanged).
-		beats: Span length per chord — a scalar, or a list cycled per chord
+		beats: Span length per chord - a scalar, or a list cycled per chord
 			(``beats=[4, 4, 2, 6]`` shapes the harmonic rhythm).
 		style: A chord-graph style name to generate from (e.g.
 			``"aeolian_minor"``).
 		bars: How many chords to generate (style mode only).
 		key: Key for style generation.
 		seed: Seed for style generation.  A standalone generated value
-			without a seed warns — module-level nondeterminism breaks live
+			without a seed warns - module-level nondeterminism breaks live
 			reload.
 		rng: An explicit random stream (overrides ``seed``; used by
 			engine-mediated calls).
@@ -1965,7 +1965,7 @@ def progression (
 
 def _chord_source (source: ProgressionSource, key: typing.Optional[str], rng: random.Random, scale: str = "ionian") -> typing.Iterator[typing.Any]:
 
-	"""Yield chords indefinitely — generated from a graph style, or cycled from a list."""
+	"""Yield chords indefinitely - generated from a graph style, or cycled from a list."""
 
 	if isinstance(source, str):
 		if not key:
@@ -2020,7 +2020,7 @@ def _resolve_length (spec: HarmonicRhythmSpec, index: int, rng: random.Random) -
 	Accepts a scalar (static), a list/tuple of lengths (a shaped rhythm, cycled by
 	``index``), or a :class:`~subsequence.harmonic_rhythm.HarmonicRhythm` from
 	``between(...)``.  Mirrors the ``(low, high)``-tuple house idiom used for
-	velocity — except a range here is spelled ``between(...)`` so a bare list can
+	velocity - except a range here is spelled ``between(...)`` so a bare list can
 	mean a *sequence* of lengths.
 	"""
 
@@ -2046,7 +2046,7 @@ def _resolve_length (spec: HarmonicRhythmSpec, index: int, rng: random.Random) -
 
 def resolve_voices (voicing: VoicingSpec, rng: random.Random) -> int:
 
-	"""Resolve the voice count for one chord — a fixed int, or a ``(low, high)`` draw."""
+	"""Resolve the voice count for one chord - a fixed int, or a ``(low, high)`` draw."""
 
 	if isinstance(voicing, bool):
 		raise TypeError(f"voicing must be an int or a (low, high) tuple, got bool: {voicing!r}")
@@ -2077,7 +2077,7 @@ def realize (
 	Walks the chord source, giving each chord a harmonic-rhythm length, until the
 	part is full.  The final chord is trimmed so the timeline ends exactly on
 	*length* and therefore loops cleanly.  Voicing and articulation are not decided
-	here — they belong to whatever places the chords (the verb you call in the loop,
+	here - they belong to whatever places the chords (the verb you call in the loop,
 	or :meth:`Composition.chords`).
 	"""
 

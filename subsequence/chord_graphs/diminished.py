@@ -17,13 +17,13 @@ class Diminished (subsequence.chord_graphs.ChordGraph):
 
 	Two chord types interlock:
 
-	- 4 diminished triads at roots 0, 3, 6, 9 (the symmetry backbone — the
+	- 4 diminished triads at roots 0, 3, 6, 9 (the symmetry backbone - the
 	  minor-third cycle that also underpins the half-whole diminished scale)
 	- 4 dominant 7th chords at roots 1, 4, 7, 10 (escape chords)
 
 	Diminished chords connect to each other by minor thirds (the defining
 	rotation). Each dominant 7th sits a half step ABOVE its diminished
-	chord as a chromatic tension point — deliberately outside the
+	chord as a chromatic tension point - deliberately outside the
 	half-whole scale on the key root, which is what gives the escape its
 	lift before the half-step-down resolve. The result is angular,
 	disorienting, and cyclical - useful for dark techno, industrial, and

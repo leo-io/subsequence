@@ -33,7 +33,7 @@ def parse (notation: str, total_duration: float = 4.0) -> typing.List[ParsedEven
 	- ``[a b]``: Groups items into a single subdivided step.
 	- ``~`` or ``.``: A rest.
 	- ``_``: Extends the previous note (sustain).
-	- ``x?0.6``: Probability suffix — fires with the given probability (0.0–1.0).
+	- ``x?0.6``: Probability suffix - fires with the given probability (0.0–1.0).
 
 	Parameters:
 		notation: The string to parse.

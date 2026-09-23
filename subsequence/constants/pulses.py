@@ -24,7 +24,7 @@ _WHOLE_PULSE_TOLERANCE = 1e-6
 
 def beats_to_pulses (beats: float, pulses_per_beat: int = MIDI_QUARTER_NOTE) -> int:
 
-	"""Convert a time in beats to whole pulses, as ``int()`` would — without its float error.
+	"""Convert a time in beats to whole pulses, as ``int()`` would - without its float error.
 
 	A third of a beat is not exact in binary floating point, so seven of them
 	come to ``55.99999999999999`` pulses and ``int()`` floors that a whole pulse
@@ -33,7 +33,7 @@ def beats_to_pulses (beats: float, pulses_per_beat: int = MIDI_QUARTER_NOTE) -> 
 	does, so a grid that really falls between pulses (sixteen steps over three
 	beats, 4.5 pulses a step) keeps the positions it has always had.
 
-	Every conversion from beats to pulses goes through here —
+	Every conversion from beats to pulses goes through here -
 	``tests/test_pulse_rounding.py`` fails on a bare ``int()`` of one.
 	"""
 

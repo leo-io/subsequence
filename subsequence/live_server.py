@@ -146,7 +146,7 @@ class LiveServer:
 		"""Play one typed submission into the composition, and start what it added.
 
 		A line typed at the REPL is a declaration in its own right, and is
-		treated as one — the same pass a file save gets.  What it declares
+		treated as one - the same pass a file save gets.  What it declares
 		afresh comes in at the next whole multiple of its own length, so a
 		new part lands on a bar line rather than wherever the typing fell
 		(:meth:`Composition._next_start_pulse`), and re-declaring a part that
@@ -158,7 +158,7 @@ class LiveServer:
 		and never heard, and a re-declared ``layer()`` came back as a second
 		layer with a ``#2`` on its name.  Running it here, on the loop that
 		owns the pattern registry and the scheduler's queue, is what lets the
-		declaration be acted on — at the cost of holding the clock for as
+		declaration be acted on - at the cost of holding the clock for as
 		long as the submission runs, which is the same bargain a watched file
 		save already makes.
 
@@ -194,7 +194,7 @@ class LiveServer:
 
 		"""Validate, then eval/exec the code string.
 
-		Returns the text to send back, and whether the code ran to completion —
+		Returns the text to send back, and whether the code ran to completion -
 		a submission that raised has declared nothing worth scheduling, and its
 		half-built patterns must not be started.
 		"""

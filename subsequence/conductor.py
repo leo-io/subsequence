@@ -1,5 +1,5 @@
 """
-Global automation signals — LFOs and ramps that modulate a composition over time.
+Global automation signals - LFOs and ramps that modulate a composition over time.
 
 The Conductor holds named, time-varying signals (swells, fades, filter sweeps)
 that any pattern can read via ``p.signal(name)`` to shape velocity, CCs, or
@@ -115,7 +115,7 @@ class Line(Signal):
 			duration_beats: How long it takes to reach the target (in beats).
 			start_beat: Global beat time when the ramp should start (default 0).
 			loop: Whether to jump back to start_val and repeat (default False).
-			shape: Easing curve — a name string (e.g. ``"ease_in_out"``) or any
+			shape: Easing curve - a name string (e.g. ``"ease_in_out"``) or any
 			       callable that maps [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			       See :mod:`subsequence.easing` for available shapes.
 		"""

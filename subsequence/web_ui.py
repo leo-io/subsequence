@@ -1,8 +1,8 @@
 """
 Browser dashboard for a running composition.
 
-Serves a read-only web UI that shows the live state of a composition —
-tempo, current chord, section, pattern grids, and conductor signals —
+Serves a read-only web UI that shows the live state of a composition -
+tempo, current chord, section, pattern grids, and conductor signals -
 over a local HTTP + WebSocket pair.  Started via ``composition.web_ui()``.
 """
 

@@ -6,7 +6,7 @@ editing anything.  The point is that no list of parameters exists anywhere but
 in the code that owns them.
 
 **This module describes; it does not draw.**  Nothing here knows about any
-particular consumer, and the return value is plain dicts and lists — no classes
+particular consumer, and the return value is plain dicts and lists - no classes
 to import, no protocol to satisfy.  A parameter whose type maps to none of the
 control shapes is simply left out.
 
@@ -24,7 +24,7 @@ The shape is fixed by agreement with the consumer, so treat it as a contract:
       "dropped": [],
     }
 
-Every parameter carries ``required``, and ``default`` whenever there is one —
+Every parameter carries ``required``, and ``default`` whenever there is one -
 ``None`` included, which reaches a consumer as JSON ``null``.  So a required
 parameter with no default means supply something; an optional one defaulting
 to ``null`` means leave it alone, because ``None`` is what tells the function
@@ -44,14 +44,14 @@ surface could tell it from one that really only takes a list (#2375):
                "only":      ["root", "count", "inversion"]}}
 
 ``accepts`` names the forms; ``chord`` carries what the chord form needs.  A
-name is a root joined to a quality suffix — ``"C" + "m7"`` — which is what
+name is a root joined to a quality suffix - ``"C" + "m7"`` - which is what
 these parameters take, and it is a *name* rather than a ``Chord`` because an
 object does not cross a wire (the same lesson as the range control that could
 only be sent as a JSON array, #2349).  A consumer that ignores both keys
 renders the pitch pool it rendered before, so this is additive.
 
 ``needs`` is the part a flat declaration cannot hold.  ``root`` is
-``required: False, default: None`` because the *pitch-list* form refuses it —
+``required: False, default: None`` because the *pitch-list* form refuses it -
 and the chord form raises without it, so a surface following the ordinary rule
 (a null default means leave it alone) would build a control that fails every
 cycle.  One field cannot say both, so the chord form names what it requires.
@@ -61,7 +61,7 @@ pitch classes, and the chord voices at the nearest instance of its own root, so
 
 ``only`` is the other half of the same problem, from the other side: these
 parameters belong to the chord form and are **refused** beside a pitch list, so
-a surface holding a list must not offer them.  Zero does not excuse them —
+a surface holding a list must not offer them.  Zero does not excuse them -
 ``count=0`` and ``root=0`` are refused as surely as any other number, and only
 *absence* reads as "not asked for".  A panel drawing a stepper can reach zero
 and cannot reach unset, which is how a musician turning a dial silently killed a
@@ -70,27 +70,27 @@ layer (#2410).  ``needs`` is a subset: required *with* a chord, refused
 
 ``kind: "chord"`` is the one place that is not additive: it means the
 parameter takes a chord and **nothing else**, so there is no pool arm to fall
-back to.  ``broken_chord`` is the case — it indexes chord tones, and a pitch
-list has nothing to index — and declaring it a pool would hand a consumer a
+back to.  ``broken_chord`` is the case - it indexes chord tones, and a pitch
+list has nothing to index - and declaring it a pool would hand a consumer a
 control that raises rather than one that is merely coarse.
 
-``partial`` says a *required* parameter has no shape — a list, a dict, a
-callable — so the generator cannot be fully offered.  It is reported rather
+``partial`` says a *required* parameter has no shape - a list, a dict, a
+callable - so the generator cannot be fully offered.  It is reported rather
 than hidden, because a control that cannot be completed is worse than one that
 is absent, and only the caller can decide which to show.
 
 ``dropped`` names every parameter left out for want of a shape, required or
 not.  ``partial`` alone was not enough: it speaks only for the *required*
 ones, so an optional parameter with no shape vanished from an entry that still
-said ``"partial": False`` — a consumer told "fully offerable" about something
+said ``"partial": False`` - a consumer told "fully offerable" about something
 it could not fully drive (#2239).  Naming them costs nothing and is the
 difference between a gap and a silence.  Machine-only parameters are not
 listed: they are deliberately not offered, which is a different fact.
 
 There are two catalogues and one describer.  :func:`generators` lists what
 *places* notes; :func:`transforms` lists what *reshapes* notes already placed.
-The entries have the same shape, because a surface drives both the same way —
-``getattr(pattern, name)(**params)`` — so a consumer needs no second code path.
+The entries have the same shape, because a surface drives both the same way -
+``getattr(pattern, name)(**params)`` - so a consumer needs no second code path.
 
 Each list is a curation judgement rather than a category, and each has a
 mechanical test that :mod:`tests.test_catalogue` runs rather than eyeballs: a
@@ -226,7 +226,7 @@ _PER_STEP_LISTS: typing.FrozenSet[str] = frozenset({"velocities"})
 
 def _is_optional (annotation: typing.Any) -> bool:
 
-	"""True when *annotation* is ``Optional[...]`` — a Union including None."""
+	"""True when *annotation* is ``Optional[...]`` - a Union including None."""
 
 	return (
 		typing.get_origin(annotation) is typing.Union
@@ -328,7 +328,7 @@ def _unwrap (annotation: typing.Any) -> typing.Any:
 	"""*annotation* with any ``Annotated`` wrapper removed.
 
 	Markers are read off the wrapper, but every question below it asks about
-	*shape* — is this a Literal, a low/high pair, a bool — and those read the
+	*shape* - is this a Literal, a low/high pair, a bool - and those read the
 	arms with ``typing.get_args``, which on an ``Annotated`` returns the marker
 	rather than the arms.  Without this, attaching a unit to a velocity would
 	silently demote a ``range`` control to no control at all, across thirty
@@ -381,8 +381,8 @@ def _position_arity (
 	"""The position marker on *annotation*, and whether it takes several.
 
 	Returns None when it is not a position at all.  The pool arm is what the
-	three placing verbs actually take — a bar fires at several positions, not
-	one — and it is read off the container's argument rather than the container,
+	three placing verbs actually take - a bar fires at several positions, not
+	one - and it is read off the container's argument rather than the container,
 	so ``List[StepPosition]`` and a lone ``StepPosition`` answer the same reader.
 	"""
 
@@ -433,7 +433,7 @@ def _chord_vocabulary (parameters: typing.Iterable[str]) -> typing.Dict[str, typ
 
 	"""The two halves of a chord name, so a surface can offer one.
 
-	A name is a root followed by a quality suffix — ``"C"`` + ``"maj7"`` — which
+	A name is a root followed by a quality suffix - ``"C"`` + ``"maj7"`` - which
 	is what :func:`~subsequence.chords.parse_chord` reads and what
 	``Chord.name()`` writes, so joining one choice from each list gives a value
 	these parameters accept.
@@ -446,8 +446,8 @@ def _chord_vocabulary (parameters: typing.Iterable[str]) -> typing.Dict[str, typ
 	a chord name is the only thing this list is for and such a quality has no
 	name to give.
 
-	The orders are the tables' own — chromatic for roots, and the order the
-	qualities were written in — because both are read by a musician scrolling
+	The orders are the tables' own - chromatic for roots, and the order the
+	qualities were written in - because both are read by a musician scrolling
 	a picker, and a registered quality lands at the end where its author looks.
 
 	``needs`` names the parameters this form requires that the flat declaration
@@ -460,7 +460,7 @@ def _chord_vocabulary (parameters: typing.Iterable[str]) -> typing.Dict[str, typ
 	``only`` names the parameters that belong to this form and no other, so a
 	surface holding a pitch list knows not to offer them.  They are refused
 	beside a list rather than ignored, and absence is the only thing that reads
-	as "not asked for" — so a dial that can reach zero but not *unset* is a dial
+	as "not asked for" - so a dial that can reach zero but not *unset* is a dial
 	that kills the layer (#2410).  ``needs`` is a subset of it.
 	"""
 
@@ -479,7 +479,7 @@ def _chord_vocabulary (parameters: typing.Iterable[str]) -> typing.Dict[str, typ
 
 def _is_range (annotation: typing.Any) -> bool:
 
-	"""True when *annotation* offers a ``Tuple[int, int]`` arm — a low/high pair."""
+	"""True when *annotation* offers a ``Tuple[int, int]`` arm - a low/high pair."""
 
 	for arm in typing.get_args(annotation):
 
@@ -508,8 +508,8 @@ def _bounds (entry: typing.Dict[str, typing.Any], span: subsequence.declarations
 
 	"""Publish a span's floor, and its ceiling only when it has one.
 
-	A ``Span`` may be open above — a stretch factor has a smallest useful value
-	and no largest — and infinity is not valid JSON, so an absent ``max`` is the
+	A ``Span`` may be open above - a stretch factor has a smallest useful value
+	and no largest - and infinity is not valid JSON, so an absent ``max`` is the
 	honest way to say "no ceiling" rather than a number invented to fill it.
 	"""
 
@@ -527,8 +527,8 @@ def _finished (
 	"""Stamp *entry* with whether it must be supplied, and what it falls back to.
 
 	``required`` is said outright rather than inferred.  A consumer used to read
-	it from position — Python puts undefaulted parameters first, so everything
-	before the first entry carrying a ``default`` was required — and that breaks
+	it from position - Python puts undefaulted parameters first, so everything
+	before the first entry carrying a ``default`` was required - and that breaks
 	the moment a ``None``-defaulting parameter comes first, which is most of
 	them (#2249, #2099).  It is also simply a fact this module knows, and
 	inference is how a consumer ends up holding a second copy of it.
@@ -537,7 +537,7 @@ def _finished (
 	reaches a consumer as JSON ``null``.  The two states it used to conflate
 	want opposite treatment: with no default the call fails unless a value is
 	supplied, while ``None`` is often the value that tells the function to
-	decide for itself — a grid, a length, a root — so the right move is to leave
+	decide for itself - a grid, a length, a root - so the right move is to leave
 	it alone.  Sending ``null`` also lets a surface open a control at the value
 	the function would have used.
 
@@ -684,7 +684,7 @@ def _describe_parameter (
 
 def _describe (name: str) -> typing.Dict[str, typing.Any]:
 
-	"""Describe one method's parameters as plain data — generator or transform.
+	"""Describe one method's parameters as plain data - generator or transform.
 
 	The two catalogues differ only in which names they list; what a control
 	looks like is the same question either way, so it is answered once here.
@@ -748,7 +748,7 @@ def describe_generator (name: str) -> typing.Dict[str, typing.Any]:
 
 	Returns:
 		A dict with ``name``, ``summary``, ``partial``, ``parameters`` and
-		``dropped`` — see this module's contract.  Each parameter says whether
+		``dropped`` - see this module's contract.  Each parameter says whether
 		it is ``required`` and what it defaults to.
 
 	Raises:

@@ -48,7 +48,7 @@ class _TimetagProtocol (asyncio.DatagramProtocol):
 
 	"""Honour a bundle's timetag without stopping the music to wait for it.
 
-	python-osc reaches a bundle's timetag by calling ``time.sleep()`` — inside
+	python-osc reaches a bundle's timetag by calling ``time.sleep()`` - inside
 	``datagram_received``, on the event loop, which is the loop the MIDI clock
 	runs on.  A bundle dated half a second ahead stopped the piece for half a
 	second and then burst the missed notes out together; one dated an hour

@@ -38,10 +38,10 @@ CLI usage
 ---------
 ::
 
-    # Discover — prints the device info
+    # Discover - prints the device info
     python -m subsequence.helpers.wing
 
-    # Query a node — pretty-prints its structure / value
+    # Query a node - pretty-prints its structure / value
     python -m subsequence.helpers.wing /ch/1
     python -m subsequence.helpers.wing /ch/1/fdr
     python -m subsequence.helpers.wing /
@@ -137,7 +137,7 @@ def discover (
 	model, and firmware version.
 
 	Parameters:
-		port: UDP port to broadcast on (default 2223 — the WING's OSC port).
+		port: UDP port to broadcast on (default 2223 - the WING's OSC port).
 		timeout: Seconds to wait for a reply.
 
 	Returns:
@@ -227,7 +227,7 @@ def query (
 
 		- ``address`` (str): The OSC address of the response.
 		- ``type`` (str): ``"node"`` or ``"leaf"``.
-		- For **nodes**: ``children`` (list[str]) — child node names.
+		- For **nodes**: ``children`` (list[str]) - child node names.
 		- For **string leaves**: ``value`` (str).
 		- For **numeric leaves**: ``value`` (str), ``value_f`` (float|None),
 		  ``value_i`` (int|None).
@@ -296,13 +296,13 @@ def walk (
 
 	Parameters:
 		host: WING IP address.
-		address: Starting node address (default ``"/"`` — the root).
+		address: Starting node address (default ``"/"`` - the root).
 		port: UDP port (default 2223).
 		timeout: Per-query timeout.
 		max_depth: Maximum recursion depth (default 3).
 
 	Returns:
-		Nested ``dict`` — same structure as :func:`query` but with an extra
+		Nested ``dict`` - same structure as :func:`query` but with an extra
 		``"children"`` key on nodes mapping child names to their own subtrees.
 		``None`` on timeout.
 

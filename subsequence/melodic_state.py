@@ -13,8 +13,8 @@ properly tracked across octaves: a leap from C4 (60) to G4 (67) is +7
 upward, not an ambiguous -5.
 
 Scoring follows the CHORAL separation: the **hard** constraint is structural
-and singular (the pitch pool — candidates outside it never exist), while
-everything *tasteful* is a **soft factor** in :attr:`MelodicState.factors` —
+and singular (the pitch pool - candidates outside it never exist), while
+everything *tasteful* is a **soft factor** in :attr:`MelodicState.factors` -
 a pluggable list of multipliers (NIR expectation, chord-tone pull, range
 gravity, pitch diversity, contour envelope, tessitura regression), every one
 a dial and never a law.  Replace or extend the list to reshape the
@@ -35,7 +35,7 @@ class ScoringContext:
 	"""Everything a scoring factor may read about one candidate.
 
 	``beat``, ``position``, and ``contour_target`` are optional threading
-	from the caller — ``None`` when the context does not apply (a factor
+	from the caller - ``None`` when the context does not apply (a factor
 	that needs them returns 1.0 without them).
 
 	Attributes:
@@ -70,7 +70,7 @@ ScoringFactor = typing.Callable[["MelodicState", ScoringContext], float]
 def nir_factor (state: "MelodicState", ctx: ScoringContext) -> float:
 
 	"""Narmour expectation: reversal after leaps, continuation after steps,
-	closure on the tonic, preference for proximity — scaled by ``nir_strength``."""
+	closure on the tonic, preference for proximity - scaled by ``nir_strength``."""
 
 	if not ctx.history:
 		return 1.0
@@ -168,7 +168,7 @@ def contour_factor (state: "MelodicState", ctx: ScoringContext) -> float:
 
 def tessitura_factor (state: "MelodicState", ctx: ScoringContext) -> float:
 
-	"""Regression toward the tessitura — von Hippel's reading of post-skip reversal.
+	"""Regression toward the tessitura - von Hippel's reading of post-skip reversal.
 
 	The further the line has strayed from the register's centre, the more
 	candidates that move back toward it are boosted.  Off by default
@@ -308,7 +308,7 @@ class MelodicState:
 
 		Called by ``p.melody()`` every build.  It **tracks** the builder's
 		current key/scale (which is the section's effective key under a form),
-		so a state placed across sections follows each section's key — its
+		so a state placed across sections follows each section's key - its
 		melodic *history* is untouched, only the pitch pool and tonic move.
 		An explicit constructor key/scale or an explicit pool always wins and
 		is never overridden.
@@ -336,7 +336,7 @@ class MelodicState:
 
 	def set_pool (self, pitches: typing.Sequence[int]) -> None:
 
-		"""Replace the pitch pool with explicit MIDI pitches — the experimental seam.
+		"""Replace the pitch pool with explicit MIDI pitches - the experimental seam.
 
 		Admits sieve output, non-octave organisations, or any hand-picked
 		pool; key/mode no longer constrain candidates (the tonic pitch
@@ -356,7 +356,7 @@ class MelodicState:
 
 	def clone (self) -> "MelodicState":
 
-		"""An independent copy — settings, factors, pool, and history.
+		"""An independent copy - settings, factors, pool, and history.
 
 		Value constructors (``Motif.generate``) copy the state they are
 		given and walk the copy, so a module-level live state is never
@@ -474,7 +474,7 @@ class MelodicState:
 
 		"""Append a pitch to the melodic history (capped at 4 entries).
 
-		Public so pinned notes — chosen by fiat, not by the walk — still
+		Public so pinned notes - chosen by fiat, not by the walk - still
 		enter the NIR context.
 		"""
 

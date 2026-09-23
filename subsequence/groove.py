@@ -1,5 +1,5 @@
 """
-Groove templates — repeating timing and velocity feels applied to quantized patterns.
+Groove templates - repeating timing and velocity feels applied to quantized patterns.
 
 Exports the public Groove class: build one by hand, from a swing percentage,
 or from an Ableton ``.agr`` file, then apply it with ``p.groove(template)``.
@@ -26,7 +26,7 @@ class Groove:
 	A groove is a repeating pattern of per-step timing offsets and optional
 	velocity adjustments aligned to a rhythmic grid. Apply it as a post-build
 	transform with ``p.groove(template)`` to give a pattern its characteristic
-	feel — swing, shuffle, MPC-style pocket, or anything extracted from an
+	feel - swing, shuffle, MPC-style pocket, or anything extracted from an
 	Ableton ``.agr`` file.
 
 	The offsets repeat from the start of the piece, not from the start of each
@@ -72,7 +72,7 @@ class Groove:
 		Create a swing groove from a percentage.
 
 		50% is straight (no swing). 67% is approximately triplet swing.
-		57% is a moderate shuffle — the Ableton default.
+		57% is a moderate shuffle - the Ableton default.
 
 		Applied, a note moves by whole pulses (24 to a beat), so percentages
 		that round to the same pulse sound the same: on sixteenths 55–62 all
@@ -102,7 +102,7 @@ class Groove:
 		``Groove`` dataclass format (per-step offsets and velocity scales).
 
 		Without ``grid=``, the grid is inferred as ``clip length / note
-		count`` — which assumes the clip plays **exactly one note per grid
+		count`` - which assumes the clip plays **exactly one note per grid
 		cell** (the standard shape for a groove clip). A clip with rests or
 		chords breaks that assumption: pass ``grid=`` explicitly (e.g.
 		``grid=0.25`` for a 16th-note groove) and empty cells keep a neutral

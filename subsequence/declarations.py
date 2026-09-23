@@ -39,7 +39,7 @@ class Span:
 	Read it back with :func:`typing.get_type_hints` passing
 	``include_extras=True``, which is what keeps the metadata visible.
 
-	``high`` may be left open — ``Span(low=0.01)`` — for a quantity whose only
+	``high`` may be left open - ``Span(low=0.01)`` - for a quantity whose only
 	real bound is a floor.  A stretch factor or a note duration has a smallest
 	useful value and no largest one, and inventing a ceiling to fill the field
 	would be a guess a consumer would then draw a slider to.  The catalogue
@@ -107,7 +107,7 @@ class Unit:
 	"""What a numeric parameter is measured in, for a surface to draw beside it.
 
 	Attach it with :data:`typing.Annotated`, beside a :class:`Span` where there
-	is one.  It carries no bound and implies no conversion — it is a word for a
+	is one.  It carries no bound and implies no conversion - it is a word for a
 	person, which is why the same field can say ``"beats"`` here and ``"kHz"``
 	from another app without anything in between knowing either.
 
@@ -128,13 +128,13 @@ class Step:
 	"""How far one tap of a stepper moves a number that has no range to divide.
 
 	An ``int`` already steps by one and a parameter with both ends already
-	divides into a slider, so this is for the unbounded float — where, left
+	divides into a slider, so this is for the unbounded float - where, left
 	unsaid, a surface invents an increment.  Superconductor invents a tenth
 	(#2367), which on a quantity measured in beats can never land on a
 	sixteenth: 0.1, 0.2, 0.3.
 
 	**The step must divide the default.**  A stepper adds and subtracts from
-	where it is, starting from zero when a value is unset, and never snaps — so
+	where it is, starting from zero when a value is unset, and never snaps - so
 	a step the default is not a multiple of walks a lattice that can never come
 	back to a musical value.  A 0.25 step on a duration defaulting to 0.1 would
 	go 0.35, 0.6, 0.85 for ever.  A test holds every published default to it,
@@ -167,7 +167,7 @@ class PitchParameter:
 
 	"""Marks a parameter as naming a pitch.
 
-	A bare ``typing.Union[int, str]`` alias would not survive introspection —
+	A bare ``typing.Union[int, str]`` alias would not survive introspection -
 	``get_type_hints`` resolves an alias to its target and the name is gone, so
 	a pitch would be indistinguishable from any other int-or-string.  The
 	marker is what makes it readable back.
@@ -194,8 +194,8 @@ class PositionParameter:
 	"""Marks a parameter as naming a position in the pattern.
 
 	The same join as :class:`PitchParameter`, made against the other fact a
-	composition owns.  How many positions a pattern has is per-composition — on
-	a real rig one pattern runs nine steps where its neighbours run sixteen — so
+	composition owns.  How many positions a pattern has is per-composition - on
+	a real rig one pattern runs nine steps where its neighbours run sixteen - so
 	a bound published from here would be wrong for somebody.  Subsequence says
 	only THAT a parameter is a position, and leaves the count to the consumer
 	that knows it (the engine/user boundary, #1465).
@@ -420,11 +420,11 @@ def bounded (fn: _Decorated) -> _Decorated:
 	up, where a bound nothing consults could disagree with the code forever.
 
 	Accepts the argument positionally or by keyword, and does nothing at all
-	when every value is already inside its span — the common case, which stays
+	when every value is already inside its span - the common case, which stays
 	free of allocation.
 
 	The wrapper is cast back to the decorated function's own type so mypy still
-	sees the real signature — the parameters, their vocabularies, and the
+	sees the real signature - the parameters, their vocabularies, and the
 	builder it returns for chaining.
 	"""
 

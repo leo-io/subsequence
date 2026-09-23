@@ -1,4 +1,4 @@
-"""``PatternBuilder`` (the ``p`` inside a pattern) — the note-placement surface.
+"""``PatternBuilder`` (the ``p`` inside a pattern) - the note-placement surface.
 
 This is the ``p`` handed to every ``@composition.pattern`` function: the verbs
 for placing notes, drums, chords, motifs and phrases, plus articulation, the
@@ -145,7 +145,7 @@ class PatternBuilder(
 			cc_name_map: Optional mapping of CC names to MIDI CC numbers.
 			nrpn_name_map: Optional mapping of NRPN parameter names to 14-bit
 				parameter numbers (0–16383).  Used by ``p.nrpn()`` and
-				``p.nrpn_ramp()`` for symbolic access — typically a
+				``p.nrpn_ramp()`` for symbolic access - typically a
 				device-specific dictionary (e.g. Sequential Take 5's
 				``Osc1FreqFine`` → 9).
 			section: Current ``SectionInfo`` (or ``None``).
@@ -176,22 +176,22 @@ class PatternBuilder(
 			section_motifs: Optional reference to the composition's
 				section-motif registry, read by ``p.section_motif()``.
 			harmony: Optional read-only harmony window view for this cycle
-				(``p.harmony``) — ``p.harmony.chord``, ``chord_at(beat)``,
+				(``p.harmony``) - ``p.harmony.chord``, ``chord_at(beat)``,
 				``next_chord``, ``until_change``.  ``None`` until the
 				harmonic clock has published a window.
 			held_notes: Optional live held-note tracker from ``composition.note_input()``.
 				Read via ``p.held_notes()``.  ``None`` when no note input was declared
 				(and when rendering headlessly), so the accessor returns an empty list.
 			energy: The current section's energy level (0.0–1.0), read via
-				``p.energy`` — the arranging dial.  0.5 when no energy source
+				``p.energy`` - the arranging dial.  0.5 when no energy source
 				is configured.
 			stream_seed: This pattern's derived stream seed, which
 				``p.scratch()`` takes a child stream of.  ``None`` when the
 				composition is unseeded.
 			repeating: True when the pattern is rebuilt and rescheduled every
 				cycle, so ``set_length()`` refuses a length its
-				``reschedule_lookahead`` would run past.  One-shots —
-				``trigger()`` and transition fills — leave it False: they never
+				``reschedule_lookahead`` would run past.  One-shots -
+				``trigger()`` and transition fills - leave it False: they never
 				reschedule, so their lookahead means nothing.
 			zero_indexed_channels: Whether the composition numbers channels
 				from 0, so a channel pool given to ``apply_tuning()`` is read
@@ -257,7 +257,7 @@ class PatternBuilder(
 
 		``beat=-1`` is one beat before the end, whatever the pattern's length,
 		and any magnitude wraps.  Every verb that places something at a beat
-		goes through here, notes and controls alike — the controls used to
+		goes through here, notes and controls alike - the controls used to
 		convert a negative beat straight to a negative pulse, which scheduled
 		the event before its own cycle and shifted a whole recording (#3005).
 		"""
@@ -326,7 +326,7 @@ class PatternBuilder(
 		"""Return the MIDI notes currently held on the ``note_input`` keyboard.
 
 		The notes are sorted ascending.  Pass the result straight to
-		``p.arpeggio()`` to arpeggiate whatever the player is holding —
+		``p.arpeggio()`` to arpeggiate whatever the player is holding -
 		``p.arpeggio(p.held_notes())`` rests when no keys are down.  Returns
 		an empty list when no ``note_input()`` source was declared and when
 		rendering headlessly (so seeded output stays deterministic).
@@ -374,7 +374,7 @@ class PatternBuilder(
 
 		**In steps**, every step keeps its size and the pattern gains or loses
 		steps: ``set_length(steps=12)`` on a sixteen-step bar is twelve
-		sixteenths — three beats — and ``p.grid`` becomes 12, so ``euclidean()``
+		sixteenths - three beats - and ``p.grid`` becomes 12, so ``euclidean()``
 		and every other method that counts steps spreads over those twelve.  A
 		step is the size the pattern was declared with, whatever lengths it has
 		been given since.
@@ -382,7 +382,7 @@ class PatternBuilder(
 		Notes already placed in this build keep their positions; anything placed
 		after the call sees the new length.  The sequencer plays it from the next
 		cycle, which starts where the current one ends, and it stays in force for
-		later cycles until it is set again — so a pattern left shorter than its
+		later cycles until it is set again - so a pattern left shorter than its
 		neighbours drifts against them, which is the polyrhythm.
 
 		```python
@@ -397,7 +397,7 @@ class PatternBuilder(
 		Raises:
 			ValueError: If both or neither are given, if ``steps`` is not a whole
 				number of at least 1, or if the length would be shorter than the
-				``reschedule_lookahead`` of a pattern that repeats — which would
+				``reschedule_lookahead`` of a pattern that repeats - which would
 				leave it silent.
 
 		Returns ``self`` for fluent chaining.
@@ -457,7 +457,7 @@ class PatternBuilder(
 		"""
 		Resolve a pitch value to a MIDI note number (strict).
 
-		Raises on an unknown drum name — the strict counterpart of
+		Raises on an unknown drum name - the strict counterpart of
 		:meth:`_resolve_pitch_lenient`.  Note-placement and transform methods use
 		the lenient variant, so a device may legitimately lack a voice others
 		have; this strict primitive is retained for parity with the sibling
@@ -493,7 +493,7 @@ class PatternBuilder(
 		- String absent here but present in a mirror's map →
 		  ``(placeholder, name, True)``: the primary can't voice it, but a
 		  symbolic mirror can (the placeholder pitch is used only by transforms
-		  and display, never for playback — see ``Note.primary_unmapped``).
+		  and display, never for playback - see ``Note.primary_unmapped``).
 		- String absent everywhere → warn once and return ``None`` (drop).
 		- String with **no** ``drum_note_map`` at all → still a configuration
 		  error; raises (you forgot the map, this is not a capability gap).
@@ -538,8 +538,8 @@ class PatternBuilder(
 
 		``include_mirrors`` tailors the wording: step-note placement checks the
 		mirror maps too (the name maps to *no* device), whereas the methods that
-		resolve against the primary map only — drones, ``arpeggio``, ``evolve``,
-		``branch``, and the ``thin``/``ratchet`` pitch filter — report just this
+		resolve against the primary map only - drones, ``arpeggio``, ``evolve``,
+		``branch``, and the ``thin``/``ratchet`` pitch filter - report just this
 		device.
 		"""
 
@@ -565,7 +565,7 @@ class PatternBuilder(
 		"""Resolve a pitch against this pattern's own ``drum_note_map``, leniently.
 
 		Like :meth:`_resolve_pitch`, but an unknown drum *name* (a map is present
-		yet lacks the voice) is **dropped** — warned once, returns ``None`` —
+		yet lacks the voice) is **dropped** - warned once, returns ``None`` -
 		instead of raising, so a device may legitimately lack a voice that other
 		devices have.  Used by the methods that do NOT carry the drum name to
 		mirror destinations (``note_on``/``note_off``/``drone``, ``evolve``,
@@ -613,7 +613,7 @@ class PatternBuilder(
 
 		"""Resolve an NRPN parameter name or number to a 14-bit parameter number.
 
-		Strings require an ``nrpn_name_map`` on the pattern decorator —
+		Strings require an ``nrpn_name_map`` on the pattern decorator -
 		NRPN parameter numbers are vendor-specific, so subsequence does not
 		ship a default mapping.  Integer parameters must be in the 14-bit
 		range 0–16383.
@@ -636,7 +636,7 @@ class PatternBuilder(
 
 		"""Resolve an RPN parameter name or number to a 14-bit parameter number.
 
-		Strings fall back to ``pymididefs.rpn.RPN_MAP`` — the standardised
+		Strings fall back to ``pymididefs.rpn.RPN_MAP`` - the standardised
 		set of MIDI Registered Parameter Numbers (``pitch_bend_sensitivity``,
 		``channel_fine_tuning``, ...).  No per-pattern map needed.  Integer
 		parameters must be in the 14-bit range 0–16383.
@@ -660,7 +660,7 @@ class PatternBuilder(
 		A drum name is carried through to the mirror fan-out so each device can
 		re-resolve it through its own ``drum_note_map``.  A name no destination
 		maps (not in the pattern's own map nor any mirror's) is dropped and
-		warned once — it does not raise — so device maps can legitimately lack
+		warned once - it does not raise - so device maps can legitimately lack
 		voices others have.  (A string pitch with **no** ``drum_note_map`` at all
 		is still a configuration error and raises.)
 
@@ -717,7 +717,7 @@ class PatternBuilder(
 				``(low, high)`` tuple for a single random draw.
 
 		A drum name this device's ``drum_note_map`` lacks is dropped (warned
-		once) rather than raising — consistent with the step-note methods.  A
+		once) rather than raising - consistent with the step-note methods.  A
 		string pitch with no ``drum_note_map`` at all is still a configuration
 		error and raises.
 		"""
@@ -850,14 +850,14 @@ class PatternBuilder(
 			probability: Chance (0.0 to 1.0) that each hit will play.
 			seed: Fix the probability gating for this call (an int); omit to
 				use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
 			# Typical sixteenth-note hi-hats with some probability variation
 			p.hit_steps("hh", range(16), velocity=70, probability=0.8)
 
-			# Humanised hi-hats — each step gets a fresh random velocity.
+			# Humanised hi-hats - each step gets a fresh random velocity.
 			p.hit_steps("hh", range(16), velocity=(40, 90))
 			```
 		"""
@@ -908,7 +908,7 @@ class PatternBuilder(
 			m: The motif value (anything exposing ``.events`` / ``.length``
 				places; ``.controls`` is read when present).
 			beat: Where the motif starts within the pattern.
-			span: Clamp — events whose onset falls at or beyond *span* beats
+			span: Clamp - events whose onset falls at or beyond *span* beats
 				into the motif are dropped (the ``arpeggio()`` convention).
 			root: Register anchor for scale-degree resolution: the tonic
 				lands at its nearest instance to this MIDI note (ties resolve
@@ -919,9 +919,9 @@ class PatternBuilder(
 				Degree/int pitches landing on strong beats (metric weight
 				>= 0.5) snap to the nearest chord tone with this
 				probability.  Defaults to the motif's own ``fit`` (0.7 on
-				generated motifs, none on hand-written ones — typed degrees
+				generated motifs, none on hand-written ones - typed degrees
 				are sacred); inactive without a chord context.  ChordTone
-				and Approach events never snap — their harmony reading is
+				and Approach events never snap - their harmony reading is
 				inherent (an Approach's chromaticism is the point).
 			fit_weights: Custom per-step metric weight list (the
 				``build_ghost_bias`` precedent) for additive or
@@ -996,7 +996,7 @@ class PatternBuilder(
 
 		"""Resolve one stored pitch spec to a MIDI int or drum name, late.
 
-		``event_beat`` is the event's position within this cycle — chord-
+		``event_beat`` is the event's position within this cycle - chord-
 		relative specs resolve against the chord sounding *under the event*
 		(``p.harmony.chord_at``), not the cycle-start snapshot.
 		"""
@@ -1026,7 +1026,7 @@ class PatternBuilder(
 		"""Resolve an Approach: one semitone below its target's pitch.
 
 		A ``ChordTone`` target reads the chord at the NEXT boundary after the
-		event (the harmony window's anticipation data) — the approach is the
+		event (the harmony window's anticipation data) - the approach is the
 		tension, the target is where the harmony lands.  When the window
 		holds no committed next chord (the live mode horizon's edge), the
 		sounding chord stands in.  ``Degree``/``int`` targets resolve as
@@ -1240,11 +1240,11 @@ class PatternBuilder(
 		offset: subsequence.declarations.GridBeats = 0.0,
 	) -> "PatternBuilder":
 
-		"""Place this cycle's window of a Phrase — position computed, never stored.
+		"""Place this cycle's window of a Phrase - position computed, never stored.
 
 		The playback position is stateless arithmetic over the engine's own
-		counters: ``pos = (p.cycle * pattern_length + offset) % phrase.length``
-		— deterministic under live reload, ``form_jump``, and render, with
+		counters: ``pos = (p.cycle * pattern_length + offset) % phrase.length`` -
+		deterministic under live reload, ``form_jump``, and render, with
 		zero new state.  A pattern shorter than the phrase walks through it
 		cycle by cycle; deliberately mismatched lengths are phase drift
 		(polymeter against the phrase).  When the cycle window crosses the
@@ -1311,7 +1311,7 @@ class PatternBuilder(
 		"""The Motif/Phrase bound to the current section (and part), or ``None``.
 
 		Reads the ``composition.section_motifs()`` registry for the section
-		currently playing.  A section with no binding returns ``None`` —
+		currently playing.  A section with no binding returns ``None`` -
 		bind material or rest; no fallback guessing::
 
 			@comp.pattern(channel=4, bars=2)
@@ -1330,9 +1330,9 @@ class PatternBuilder(
 
 		"""An empty builder sharing this pattern's musical context.
 
-		Everything a generator reads is carried over — key, scale, harmony,
+		Everything a generator reads is carried over - key, scale, harmony,
 		section, bar, cycle, conductor, tweaks, shared data, drum and control
-		name maps, held notes, time signature and energy — so a generator
+		name maps, held notes, time signature and energy - so a generator
 		behaves the same on a scratch as it does here.  A composition can build
 		one by hand, and then it holds a dozen copied fields that go stale the
 		day a thirteenth is added.
@@ -1343,7 +1343,7 @@ class PatternBuilder(
 
 		**The random stream is a child, not the same one.**  Sharing this
 		builder's would advance it, so how the parent's later draws come out
-		would depend on how many scratches were made — and ``lock()`` promises
+		would depend on how many scratches were made - and ``lock()`` promises
 		a pattern realises identically each cycle, which would then be true
 		only for a fixed number of them.  A fresh unseeded stream would be
 		worse: it would break reproducibility outright.  So the child is
@@ -1443,14 +1443,14 @@ class PatternBuilder(
 		difference.  A control surface uses it to draw a generated layer in a
 		different style from the steps somebody tapped by hand.
 
-		Returns a list of :class:`~subsequence.pattern.PlacedNote` — a frozen,
+		Returns a list of :class:`~subsequence.pattern.PlacedNote` - a frozen,
 		hashable copy of each note, carrying ``origin`` so a named drum voice
 		can be matched back to the panel row that asked for it.  Positions and
 		durations are in pulses; a drone's ``duration`` is None.
 
 		Only this cycle's placements are reported: the pattern is emptied at
 		the start of every rebuild, so a drone still sounding from an earlier
-		cycle is not here.  Note Offs are not reported either — ``note_off()``
+		cycle is not here.  Note Offs are not reported either - ``note_off()``
 		and ``drone_off()`` end a note rather than placing one, and drawing a
 		release as a hit would show a step that never sounds.
 
@@ -1523,7 +1523,7 @@ class PatternBuilder(
 		A named drum is the exception: its name rides along beside the number
 		as the event's ``origin``, so :meth:`~subsequence.motifs.Motif.vary`,
 		:meth:`~subsequence.motifs.Motif.transpose` and
-		:meth:`~subsequence.motifs.Motif.invert` go on refusing it — a varied
+		:meth:`~subsequence.motifs.Motif.invert` go on refusing it - a varied
 		kick is a different instrument, not a variation.
 
 		**A captured drum stays a named drum when it is placed** (#2372).
@@ -1569,15 +1569,15 @@ class PatternBuilder(
 
 		Parameters:
 			steps: List of grid indices to trigger. An empty list is a
-				no-op — no notes are placed and the builder is returned
+				no-op - no notes are placed and the builder is returned
 				unchanged (handy when probabilistic gating rejects every step).
 			pitches: Pitch or list of pitches.
 			velocities: Velocity (default 100), ``(low, high)`` tuple for
 				a fresh random draw per step, or a list of velocities
 				matched to the steps one-to-one (a short list repeats its
-				final value, a long list is truncated — both warn).
+				final value, a long list is truncated - both warn).
 			velocity: The same as ``velocities`` for a single value or a
-				``(low, high)`` range, and the name every other verb uses —
+				``(low, high)`` range, and the name every other verb uses -
 				which is what a control surface drives, since a two-element
 				list here means one value per step.  Pass one or the other.
 			durations: Duration or list of durations (default 0.1).
@@ -1587,7 +1587,7 @@ class PatternBuilder(
 			probability: Chance (0.0 to 1.0) that each step will play.
 			seed: Fix the probability gating for this call (an int); omit to
 				use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 		"""
 
 		if not steps:
@@ -1652,7 +1652,7 @@ class PatternBuilder(
 		- ``[a b]``: Groups items into a single subdivided step.
 		- ``~`` or ``.``: A rest.
 		- ``_``: Extends the previous note (sustain).
-		- ``x?0.6``: Probability suffix — fires with the given probability (0.0–1.0).
+		- ``x?0.6``: Probability suffix - fires with the given probability (0.0–1.0).
 
 		Parameters:
 			notation: The mini-notation string.
@@ -1663,7 +1663,7 @@ class PatternBuilder(
 				tuple for a fresh random draw per event.
 			seed: Fix the ``?`` probability gating for this call (an int);
 				omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1713,7 +1713,7 @@ class PatternBuilder(
 		Repeat a note at a fixed beat interval for the whole pattern.
 
 		The classic 'Note Repeat' of MPC, Push, and Maschine fame: one
-		pitch firing at a steady rate — running hi-hats, a pulsing bass
+		pitch firing at a steady rate - running hi-hats, a pulsing bass
 		note, a metronome click.
 
 		Parameters:
@@ -1758,12 +1758,12 @@ class PatternBuilder(
 	) -> "PatternBuilder":
 
 		"""
-		Arpeggiate a chord (or a list of pitches) — cycle the notes one at a time
+		Arpeggiate a chord (or a list of pitches) - cycle the notes one at a time
 		at regular beat intervals.
 
-		Like ``chord()`` and ``strum()``, the first argument can be a chord — the
+		Like ``chord()`` and ``strum()``, the first argument can be a chord - the
 		``chord`` passed to your pattern function, or any chord from
-		``p.progression()`` — and ``root`` / ``count`` / ``inversion`` voice it
+		``p.progression()`` - and ``root`` / ``count`` / ``inversion`` voice it
 		exactly as they do.  So "play this as a chord, a strum, or an arpeggio" is a
 		one-word verb swap::
 
@@ -1772,8 +1772,8 @@ class PatternBuilder(
 
 		Pass a list of pitches instead to arpeggiate something that isn't a chord (a
 		scale fragment, a custom voicing).  Unlike a held ``chord()``, an arpeggio is
-		a stream of single notes, so it has no ``sustain`` / ``legato`` / ``detached``
-		— use ``duration`` for how long each note rings and ``span`` for how much of
+		a stream of single notes, so it has no ``sustain`` / ``legato`` / ``detached`` -
+		use ``duration`` for how long each note rings and ``span`` for how much of
 		the bar the figure fills.
 
 		An empty pitch list rests (places nothing), so a live arpeggiator over
@@ -1782,10 +1782,10 @@ class PatternBuilder(
 			p.arpeggio(p.held_notes(), direction="forward")
 
 		Parameters:
-			notes: A chord to arpeggiate — anything with a ``.tones()`` method (the
+			notes: A chord to arpeggiate - anything with a ``.tones()`` method (the
 				pattern's ``chord``, or a chord from ``p.progression()``), or a
 				chord *name* like ``"Cmaj7"``, which is the form a control
-				surface can send — or a list of MIDI note numbers (e.g. ``60``)
+				surface can send - or a list of MIDI note numbers (e.g. ``60``)
 				/ drum-name strings when the
 				pattern has a ``drum_note_map``.  For pitched note *names* use the
 				integer constants in ``subsequence.constants.midi_notes`` (e.g.
@@ -1793,7 +1793,7 @@ class PatternBuilder(
 				dropped (warned once); a string with no map at all still raises.
 			root: MIDI root note for the chord form (e.g. 48), exactly as ``chord()``.
 				Required for a chord; not used for a plain pitch list.
-			velocity: MIDI velocity for all notes (default 100 — arpeggios sit in the
+			velocity: MIDI velocity for all notes (default 100 - arpeggios sit in the
 				melodic-line velocity bucket, not the softened-chord bucket; pass
 				``velocity=90`` to match ``chord()``), or a ``(low, high)`` tuple for
 				a fresh random draw per note.
@@ -1814,22 +1814,22 @@ class PatternBuilder(
 				``forward`` and ``reverse`` walk the pitches **in the order
 				they were given**.  For a chord that is ascending, because a
 				chord's tones arrive sorted; for a list somebody chose it is
-				the order they chose, which is musically real — ``G, C, E``
+				the order they chose, which is musically real - ``G, C, E``
 				is a different figure from ``C, E, G``.  The ``low_to_high``
 				pair sorts by pitch first, whatever order they arrived in.
 
-				- ``"forward"`` — as given, then wrap (default).
-				- ``"reverse"`` — as given, backwards.
-				- ``"forward_and_back"`` — as given, there and back (ping-pong).
-				- ``"low_to_high"`` — sorted, ascending.
-				- ``"high_to_low"`` — sorted, descending.
-				- ``"low_to_high_and_back"`` — sorted, there and back: the
+				- ``"forward"`` - as given, then wrap (default).
+				- ``"reverse"`` - as given, backwards.
+				- ``"forward_and_back"`` - as given, there and back (ping-pong).
+				- ``"low_to_high"`` - sorted, ascending.
+				- ``"high_to_low"`` - sorted, descending.
+				- ``"low_to_high_and_back"`` - sorted, there and back: the
 				  figure a hardware arpeggiator calls up-down.
-				- ``"random"`` — shuffled once per call using *rng*.
+				- ``"random"`` - shuffled once per call using *rng*.
 
 			seed: Fix the ``direction="random"`` shuffle for this call (an
 				int); omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -1912,8 +1912,8 @@ class PatternBuilder(
 		length, not from ``beat``.
 
 		``chord``/``strum`` size ``sustain``/``detached`` against the whole pattern (the
-		one-chord-fills-the-bar model).  With a non-zero ``beat`` — e.g. placing several
-		chords across a progression — that almost always rings the chord far past its
+		one-chord-fills-the-bar model).  With a non-zero ``beat`` - e.g. placing several
+		chords across a progression - that almost always rings the chord far past its
 		slot, so we flag it.  Deduped on the pattern so a hot-reloading builder warns once.
 		"""
 
@@ -1931,8 +1931,8 @@ class PatternBuilder(
 
 		"""The chord *value* is or names, or None when it is a list of pitches.
 
-		A name like ``"Cmaj7"`` is the form a control surface can send — a
-		``Chord`` is a Python object and does not cross a wire — so a string
+		A name like ``"Cmaj7"`` is the form a control surface can send - a
+		``Chord`` is a Python object and does not cross a wire - so a string
 		here is read as a chord name rather than as a sequence of pitches.  It
 		could not honestly be the latter: every character would have to be a
 		drum voice, and a one-character voice name is not a thing anybody has.
@@ -1956,17 +1956,17 @@ class PatternBuilder(
 		count: typing.Optional[int],
 	) -> typing.List[typing.Tuple[int, typing.Optional[str], bool]]:
 
-		"""Voice a chord, or resolve a plain pitch list — the shared first argument.
+		"""Voice a chord, or resolve a plain pitch list - the shared first argument.
 
 		``chord()``, ``strum()``, ``broken_chord()`` and ``arpeggio()`` all take
-		"a chord, or the pitches themselves".  A chord — an object with
-		``.tones()``, or a name like ``"Cmaj7"`` — is voiced through
+		"a chord, or the pitches themselves".  A chord - an object with
+		``.tones()``, or a name like ``"Cmaj7"`` - is voiced through
 		``root``/``inversion``/``count``; a sequence is resolved as pitches,
 		leniently, so a drum name no destination can voice is dropped rather
 		than raising, and those three voicing arguments are refused because
 		they would mean nothing for a list somebody has already chosen.
 
-		Each entry is ``(midi_pitch, origin, primary_unmapped)`` — the same
+		Each entry is ``(midi_pitch, origin, primary_unmapped)`` - the same
 		triple :meth:`_resolve_hit_pitch` returns, so a named voice keeps its
 		name all the way to the ``Note``.  Without that these three verbs
 		placed notes no surface could match to the row that sounds them, where
@@ -1974,7 +1974,7 @@ class PatternBuilder(
 		(#2395).  A chord's tones are numbers nobody named, so their origin is
 		``None``.
 
-		May return an empty list — an empty pool, or every named voice was one
+		May return an empty list - an empty pool, or every named voice was one
 		this device lacks.  The caller decides what that means; for a placing
 		verb it is a rest.
 		"""
@@ -2003,7 +2003,7 @@ class PatternBuilder(
 		(#2414).  They walked the pitches in the order they were given while
 		the docstring promised lowest to highest, and a name that quietly
 		changed meaning would have altered what existing pieces play with
-		nothing to notice it — where an unknown name stops the call and says so.
+		nothing to notice it - where an unknown name stops the call and says so.
 		"""
 
 		if direction in allowed:
@@ -2026,7 +2026,7 @@ class PatternBuilder(
 		"""Reject root/inversion/count when the caller passed plain pitches.
 
 		They voice a chord and mean nothing for a list somebody has already
-		chosen — silently ignoring them would look like they had been applied.
+		chosen - silently ignoring them would look like they had been applied.
 		"""
 
 		if root is not None or count is not None or inversion != 0:
@@ -2047,7 +2047,7 @@ class PatternBuilder(
 		Parameters:
 			chord_obj: The chord to play (usually the ``chord`` parameter
 				passed to your pattern function, or a name like
-				``"Cmaj7"``) — or, exactly as ``arpeggio()`` takes it, a
+				``"Cmaj7"``) - or, exactly as ``arpeggio()`` takes it, a
 				plain list of pitches to voice as written: MIDI note
 				numbers, or drum names when the pattern has a
 				``drum_note_map``.  A name is carried to the mirror
@@ -2055,11 +2055,11 @@ class PatternBuilder(
 				map; one no destination maps at all is dropped (warned
 				once), and an empty list rests.
 			root: MIDI root note (e.g., 60 for Middle C).  Required for a
-				chord, and not used for a plain pitch list — passing it
+				chord, and not used for a plain pitch list - passing it
 				with one raises, rather than looking as though it applied.
 			velocity: MIDI velocity (default 90), or a ``(low, high)``
 				tuple for a fresh random draw per chord tone (each
-				voice gets a slightly different velocity — useful for
+				voice gets a slightly different velocity - useful for
 				humanising the "fingers" feel).
 			sustain: If True, the notes last for the entire pattern duration.
 				Mutually exclusive with ``legato`` and ``detached``.
@@ -2074,14 +2074,14 @@ class PatternBuilder(
 				the next note. Mutually exclusive with ``sustain`` and
 				``detached``.
 			detached: If given, the chord rings until ``detached`` beats
-				before the next cycle — equivalent to setting
+				before the next cycle - equivalent to setting
 				``duration = pattern.length - detached``.  Use this for a
 				declarative polyphony-safety margin so the chord always
 				releases before the next chord begins.  Mutually exclusive
 				with ``sustain`` and ``legato``.
 			beat: Beat offset to place the chord at (default 0.0 = the start of the
 				pattern).  ``sustain`` and ``detached`` still measure their ring from the
-				pattern length, not from ``beat`` — when placing several positioned chords
+				pattern length, not from ``beat`` - when placing several positioned chords
 				(e.g. over a progression) set ``duration`` explicitly instead.
 
 		Example::
@@ -2139,7 +2139,7 @@ class PatternBuilder(
 		Parameters:
 			chord_obj: The chord to play (usually the ``chord`` parameter
 				passed to your pattern function, or a name like
-				``"Cmaj7"``) — or, exactly as ``arpeggio()`` takes it, a
+				``"Cmaj7"``) - or, exactly as ``arpeggio()`` takes it, a
 				plain list of pitches to voice as written: MIDI note
 				numbers, or drum names when the pattern has a
 				``drum_note_map``.  A name is carried to the mirror
@@ -2147,7 +2147,7 @@ class PatternBuilder(
 				map; one no destination maps at all is dropped (warned
 				once), and an empty list rests.
 			root: MIDI root note (e.g., 60 for Middle C).  Required for a
-				chord, and not used for a plain pitch list — passing it
+				chord, and not used for a plain pitch list - passing it
 				with one raises, rather than looking as though it applied.
 			velocity: MIDI velocity (default 90), or a ``(low, high)``
 				tuple for a fresh random draw per strum note.
@@ -2167,7 +2167,7 @@ class PatternBuilder(
 				is ``"low_to_high"`` whatever order the notes were handed over in.
 			beat: Beat offset for the first note (default 0.0); the stagger is added
 				on top.  ``sustain``/``detached`` ring from the pattern length, not from
-				``beat`` — set ``duration`` explicitly when placing positioned strums.
+				``beat`` - set ``duration`` explicitly when placing positioned strums.
 			legato: If given, calls ``p.legato(ratio)`` after placing the
 				chord, stretching each note to fill ``ratio`` of the gap to
 				the next note. Mutually exclusive with ``sustain`` and
@@ -2191,7 +2191,7 @@ class PatternBuilder(
 			p.strum(chord, root=52, direction="reverse", spacing=0.03)
 
 			# Five-voice strum with a 0.25-beat safety gap before the
-			# next chord — won't exhaust polyphony on a 5-voice synth.
+			# next chord - won't exhaust polyphony on a 5-voice synth.
 			p.strum(chord, root=48, count=5, spacing=0.1, detached=0.25)
 		"""
 
@@ -2237,11 +2237,11 @@ class PatternBuilder(
 
 		"""Realise a chord progression across the pattern, returning it to place yourself.
 
-		Returns a freshly realised :class:`~subsequence.progressions.Progression`
-		— an iterable of ``(chord, start, length)`` events laying a progression
+		Returns a freshly realised :class:`~subsequence.progressions.Progression` -
+		an iterable of ``(chord, start, length)`` events laying a progression
 		end-to-end across the pattern's length, each chord given a length drawn
 		from *harmonic_rhythm* (the musical term for how often the chords
-		change).  You loop over it and play each chord however you like —
+		change).  You loop over it and play each chord however you like -
 		block, strummed, or arpeggiated::
 
 			for chord, start, length in p.progression("phrygian_minor",
@@ -2250,17 +2250,17 @@ class PatternBuilder(
 
 		This is the **part-level** progression seam: it re-realises a fresh
 		value each rebuild (the breathing behaviour), runs entirely outside
-		the global harmonic clock — so a part can inhabit its own harmonic
-		world (polytonality) or move faster than the clock's span floor —
+		the global harmonic clock - so a part can inhabit its own harmonic
+		world (polytonality) or move faster than the clock's span floor -
 		and never advances engine state.
 
 		For a one-call block-chord part with no loop, use ``composition.chords()``.
 
 		Parameters:
 			source: A built-in chord-graph style name (e.g. ``"phrygian_minor"``) to
-				*generate* a progression; an explicit element list — ints where
+				*generate* a progression; an explicit element list - ints where
 				diatonic, name or roman strings (``["Cm7", 6, "bVII"]``), ``Chord``
-				objects — cycled to fill the pattern; or a
+				objects - cycled to fill the pattern; or a
 				:class:`~subsequence.progressions.Progression` value (its spans
 				cycled, decoration preserved).
 			harmonic_rhythm: How long each chord lasts, in beats.  One of: a single
@@ -2273,7 +2273,7 @@ class PatternBuilder(
 				so it is identical on every cycle (a fixed phrase).  When omitted, the
 				pattern's own RNG is used, so it can vary per cycle (still reproducible
 				under a composition seed).
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Returns:
 			A ``Progression`` you can iterate as ``(chord, start, length)`` tuples
@@ -2310,7 +2310,7 @@ class PatternBuilder(
 			root: MIDI root note (e.g., 60 for Middle C).
 			order: List of indices into the chord tones array, dictating playback order.
 			spacing: Time between each note in beats (default 0.25 = 16th note).
-			velocity: MIDI velocity for all notes (default 90 — broken_chord is a
+			velocity: MIDI velocity for all notes (default 90 - broken_chord is a
 				chord voice, so it sits in the softer chord velocity bucket like
 				``chord()`` and ``strum()``), or a ``(low, high)`` tuple for a
 				fresh random draw per note.
@@ -2382,7 +2382,7 @@ class PatternBuilder(
 
 			p.hit_steps("hh", range(16), velocity=80)
 			p.swing(57)                # gentle 16th-note shuffle
-			p.swing(57, strength=0.5)  # half-strength — subtler feel
+			p.swing(57, strength=0.5)  # half-strength - subtler feel
 		"""
 
 		self.groove(subsequence.groove.Groove.swing(percent=percent, grid=grid), strength=strength)
@@ -2455,11 +2455,11 @@ class PatternBuilder(
 
 		Parameters:
 			probability: The chance (0.0 to 1.0) of each pulse POSITION being
-				removed — all notes sharing that position (a chord's voices,
+				removed - all notes sharing that position (a chord's voices,
 				layered drums) live or die together.
 			seed: Fix the dropout for this call (an int); omit to use the
 				pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 		"""
 
 		rng = self._rng_from(seed, rng)
@@ -2612,7 +2612,7 @@ class PatternBuilder(
 
 		Parameters:
 			factors: Per-step multipliers, one float per grid step.
-				Values outside ``[0.0, 1.0]`` are valid — result is clamped to
+				Values outside ``[0.0, 1.0]`` are valid - result is clamped to
 				``[0, 127]`` after scaling.
 			grid: Grid resolution (defaults to ``p.grid``). Must match the
 				length of ``factors``.
@@ -2663,11 +2663,11 @@ class PatternBuilder(
 		"""
 		Add random variations to note timing and velocity.
 
-		Introduces small imperfections — the micro-variations that distinguish
+		Introduces small imperfections - the micro-variations that distinguish
 		a played performance from a perfectly quantized sequence.
 
 		Called with no arguments, only timing variation is applied
-		(velocity defaults to 0.0 — no change). Pass a velocity value
+		(velocity defaults to 0.0 - no change). Pass a velocity value
 		to also randomise dynamics:
 
 		    # Timing only (default)
@@ -2697,7 +2697,7 @@ class PatternBuilder(
 				``[1 - velocity, 1 + velocity]``, clamped to 1–127.
 			seed: Fix the variations for this call (an int); omit to use the
 				pattern's RNG (seeded when the composition has a seed).
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 		"""
 
 		rng = self._rng_from(seed, rng)
@@ -2802,8 +2802,8 @@ class PatternBuilder(
 		voice-limited synth.
 
 		Parameters:
-			beats: Minimum gap in beats before the next onset (default 0.05
-				— roughly 25 ms at 120 BPM).  Must be positive.
+			beats: Minimum gap in beats before the next onset (default 0.05 -
+				roughly 25 ms at 120 BPM).  Must be positive.
 
 		Example::
 
@@ -2865,7 +2865,7 @@ class PatternBuilder(
 			      pattern's seeded RNG for reproducibility.
 			seed: Fix the partial-strength snapping for this call (an int);
 			      omit to use the pattern's RNG.
-			rng: Advanced determinism form — a ``random.Random`` (wins over ``seed=``).
+			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
 		Example:
 			```python
@@ -2984,7 +2984,7 @@ class PatternBuilder(
 		"""Re-select an NRPN/RPN parameter wherever something else has taken it.
 
 		A ramp selects its parameter once and then sends only Data Entry, which
-		is correct MIDI and cheap — a synth holds the last parameter selected on
+		is correct MIDI and cheap - a synth holds the last parameter selected on
 		a channel.  Nothing defended it, though, so any other NRPN or RPN write
 		inside the ramp's window silently redirected the rest of it.  Measured
 		before this (#3070): with two ramps over one window, the first reached
@@ -3072,7 +3072,7 @@ class PatternBuilder(
 		"""Register this build so :meth:`_finish_build` runs, deferring nothing.
 
 		For closing work that reads what the build laid rather than adding to
-		it — the NRPN/RPN re-select pass (#3070).  :meth:`_defer` does the same
+		it - the NRPN/RPN re-select pass (#3070).  :meth:`_defer` does the same
 		registration for work that *does* have something to lay later.
 		"""
 
@@ -3134,14 +3134,14 @@ class PatternBuilder(
 		"""
 		Stretch the pattern in time, scaling note positions and durations.
 
-		``stretch(2.0)`` makes everything twice as long (half speed) — what
+		``stretch(2.0)`` makes everything twice as long (half speed) - what
 		theorists call *augmentation*; ``stretch(0.5)`` squeezes the pattern
-		into half the time (double speed) — *diminution*.  Any positive
+		into half the time (double speed) - *diminution*.  Any positive
 		factor works: ``stretch(2/3)`` compresses a dotted feel into
 		straight time, for example.
 
 		Notes whose start lands past the end of the pattern are dropped,
-		and compression leaves the freed space empty — the pattern is not
+		and compression leaves the freed space empty - the pattern is not
 		tiled to fill it.  Durations scale without clipping, so a stretched
 		note may ring past the pattern's end exactly like a legato note,
 		and ``stretch(1.0)`` is a true no-op.  Positions and durations
@@ -3186,7 +3186,7 @@ class PatternBuilder(
 		Rotate the pattern by a number of grid steps, wrapping around.
 
 		Notes pushed past the end of the pattern re-enter at the start
-		(and vice versa for negative values) — the step-sequencer rotation
+		(and vice versa for negative values) - the step-sequencer rotation
 		familiar from Euclidean rhythm tools.
 
 		Parameters:
@@ -3227,13 +3227,13 @@ class PatternBuilder(
 
 		Parameters:
 			semitones: Positive for up, negative for down.
-			within: ``(low, high)`` — notes moved outside this range are
+			within: ``(low, high)`` - notes moved outside this range are
 				**removed** rather than pinned to its edge.  Omit it and
 				pitches clamp to 0-127 as they always have.
 
 		An instrument's reach is usually narrower than MIDI's.  A Minitaur
 		sounds notes 0-72, and a note transposed past that is silent on the
-		instrument — so clamping it to 72 sounds a note nobody asked for,
+		instrument - so clamping it to 72 sounds a note nobody asked for,
 		piling voices onto the top note (#2464).  Dropping is the honest
 		answer, and a position left with no notes goes with them.
 

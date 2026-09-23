@@ -7,19 +7,19 @@ live pitch set each cycle via ``p.held_notes()``.
 It is a tiny, dependency-free state machine.  All of its state lives on the
 sequencer loop thread: the mido callback thread only appends raw note events
 to a deque, which the loop drains and feeds here.  Because it is never touched
-from two threads, it needs no locking — and because it takes the current time
+from two threads, it needs no locking - and because it takes the current time
 as an argument (rather than reading the clock itself), it is fully
 deterministic and trivial to unit-test.
 
 Two smoothing behaviours guard against the arp dropping to silence:
 
-* **``release_ms`` debounce** — a just-released note lingers in the held set
+* **``release_ms`` debounce** - a just-released note lingers in the held set
   for a short window, so the momentary all-keys-up gap during a hand-position
   changeover does not register as "nothing held".
-* **``latch``** — the held set persists after release until a *new* chord is
+* **``latch``** - the held set persists after release until a *new* chord is
   started (the first key pressed after every key is up replaces it), like a
   hardware arp's latch / a sustain pedal.  Under ``latch`` the ``release_ms``
-  window is unused — latch dominates.
+  window is unused - latch dominates.
 """
 
 import typing

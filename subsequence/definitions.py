@@ -1,11 +1,11 @@
 """
-Project definitions loader — a shared name-to-number vocabulary file.
+Project definitions loader - a shared name-to-number vocabulary file.
 
-A music project can keep one small YAML file (any filename — ``project.yaml``,
+A music project can keep one small YAML file (any filename - ``project.yaml``,
 ``kit.yaml``) mapping human names to MIDI numbers, shared between Subsequence
 and the Subsample sampler.  Both tools read the same file, so renumbering a
 sound or a controller is one edit and both follow on their next reload.  The
-file format is the only contract — neither application depends on the other.
+file format is the only contract - neither application depends on the other.
 
 The file is a flat mapping of sections, each mapping names to whole numbers:
 
@@ -24,18 +24,18 @@ The file is a flat mapping of sections, each mapping names to whole numbers:
 
 Sections and value ranges (inclusive):
 
-	- ``notes`` — MIDI note numbers, 0-127.
-	- ``cc`` — controller numbers, 0-127.
-	- ``channels`` — MIDI channels as musicians count them, 1-16.
-	- ``programs`` — program-change numbers as sent on the wire (0-based), 0-127.
-	- ``nrpn`` — 14-bit NRPN parameter numbers, 0-16383.  Subsequence-specific;
+	- ``notes`` - MIDI note numbers, 0-127.
+	- ``cc`` - controller numbers, 0-127.
+	- ``channels`` - MIDI channels as musicians count them, 1-16.
+	- ``programs`` - program-change numbers as sent on the wire (0-based), 0-127.
+	- ``nrpn`` - 14-bit NRPN parameter numbers, 0-16383.  Subsequence-specific;
 	  Subsample ignores this section.
 
-Names must match ``[a-z][a-z0-9_]*`` — lowercase letters, digits, underscores;
+Names must match ``[a-z][a-z0-9_]*`` - lowercase letters, digits, underscores;
 no dots, no leading digit.  Unknown top-level sections are silently ignored, so
 either tool can grow a new section without breaking the other.  An empty file,
 an absent section, and a null section are all valid.  Every failure raises
-``ValueError`` naming the file, section, and offending entry — the same checks,
+``ValueError`` naming the file, section, and offending entry - the same checks,
 in the same order, as Subsample applies, so a bad file fails the same way in
 both tools.
 
@@ -44,7 +44,7 @@ Caveats worth knowing:
 	- ``channels`` values are always user-facing 1-16 (the cross-tool contract).
 	  They pass straight into ``channel=`` under the default numbering; if your
 	  composition sets ``zero_indexed_channels=True``, subtract 1 yourself.
-	- YAML silently collapses duplicate keys — the last duplicate wins, and
+	- YAML silently collapses duplicate keys - the last duplicate wins, and
 	  neither tool can detect it.
 	- Names resolve exactly as written (lowercase) in ``drum_note_map`` /
 	  ``cc_name_map`` lookups.  Merging over a stock map, the later dict wins:
@@ -86,7 +86,7 @@ class _Yaml12Loader(yaml.SafeLoader):
 	mostly small integers written by hand:
 
 	- a leading zero means octal, so a drum map lining numbers up in a column
-	  reads ``kick: 036`` as **30** — a different drum, silently;
+	  reads ``kick: 036`` as **30** - a different drum, silently;
 	- a colon means sexagesimal, so a cue written ``1:30`` becomes **90**.
 
 	YAML 1.2's core schema has neither.  ``036`` is thirty-six, ``0o42`` is
@@ -171,7 +171,7 @@ def _construct_yaml_12_int (loader: yaml.Loader, node: yaml.Node) -> int:
 	"""Read an integer by YAML 1.2 rules: decimal, 0o octal, 0x hex.
 
 	The resolver decides which TAG a scalar carries; the constructor decides
-	what value it becomes, and PyYAML's is 1.1 all the way down — a leading
+	what value it becomes, and PyYAML's is 1.1 all the way down - a leading
 	zero is octal and a colon is sexagesimal there, whatever the resolver
 	said. Replacing only the resolver left ``kick: 036`` reading 30, exactly as
 	before, which is a good reminder that the two halves are separate.
@@ -220,7 +220,7 @@ class Definitions:
 	"""
 	The name-to-number tables read from a project definitions file.
 
-	One plain ``dict`` per section, always present — an absent or null section
+	One plain ``dict`` per section, always present - an absent or null section
 	is an empty dict.  The dicts merge directly into the existing parameters:
 	``notes`` into ``drum_note_map=``, ``cc`` into ``cc_name_map=``, ``nrpn``
 	into ``nrpn_name_map=``, while ``channels`` values feed ``channel=`` and

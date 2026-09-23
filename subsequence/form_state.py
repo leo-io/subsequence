@@ -1,4 +1,4 @@
-"""Compositional form tracking — section sequences, transitions, and lookahead.
+"""Compositional form tracking - section sequences, transitions, and lookahead.
 
 Defines :class:`SectionInfo` (immutable per-bar snapshot) and
 :class:`FormState` (the stateful form engine that advances through sections).
@@ -10,7 +10,7 @@ builders through ``p.section``.
 A form may be a :class:`~subsequence.forms.Form` value (Sections with
 energy/key payloads), a plain list of ``(name, bars)`` tuples or Sections,
 a generator yielding ``(name, bars)`` pairs, or a weighted-graph dict.
-Everything normalises to :class:`~subsequence.forms.Section` internally —
+Everything normalises to :class:`~subsequence.forms.Section` internally -
 the payload travels with the section either way.
 """
 
@@ -52,8 +52,8 @@ class SectionInfo:
 		energy: The section's energy payload (0.5 unless a bound
 			:class:`~subsequence.forms.Form` says otherwise; the
 			``composition.energy()`` dict overrides it at read time).
-		key: The section's key override, or ``None`` (a higher tier — form
-			key, then composition key — supplies it).
+		key: The section's key override, or ``None`` (a higher tier - form
+			key, then composition key - supplies it).
 		scale: The section's scale/mode override, or ``None`` (falls back
 			through the form scale to the composition scale).
 
@@ -117,7 +117,7 @@ class SectionInfo:
 		"""True on the last bar before a DIFFERENT section.
 
 		A repeat (verse → verse) is not an ending, and neither is the
-		form's end — ``ending`` marks the bars where transition material
+		form's end - ``ending`` marks the bars where transition material
 		(fills, mutes) belongs.
 		"""
 
@@ -158,7 +158,7 @@ class FormState:
 			start: Name of the starting section when using a graph dict. If omitted,
 				it defaults to the first key in the dictionary.
 			rng: Optional seeded ``random.Random`` for deterministic graph decisions.
-			at_end: What happens when a sequence/generator form runs out —
+			at_end: What happens when a sequence/generator form runs out -
 				``"stop"`` (the form finishes; default), ``"hold"`` (the
 				final section repeats until navigated away from), or
 				``"loop"`` (start over).  Graphs end via their terminal
@@ -308,7 +308,7 @@ class FormState:
 		"""The natural next position in sequence mode, or None at the end.
 
 		``at_end="loop"`` wraps; ``"hold"`` and ``"stop"`` both return
-		None here — hold's repeat is decided at the boundary in
+		None here - hold's repeat is decided at the boundary in
 		:meth:`advance` (the position does not move).
 		"""
 
@@ -374,7 +374,7 @@ class FormState:
 		"""Queue a section to play after the current one ends.
 
 		Overrides the automatically pre-decided next section.  The queued
-		section takes effect at the natural section boundary — the current
+		section takes effect at the natural section boundary - the current
 		section plays to completion first.  In sequence mode the form
 		continues from the queued occurrence onward.
 
@@ -537,7 +537,7 @@ class FormState:
 
 		"""Return the section covering a 1-based GLOBAL bar, or ``None``.
 
-		Available for **sequence** forms only (lists and ``Form`` values — the
+		Available for **sequence** forms only (lists and ``Form`` values - the
 		whole timeline is known, so a bar maps to a section by accumulating
 		``Section.bars``).  Graph and generator forms have no fixed layout
 		ahead of the playhead, so they return ``None`` (callers fall back to
@@ -545,7 +545,7 @@ class FormState:
 		end returns ``None``.
 
 		Used to key a relative ``pin_chord`` to the section that *owns* the
-		pinned bar rather than the section at the playhead — they differ when
+		pinned bar rather than the section at the playhead - they differ when
 		the harmonic clock's lookahead projects a pin into a later, possibly
 		differently-keyed, section.  This is a layout lookup (linear from bar
 		1); live ``form_jump`` is not reflected, which is acceptable for
@@ -611,7 +611,7 @@ class FormState:
 		"""Force the form to a named section immediately.
 
 		Available in **graph mode** (dict forms) and **sequence mode**
-		(list/Form forms — the jump lands on the next occurrence of the
+		(list/Form forms - the jump lands on the next occurrence of the
 		name, searching forward and wrapping, and the form continues from
 		there).  A generator form cannot be navigated.
 

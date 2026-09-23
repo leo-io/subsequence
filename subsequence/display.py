@@ -62,7 +62,7 @@ def _fit_to_terminal (parts: typing.List[str]) -> str:
 
 	Whole parts are dropped from the RIGHT before anything is truncated, so a
 	line that does not fit loses a conductor signal rather than half of the
-	chord. The parts are ordered tempo, key, bar, section, chord, signals —
+	chord. The parts are ordered tempo, key, bar, section, chord, signals -
 	so what goes first is what a musician can most afford to lose, and the
 	chord survives a narrow terminal. Only when even the first part is too
 	wide is the text itself cut.
@@ -98,7 +98,7 @@ class GridDisplay:
 	what velocity.  Drum patterns (those with a ``drum_note_map``) show one
 	row per drum sound; pitched patterns show a single summary row.
 
-	Not used directly — instantiated by ``Display`` when ``grid=True``.
+	Not used directly - instantiated by ``Display`` when ``grid=True``.
 	"""
 
 	def __init__ (self, composition: "Composition", scale: float = 1.0) -> None:
@@ -515,13 +515,13 @@ class Display:
 
 		"""Rebuild and redraw the dashboard; called on ``"bar"`` and ``"beat"`` events.
 
-		The integer argument (bar or beat number) is ignored — state is read directly from
+		The integer argument (bar or beat number) is ignored - state is read directly from
 		the composition.
 
 		Note: "bar" and "beat" events are emitted as ``asyncio.create_task`` at the start
 		of each pulse, but the tasks only execute *after* ``_advance_pulse()`` completes
 		(which includes sending MIDI via ``_process_pulse()``). The display therefore
-		always trails the audio slightly — this is inherent to the architecture and cannot
+		always trails the audio slightly - this is inherent to the architecture and cannot
 		be avoided without restructuring the sequencer loop.
 		"""
 

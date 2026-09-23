@@ -11,12 +11,12 @@ How it works
 ``Composition.watch(path)`` constructs a ``LiveReloader`` and calls
 ``start()``.
 
-``start()`` performs an initial synchronous load — reads the file and
+``start()`` performs an initial synchronous load - reads the file and
 delegates to ``Composition.load_patterns()``, which compiles and execs
 the source into a namespace that has ``composition`` and ``subsequence``
 in scope.  This is the first chance for ``@composition.pattern``
 decorators in the file to register with the composition.  If the initial
-load fails (``SyntaxError``, missing file), the exception propagates —
+load fails (``SyntaxError``, missing file), the exception propagates -
 the user should know immediately if their entry point is broken.
 
 A daemon thread is then spawned that polls the file's ``st_mtime`` every
@@ -42,20 +42,20 @@ port while the clock runs would be heard.
 Error handling
 ──────────────
 
-``SyntaxError`` during a reload — log a warning and skip the reload
+``SyntaxError`` during a reload - log a warning and skip the reload
 entirely.  Previous state is preserved.  The user fixes the file and
 saves again; the next mtime tick retries.
 
-Runtime error during ``exec()`` (e.g. ``NameError``, ``ImportError``)
-— treated the same way: log a warning and skip the rest of the reload.
+Runtime error during ``exec()`` (e.g. ``NameError``, ``ImportError``) -
+treated the same way: log a warning and skip the rest of the reload.
 ``Composition._apply_source_async`` re-raises exec failures specifically
 so this catch can suppress the diff-and-unregister phase, which would
 otherwise tear down patterns the broken file failed to reach.  Note
 that decorators that already side-effect'd before the error fired
-cannot be rolled back — those builders will run their new bodies on
+cannot be rolled back - those builders will run their new bodies on
 the next reschedule.
 
-File missing or unreadable mid-poll — log a warning, skip, retry next
+File missing or unreadable mid-poll - log a warning, skip, retry next
 tick.  Editor "atomic save" (write-temp-then-rename) is handled by
 catching ``OSError`` around the read.
 
@@ -125,7 +125,7 @@ class LiveReloader:
 				``_last_mtime``.  Set by ``Composition.watch()`` when it
 				detects a self-watch (the file calling ``watch()`` is the
 				file being watched), since the outer Python script execution
-				will already run the patterns at the module level — a second
+				will already run the patterns at the module level - a second
 				exec via ``_load_initial`` would double-register every one.
 		"""
 
@@ -147,7 +147,7 @@ class LiveReloader:
 		"""Perform the initial synchronous load, then spawn the watcher thread.
 
 		Raises :exc:`SyntaxError` or :exc:`FileNotFoundError` if the file
-		cannot be loaded — better to fail loudly here than to leave the
+		cannot be loaded - better to fail loudly here than to leave the
 		user wondering why no patterns are running.
 
 		Safe to call once.  A second call while the watcher is already
@@ -193,14 +193,14 @@ class LiveReloader:
 		Reads, compiles and execs the file on the calling thread.  Doesn't
 		go through ``Composition.load_patterns()`` because that method
 		schedules onto the event loop when one is running and waits via
-		``future.result()`` — which would deadlock if ``watch()`` happens
+		``future.result()`` - which would deadlock if ``watch()`` happens
 		to be called from inside the event loop (e.g. in tests).  The
 		``_load_initial`` contract is pre-play setup, so direct exec is
 		correct here: decorators populate ``_pending_patterns`` and the
 		composition's ``play()`` graduates them.
 
 		When ``self._skip_initial_exec`` is ``True`` (single-file self-watch),
-		the compile+exec step is skipped — the outer Python script will run
+		the compile+exec step is skipped - the outer Python script will run
 		the decorators itself.  We still stat for ``_last_mtime`` so the
 		watcher loop doesn't immediately re-trigger on the first poll.
 		"""
@@ -265,7 +265,7 @@ class LiveReloader:
 
 	async def _reload_async (self) -> None:
 
-		"""Read, compile, apply — runs on the event loop thread.
+		"""Read, compile, apply - runs on the event loop thread.
 
 		Delegates the exec + activate + diff-and-unregister phases to
 		``Composition._apply_source_async``.  We do the compile step here

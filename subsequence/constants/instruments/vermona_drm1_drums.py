@@ -24,12 +24,12 @@ Two ways to use this module:
            p.hit_steps(drm1.KICK, [0, 4, 8, 12], velocity=127)
 
 ``VERMONA_DRM1_DRUM_MAP`` also accepts a *faithful* subset of General MIDI drum
-names (e.g. ``"kick_1"``, ``"snare_1"``, ``"hi_hat_closed"``) as aliases — only
+names (e.g. ``"kick_1"``, ``"snare_1"``, ``"hi_hat_closed"``) as aliases - only
 for the voices the DRM1 genuinely has (kick, snare, clap, hi-hats).  These
 shared GM names are what let the DRM1 take part in symbolic mirroring (each
 device re-resolves a drum name through its own map).  GM names for instruments
 the DRM1 lacks (toms, ride/crash cymbals, shakers, cowbell and other latin/aux
-percussion) are intentionally NOT aliased — naming one anyway is dropped with
+percussion) are intentionally NOT aliased - naming one anyway is dropped with
 a one-time warning (never a wrong voice); address those by their native
 ``drum_1`` / ``drum_2`` / ``multi`` names.  Canonical GM names come from
 `pymididefs.drums <https://github.com/simonholliday/PyMidiDefs>`_ (``GM_DRUM_MAP``).

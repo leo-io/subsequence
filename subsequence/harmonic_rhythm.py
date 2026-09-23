@@ -7,10 +7,10 @@ import typing
 @dataclasses.dataclass(frozen=True)
 class HarmonicRhythm:
 
-	"""A bounded, optionally-quantised *harmonic rhythm* — how long each chord lasts.
+	"""A bounded, optionally-quantised *harmonic rhythm* - how long each chord lasts.
 
 	Harmonic rhythm is the rate at which the chords change.  It can be regular,
-	irregular, or static; this spec describes the **irregular** case — each chord
+	irregular, or static; this spec describes the **irregular** case - each chord
 	lasts a fresh random length somewhere between ``low`` and ``high`` beats.  When
 	``step`` is given, those lengths snap to whole multiples of it, so the result
 	is irregular but still lands on a musical grid (e.g. always a whole-note
@@ -21,7 +21,7 @@ class HarmonicRhythm:
 		harmonic_rhythm = between(WHOLE, 3 * WHOLE, step=WHOLE)   # 1, 2, or 3 whole notes
 
 	The other two harmonic-rhythm shapes are expressed without this class:
-	a single ``float`` (static — every chord the same length) and a ``list`` of
+	a single ``float`` (static - every chord the same length) and a ``list`` of
 	floats (a *shaped* rhythm such as ``[WHOLE, HALF, HALF]``, cycled per chord).
 	``p.progression()`` / ``comp.chords()`` accept all three.
 	"""
@@ -73,7 +73,7 @@ def between (low: float, high: float, step: typing.Optional[float] = None) -> Ha
 	"""A harmonic rhythm that varies *between* two lengths (in beats).
 
 	Each chord lasts a random length in ``[low, high]``.  Pass ``step`` to snap
-	those lengths to a grid — e.g. ``between(WHOLE, 3 * WHOLE, step=WHOLE)`` gives
+	those lengths to a grid - e.g. ``between(WHOLE, 3 * WHOLE, step=WHOLE)`` gives
 	one, two, or three whole notes, never anything in between.
 
 	Reads aloud the way you'd describe it: "between one and three whole notes,
