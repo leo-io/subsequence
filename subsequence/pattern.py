@@ -97,6 +97,7 @@ class Note:
 	origin: typing.Optional[str] = None		# Original drum-name string (if the pitch was named), kept so mirror destinations can re-resolve it through their own drum_note_map.  None for numeric/pitched notes.
 	primary_unmapped: bool = False			# True when origin was NOT in the pattern's own (primary) drum_note_map — the primary device has no such voice, so it stays silent; only mirror destinations whose maps contain origin sound it.  pitch then holds a placeholder (a mirror's value) used only by transforms/display, never for playback.
 	nudge: int = 0							# Pulses that feel (swing, a groove, randomize()) has moved this note from the pulse it was placed on.  The transforms that read the grid count a note as the step it was placed on, however far the feel has carried it (see Pattern._placed_pulse, #3447).
+	legato_group: typing.Optional[int] = None	# Which chord(legato=) or strum(legato=) placed this note, so the build's end sizes that call's notes, and only them, against the next attack (#3463).  Carried through every copy a transform makes.
 
 
 @dataclasses.dataclass

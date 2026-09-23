@@ -2623,7 +2623,7 @@ def test_strum_invalid_direction () -> None:
 
 def test_chord_legato_reshapes_durations () -> None:
 
-	"""chord(legato=0.9) should call p.legato() — durations differ from the default."""
+	"""chord(legato=0.9) sizes the chord's notes when the build is done - durations differ from the default."""
 
 	pattern, builder = _make_builder(length=4)
 
@@ -2631,6 +2631,7 @@ def test_chord_legato_reshapes_durations () -> None:
 
 	# Without legato, default duration is 1.0 beat = MIDI_QUARTER_NOTE pulses
 	builder.chord(chord, root=60, velocity=90, legato=0.9)
+	builder._finish_build()		# legato is sized against every attack, so once the build is done (#3463)
 
 	# legato() wraps around to the full pattern for a lone chord, so duration
 	# should be 0.9 × total_pulses, not the default 1.0-beat value.
@@ -2671,22 +2672,23 @@ def test_chord_default_no_legato_unchanged () -> None:
 
 def test_strum_legato_reshapes_durations () -> None:
 
-	"""strum(legato=0.9) should call p.legato() after placing notes."""
+	"""strum(legato=0.9) rings as one attack: every string the same length, the last letting go at 0.9 of the cycle.
+
+	This only asserted "not 24 pulses" until #3463, and so passed on (1, 1, 84):
+	two strings a pulse long, each cut at the next string.
+	"""
 
 	pattern, builder = _make_builder(length=4)
 
 	chord = subsequence.chords.Chord(root_pc=0, quality="major")
 
 	builder.strum(chord, root=60, velocity=90, spacing=0.1, legato=0.9)
+	builder._finish_build()
 
-	# Each note is at a different pulse position due to strum offset;
-	# legato stretches each to fill the gap to the next. Verify that
-	# note durations are not the default 1.0-beat value (24 pulses).
-	default_duration = int(1.0 * subsequence.constants.MIDI_QUARTER_NOTE)
+	strings = sorted((position, note.duration) for position, step in pattern.steps.items() for note in step.notes)
 
-	for step in pattern.steps.values():
-		for note in step.notes:
-			assert note.duration != default_duration
+	assert [position for position, _ in strings] == [0, 2, 4]
+	assert [duration for _, duration in strings] == [82, 82, 82]		# the last ends at 4 + 82 = 86 = int(96 * 0.9)
 
 
 def test_strum_legato_sustain_clash_raises () -> None:

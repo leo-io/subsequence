@@ -231,6 +231,10 @@ class PatternBuilder(
 		# against the notes where they finally sit — see _finish_build().
 		self._pending_glides: typing.List[typing.Callable[[], None]] = []
 		self._pending_tunings: typing.List[typing.Callable[[], object]] = []
+		# chord(legato=) and strum(legato=) likewise wait, so they measure
+		# against every attack the build placed, before or after them (#3463).
+		self._pending_legatos: typing.List[typing.Callable[[], None]] = []
+		self._legato_groups: int = 0
 		# This pattern's derived stream seed, so scratch() can take a child
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
@@ -2078,10 +2082,12 @@ class PatternBuilder(
 			inversion: Specific chord inversion (ignored if voice leading is on).
 			count: Number of notes to play (cycles tones if higher than
 				the chord's natural size).
-			legato: If given, calls ``p.legato(ratio)`` after placing the
-				chord, stretching each note to fill ``ratio`` of the gap to
-				the next note. Mutually exclusive with ``sustain`` and
-				``detached``.
+			legato: If given, the chord rings for ``ratio`` of the gap to
+				the next attack after it (round the cycle, where it plays
+				again, if nothing comes sooner), measured once the build is
+				done - so a chord placed later still cuts it, and nothing
+				else in the pattern is resized.  Mutually exclusive with
+				``sustain`` and ``detached``.
 			detached: If given, the chord rings until ``detached`` beats
 				before the next cycle - equivalent to setting
 				``duration = pattern.length - detached``.  Use this for a
@@ -2095,7 +2101,7 @@ class PatternBuilder(
 
 		Example::
 
-			# Shorthand for: p.chord(...) then p.legato(0.9)
+			# Ring each chord for 90% of the way to the next one
 			p.chord(chord, root=root, velocity=85, count=4, legato=0.9)
 
 			# Hold the chord almost the full cycle, releasing 0.25 beats
@@ -2122,6 +2128,8 @@ class PatternBuilder(
 			if duration <= 0:
 				raise ValueError(f"detached ({detached}) must be less than the pattern length ({self._pattern.length:g} beats) so the chord keeps a positive duration")
 
+		placed_before = self._note_ids() if legato is not None else set()
+
 		for pitch, origin, unmapped in pitches:
 			self._pattern.add_note_beats(
 				beat_position = beat,
@@ -2133,7 +2141,7 @@ class PatternBuilder(
 			)
 
 		if legato is not None:
-			self.legato(legato)
+			self._legato_own_notes(placed_before, legato)
 		return self
 
 	def strum (self, chord_obj: typing.Union[subsequence.chords.Chord, str, typing.Sequence[subsequence.declarations.Pitch]], root: typing.Optional[int] = None, velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_CHORD_VELOCITY, sustain: bool = False, duration: subsequence.declarations.GateBeats = 1.0, inversion: int = 0, count: typing.Optional[int] = None, spacing: subsequence.declarations.GateBeats = 0.05, direction: subsequence.declarations.StrumDirection = "forward", legato: typing.Optional[subsequence.declarations.UnitInterval] = None, detached: typing.Optional[subsequence.declarations.GateBeats] = None, beat: subsequence.declarations.GridBeats = 0.0) -> "PatternBuilder":
@@ -2169,6 +2177,8 @@ class PatternBuilder(
 			count: Number of notes to play (cycles tones if higher than
 				the chord's natural size).
 			spacing: Time in beats between each note onset (default 0.05).
+				Onsets fall on whole pulses, 24 to a beat, so a spacing
+				below about 0.04 puts some strings together.
 			direction: ``"forward"`` staggers the pitches in the order they were
 				given (ascending for a chord, whose tones arrive sorted) and
 				``"reverse"`` staggers them backwards; ``"low_to_high"`` and
@@ -2177,10 +2187,13 @@ class PatternBuilder(
 			beat: Beat offset for the first note (default 0.0); the stagger is added
 				on top.  ``sustain``/``detached`` ring from the pattern length, not from
 				``beat`` - set ``duration`` explicitly when placing positioned strums.
-			legato: If given, calls ``p.legato(ratio)`` after placing the
-				chord, stretching each note to fill ``ratio`` of the gap to
-				the next note. Mutually exclusive with ``sustain`` and
-				``detached``.
+			legato: If given, the strum rings as one attack: every string
+				lasts the same, so the last lets go at ``ratio`` of the gap
+				from the first string to the next attack after the last,
+				and the earlier strings sooner - the shape
+				``detached`` gives.  Measured once the build is done, and
+				nothing else in the pattern is resized.  Mutually exclusive
+				with ``sustain`` and ``detached``.
 			detached: If given, every strum note rings with a uniform
 				duration of ``pattern.length - detached - (count - 1) * spacing``.
 				The last note ends exactly ``detached`` beats before the
@@ -2234,12 +2247,14 @@ class PatternBuilder(
 			if duration <= 0:
 				raise ValueError(f"detached ({detached}) plus the strum stagger exceeds the pattern length ({self._pattern.length:g} beats) — reduce detached, spacing, or count")
 
+		placed_before = self._note_ids() if legato is not None else set()
+
 		for i, (pitch, origin, _) in enumerate(pitches):
 			# The name where there is one, so note() carries it as a named hit does.
 			self.note(pitch=pitch if origin is None else origin, beat=beat + i * spacing, velocity=velocity, duration=duration)
 
 		if legato is not None:
-			self.legato(legato)
+			self._legato_own_notes(placed_before, legato)
 		return self
 
 	def progression (self, source: subsequence.progressions.ProgressionSource, harmonic_rhythm: subsequence.progressions.HarmonicRhythmSpec, key: typing.Optional[str] = None, seed: typing.Optional[int] = None, rng: typing.Optional[random.Random] = None) -> subsequence.progressions.Progression:
@@ -2999,6 +3014,10 @@ class PatternBuilder(
 		first because a tuning shifts every pitch bend already present.
 		"""
 
+		# Legato first: it sets the lengths a glide may then extend.
+		for size in self._pending_legatos:
+			size()
+
 		for lay in self._pending_glides:
 			lay()
 
@@ -3097,6 +3116,59 @@ class PatternBuilder(
 
 		self._pattern.cc_events[:] = repaired
 
+	def _note_ids (self) -> typing.Set[int]:
+
+		"""The identity of every note placed so far, to tell a call's own notes from the rest."""
+
+		return {id(note) for step in self._pattern.steps.values() for note in step.notes}
+
+	def _legato_own_notes (self, placed_before: typing.Set[int], ratio: float) -> None:
+
+		"""Mark the notes placed since *placed_before* as one attack, and size them when the build is done (#3463)."""
+
+		self._legato_groups += 1
+		group = self._legato_groups
+
+		for step in self._pattern.steps.values():
+			for note in step.notes:
+				if id(note) not in placed_before:
+					note.legato_group = group
+
+		self._defer(self._pending_legatos, functools.partial(self._lay_legato, group, ratio))
+
+	def _lay_legato (self, group: int, ratio: float) -> None:
+
+		"""Ring one chord's or strum's notes for *ratio* of the gap to the next attack outside it.
+
+		A strum is one attack: the gap runs from its first string to the next
+		attack after its last string, wrapping round the cycle, and every
+		string rings the same length, so the last lets go at
+		*ratio* of the gap and the earlier ones sooner, as ``detached=`` shapes
+		them.  Measured once the build is done, so a chord placed later still
+		cuts one placed earlier, and each call keeps its own ratio.  Applied
+		pattern-wide at the call, every string rang until the next string and
+		a strum's lower strings lasted one pulse (#3463).
+		"""
+
+		own = [(position, note) for position, step in self._pattern.steps.items() for note in step.notes if note.legato_group == group]
+
+		if not own:
+			return
+
+		attack = min(position for position, _ in own)
+		last = max(position for position, _ in own)
+		onsets = sorted(self._pattern.steps)
+		later = [position for position in onsets if position > last]
+
+		# Round the cycle, the next attack is the next cycle's first, which may
+		# be this call's own: it plays again there.
+		following = later[0] if later else onsets[0] + subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
+
+		ring = max(1, int((following - attack) * ratio) - (last - attack))
+
+		for _, note in own:
+			note.duration = ring
+
 	def _will_need_finishing (self) -> None:
 
 		"""Register this build so :meth:`_finish_build` runs, deferring nothing.
@@ -3127,6 +3199,7 @@ class PatternBuilder(
 
 		"""Forget what this build deferred: after laying it, or after the builder raised and its pattern was emptied."""
 
+		self._pending_legatos.clear()
 		self._pending_glides.clear()
 		self._pending_tunings.clear()
 
