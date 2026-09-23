@@ -58,6 +58,10 @@ class Tuning:
 	    Tuning.from_cents([100, 200, ..., 1200])  # explicit cents
 	    Tuning.from_ratios([9/8, 5/4, ..., 2])   # frequency ratios
 	    Tuning.equal(19)                          # 19-tone equal temperament
+
+	A MIDI note plays the degree it lands on, counting up from the reference
+	note, so a twelve-degree table retunes ordinary music note for note, and
+	a shorter one steps consecutive notes through its degrees.
 	"""
 
 	cents: typing.List[float]

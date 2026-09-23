@@ -3728,8 +3728,17 @@ class Composition:
 
 		- ``source``: path to a Scala ``.scl`` file.
 		- ``cents``: list of cent offsets for degrees 1..N (degree 0 = 0.0 is implicit).
-		- ``ratios``: list of frequency ratios (e.g., ``[9/8, 5/4, 4/3, 3/2, 2]``).
+		- ``ratios``: list of frequency ratios for degrees 1..N, the last one
+		  the octave (e.g., ``[16/15, 9/8, 6/5, 5/4, ..., 15/8, 2]``).
 		- ``equal``: integer for N-tone equal temperament (e.g., ``equal=19``).
+
+		A MIDI note plays the degree it lands on, counting up from
+		``reference_note``.  With twelve degrees each note keeps its name, so
+		ordinary music is retuned note for note: under the just table below,
+		E is 14 cents flat and G 2 cents sharp.  With fewer, consecutive notes
+		step through the scale - under a seven-degree table MIDI 60, 61 and 62
+		play its first three degrees, C, D and E - so write such a part in
+		degrees, one MIDI number to each (#3474).
 
 		For polyphonic parts, supply a ``channels`` pool.  Notes are spread
 		across those MIDI channels so each can carry an independent pitch bend.
@@ -3762,7 +3771,10 @@ class Composition:
 			# Quarter-comma meantone from a Scala file
 			comp.tuning("meanquar.scl")
 
-			# Just intonation from ratios
+			# Just intonation in C: each of the twelve notes at its just ratio
+			comp.tuning(ratios=[16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8, 2])
+
+			# A seven-degree just scale: consecutive notes step through it
 			comp.tuning(ratios=[9/8, 5/4, 4/3, 3/2, 5/3, 15/8, 2])
 
 			# 19-TET, monophonic
