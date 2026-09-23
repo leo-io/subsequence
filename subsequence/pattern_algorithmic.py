@@ -1860,7 +1860,7 @@ class PatternAlgorithmicMixin:
 		(all neighbours visited), the visited set resets and the walk continues
 		from the current position - creating natural phrase boundaries.
 
-		Compared to :func:`random_walk`, the self-avoiding variant guarantees
+		Compared to a plain random walk, the self-avoiding variant guarantees
 		pitch diversity within each phrase: no pitch repeats until the walk
 		resets.  The contiguous step motion (never skipping pitches) gives
 		melodies a smooth, step-wise quality with occasional direction reversals.

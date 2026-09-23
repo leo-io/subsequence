@@ -2854,9 +2854,9 @@ class PatternBuilder(
 
 		Parameters:
 			key: Root note name (e.g. ``"C"``, ``"F#"``, ``"Bb"``).
-			mode: Scale mode.  Any key in :data:`subsequence.intervals.DIATONIC_MODE_MAP`
-			      is accepted: ``"ionian"`` (default), ``"dorian"``, ``"minor"``,
-			      ``"harmonic_minor"``, etc.
+			mode: Scale mode.  Any mode :func:`scale_notes` accepts, including one added
+			      with :func:`register_scale`: ``"ionian"`` (default), ``"dorian"``,
+			      ``"minor"``, ``"harmonic_minor"``, etc.
 			strength: Probability that each note is snapped (0.0–1.0).
 			      At 1.0 (default), every note snaps to the scale.
 			      At 0.0, no notes are affected.
