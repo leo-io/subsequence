@@ -51,6 +51,11 @@ import subsequence.sequence_utils
 
 _DEFAULT_VELOCITY = subsequence.constants.velocity.DEFAULT_VELOCITY
 
+# The fit generate() gives each note it makes: how likely a generated note on
+# a strong beat is to move to a chord tone, so a made-up line plays against
+# the changes where a written one plays as written.
+_GENERATED_FIT = 0.7
+
 # Degree ints beyond this are almost certainly pasted MIDI note numbers
 # (e.g. 60 for middle C), not scale degrees; fail loud rather than emit a
 # squeal eight octaves up.
@@ -438,6 +443,13 @@ class MotifEvent:
 	capture reads notes back as absolute MIDI, so ``"kick"`` arrives here as
 	``36`` - and it is what lets the pitch-moving methods go on refusing a
 	drum they can no longer see.
+
+	``fit`` is how likely the note is to move to a chord tone when it lands
+	on a strong beat, 0.0 to 1.0.  :meth:`Motif.generate` gives each note it
+	makes a fit of 0.7; a note written by hand has none and plays exactly as
+	written.  The fit travels with the note through every transform, so a
+	generated line keeps its fit however it is cut, joined or stacked, and
+	never lends it to a written one.
 	"""
 
 	beat: float
@@ -446,6 +458,7 @@ class MotifEvent:
 	duration: float = 0.25
 	probability: float = 1.0
 	origin: typing.Optional[str] = None		# Drum name a captured pitch was resolved from; None for anything authored directly.
+	fit: typing.Optional[float] = None		# Chance of snapping to a chord tone on a strong beat; None plays as written (#3458).
 
 	def __post_init__ (self) -> None:
 
@@ -455,12 +468,17 @@ class MotifEvent:
 			raise ValueError(f"Event duration must be positive — got {self.duration}")
 		if not 0.0 <= self.probability <= 1.0:
 			raise ValueError(f"Event probability must be 0.0–1.0 — got {self.probability}")
+		if self.fit is not None and not 0.0 <= self.fit <= 1.0:
+			raise ValueError(f"A note's fit is 0.0 to 1.0 - got {self.fit}")
 
 	def _sort_key (self) -> tuple:
 
 		"""Canonical ordering key - makes parallel merge order-independent."""
 
-		return (self.beat, _pitch_sort_key(self.pitch), _velocity_key(self.velocity), self.duration, self.probability)
+		return (
+			self.beat, _pitch_sort_key(self.pitch), _velocity_key(self.velocity), self.duration, self.probability,
+			-1.0 if self.fit is None else self.fit,
+		)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -637,7 +655,6 @@ class Motif:
 	events: typing.Tuple[MotifEvent, ...]
 	length: float
 	controls: typing.Tuple[ControlEvent, ...] = ()
-	fit: typing.Optional[float] = None		# placement default for the fit dial; set by generate()
 
 	def __post_init__ (self) -> None:
 
@@ -660,6 +677,23 @@ class Motif:
 
 		object.__setattr__(self, "events", tuple(sorted(self.events, key=MotifEvent._sort_key)))
 		object.__setattr__(self, "controls", tuple(sorted(self.controls, key=ControlEvent._sort_key)))
+
+	@property
+	def fit (self) -> typing.Optional[float]:
+
+		"""The fit the motif's notes share, or ``None`` when they have none or differ.
+
+		Fit belongs to each note (:attr:`MotifEvent.fit`): :meth:`generate` gives
+		the notes it makes 0.7, and notes written by hand have none.  This reads
+		it back for a whole motif - 0.7 for a generated one, ``None`` for a written
+		one or a mix - and placement never reads it: each note plays its own.
+		A motif-wide fit lent a generated line's dial to every note ``then()``
+		or ``&`` put beside it, and lost it wherever a motif was rebuilt (#3458).
+		"""
+
+		fits = {event.fit for event in self.events if event.pitch is not None}
+
+		return fits.pop() if len(fits) == 1 else None
 
 	# ── constructors ────────────────────────────────────────────────────
 
@@ -1090,10 +1124,6 @@ class Motif:
 			events = self.events + tuple(dataclasses.replace(e, beat=e.beat + self.length) for e in other.events),
 			length = self.length + other.length,
 			controls = self.controls + tuple(dataclasses.replace(c, beat=c.beat + self.length) for c in other.controls),
-			# fit is a dial, not content: keep ours, inherit the other's when
-			# we have none — join()/tiling folds from empty() (fit=None), and
-			# must not silently strip a generated motif's chord-snapping.
-			fit = self.fit if self.fit is not None else other.fit,
 		)
 
 	@classmethod
@@ -1397,14 +1427,17 @@ class Motif:
 				else:
 					spec = Degree(reference.index(pc - 1) + 1, octave = octave, chroma = 1)
 
+			# Each note carries the fit, so it goes wherever the note goes and
+			# nowhere else (#3458).
 			events.append(MotifEvent(
 				beat = onset,
 				pitch = spec,
 				velocity = velocity_values[index],
 				duration = float(duration_values[index]),
+				fit = _GENERATED_FIT,
 			))
 
-		return cls(events = tuple(events), length = float(length), fit = 0.7)
+		return cls(events = tuple(events), length = float(length))
 
 	def stack (self, other: typing.Union["Motif", "Phrase"]) -> "Motif":
 
@@ -1426,7 +1459,6 @@ class Motif:
 			events = self.events + merged.events,
 			length = max(self.length, merged.length),
 			controls = self.controls + merged.controls,
-			fit = self.fit,
 		)
 
 	def slice (self, start: float, end: float) -> "Motif":
@@ -1488,7 +1520,7 @@ class Motif:
 				shape_to = c.shape_from + whole * ((high - gesture_start) / c.span),
 			))
 
-		return Motif(events=events, length=end - start, controls=tuple(controls), fit=self.fit)
+		return Motif(events=events, length=end - start, controls=tuple(controls))
 
 	def __add__ (self, other: typing.Any) -> "Phrase":
 
@@ -1551,7 +1583,7 @@ class Motif:
 			for e in self.events
 		)
 
-		return Motif(events=events, length=self.length, controls=_mirrored_controls(self.controls, self.length), fit=self.fit)
+		return Motif(events=events, length=self.length, controls=_mirrored_controls(self.controls, self.length))
 
 	def rotate (self, beats: float) -> "Motif":
 
@@ -1565,7 +1597,7 @@ class Motif:
 		events = tuple(dataclasses.replace(e, beat=_folded_onset((e.beat + beats) % self.length, self.length)) for e in self.events)
 		controls = tuple(dataclasses.replace(c, beat=(c.beat + beats) % self.length) for c in self.controls)
 
-		return Motif(events=events, length=self.length, controls=controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=controls)
 
 	def stretch (self, factor: float) -> "Motif":
 
@@ -1583,7 +1615,7 @@ class Motif:
 			for c in self.controls
 		)
 
-		return Motif(events=events, length=self.length * factor, controls=controls, fit=self.fit)
+		return Motif(events=events, length=self.length * factor, controls=controls)
 
 	def quantize (self, grid: float) -> "Motif":
 
@@ -1607,7 +1639,7 @@ class Motif:
 			for e in self.events
 		)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	def accent (self, beat: float, amount: int = 20) -> "Motif":
 
@@ -1625,7 +1657,7 @@ class Motif:
 			for e in self.events
 		)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	def with_velocity (self, velocity: subsequence.declarations.VelocityValue) -> "Motif":
 
@@ -1633,7 +1665,7 @@ class Motif:
 
 		events = tuple(dataclasses.replace(e, velocity=velocity) for e in self.events)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	def _nudged_pitch (self, pitch: PitchSpec, rng: random.Random, origin: typing.Optional[str]) -> PitchSpec:
 
@@ -1743,7 +1775,7 @@ class Motif:
 			else:
 				events[index] = dataclasses.replace(events[index], pitch = self._nudged_pitch(events[index].pitch, rng, events[index].origin))
 
-		return Motif(events = tuple(events), length = self.length, controls = self.controls, fit = self.fit)
+		return Motif(events = tuple(events), length = self.length, controls = self.controls)
 
 	@staticmethod
 	def _rank_value (pitch: PitchSpec) -> float:
@@ -1850,7 +1882,7 @@ class Motif:
 		events = list(self.events)
 		events[pitched_indices[-1]] = dataclasses.replace(last, pitch = target)
 
-		return Motif(events = tuple(events), length = self.length, controls = self.controls, fit = self.fit)
+		return Motif(events = tuple(events), length = self.length, controls = self.controls)
 
 	def pitched (self, spec: PitchSpec) -> "Motif":
 
@@ -1865,10 +1897,11 @@ class Motif:
 		if isinstance(spec, str) and spec in _CHORD_TONE_NAMES:
 			spec = ChordTone(spec)
 
-		# The new spec replaces whatever a capture resolved, so its origin goes too.
-		events = tuple(dataclasses.replace(e, pitch=spec, origin=None) for e in self.events)
+		# The new spec replaces whatever a capture resolved, so its origin goes
+		# too, and it is written, not generated, so it has no fit (#3458).
+		events = tuple(dataclasses.replace(e, pitch=spec, origin=None, fit=None) for e in self.events)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	def rhythm (self) -> "Motif":
 
@@ -1879,7 +1912,7 @@ class Motif:
 		with :meth:`pitched` before placement (placing a skeleton raises).
 		"""
 
-		events = tuple(dataclasses.replace(e, pitch=None, origin=None) for e in self.events)
+		events = tuple(dataclasses.replace(e, pitch=None, origin=None, fit=None) for e in self.events)
 
 		return Motif(events=events, length=self.length)
 
@@ -1936,7 +1969,7 @@ class Motif:
 
 		events = tuple(dataclasses.replace(e, pitch=move(e.pitch, e.origin)) for e in self.events)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	def invert (self, pivot: typing.Optional[typing.Union[int, Degree]] = None) -> "Motif":
 
@@ -2014,7 +2047,7 @@ class Motif:
 
 		events = tuple(dataclasses.replace(e, pitch=mirror(e.pitch, e.origin)) for e in self.events)
 
-		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=self.controls)
 
 	# ── description ─────────────────────────────────────────────────────
 
@@ -2488,19 +2521,17 @@ class Phrase:
 
 		window = self.flatten().slice(start, end)
 
-		# Where the original boundaries land inside this window, and which
-		# original segment each resulting piece came from (for its `fit`).
+		# Where the original boundaries land inside this window.  Each piece's
+		# notes carry their own fits, so nothing else needs to follow them (#3458).
 		bounds: typing.List[float] = [0.0]
-		sources: typing.List[int] = []
 		offset = 0.0
 
-		for index, segment in enumerate(self.segments):
+		for segment in self.segments:
 
 			if offset >= end - 1e-9:
 				break
 
 			if offset + segment.length > start + 1e-9:
-				sources.append(index)
 				edge = offset + segment.length
 				if start + 1e-9 < edge < end - 1e-9:
 					bounds.append(edge - start)
@@ -2511,7 +2542,7 @@ class Phrase:
 
 		segments = []
 
-		for piece, (low, high) in enumerate(zip(bounds, bounds[1:])):
+		for low, high in zip(bounds, bounds[1:]):
 
 			if high <= low:
 				continue
@@ -2526,7 +2557,6 @@ class Phrase:
 					dataclasses.replace(c, beat = c.beat - low)
 					for c in window.controls if low - 1e-9 <= c.beat < high - 1e-9
 				),
-				fit = self.segments[sources[piece]].fit if piece < len(sources) else window.fit,
 			))
 
 		return Phrase(segments)

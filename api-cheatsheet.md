@@ -227,7 +227,7 @@ An immutable musical figure: timed note events + control gestures + a length in 
 
 | Method | Description |
 |---|---|
-| `__init__(events, length, controls, fit) -> None` |  |
+| `__init__(events, length, controls) -> None` |  |
 | `accent(beat, amount) -> Motif` | Add *amount* velocity to every note at the given beat position (0-based beats). |
 | `answer(to) -> Motif` | Call → response: re-aim the tail to a stable degree. |
 | `cc(control, values, beats, length, probabilities) -> Motif` | Discrete CC writes at beat positions - mirrors ``p.cc()``; names resolve at placement. |
@@ -236,6 +236,7 @@ An immutable musical figure: timed note events + control gestures + a length in 
 | `describe() -> str` | A readable one-line summary: length, notes (pitch@beat), and control gestures. |
 | `empty() -> Motif` | The empty motif (zero events, zero length) - the identity for ``then``. |
 | `euclidean(pulses, steps, pitch, length, velocities, durations, probabilities) -> Motif` | A euclidean rhythm as a value: *pulses* spread evenly across *steps* over *length* beats. |
+| `fit *(property)*` | The fit the motif's notes share, or ``None`` when they have none or differ. |
 | `from_events(events, length, controls) -> Motif` | Build a motif from explicit events (power use; length defaults to the next whole beat). |
 | `generate(rhythm, length, scale, contour, end_on, cadence, pins, max_pitches, velocities, durations, seed, rng, state, nir_strength, pitch_diversity, tessitura_strength) -> Motif` | Generate a melodic motif - rhythm first, pitches walked, a value out. |
 | `hits(pitch, beats, length, velocities, durations, probabilities) -> Motif` | One pitch (usually a drum name) at a list of beat positions - the ``hit()`` convention. |
@@ -358,7 +359,7 @@ One timed note event inside a Motif.
 
 | Method | Description |
 |---|---|
-| `__init__(beat, pitch, velocity, duration, probability, origin) -> None` |  |
+| `__init__(beat, pitch, velocity, duration, probability, origin, fit) -> None` |  |
 
 
 ## `ControlEvent`

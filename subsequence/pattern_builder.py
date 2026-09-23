@@ -918,9 +918,11 @@ class PatternBuilder(
 			fit: The chord-tones-on-strong-beats dial, 0.0–1.0: resolved
 				Degree/int pitches landing on strong beats (metric weight
 				>= 0.5) snap to the nearest chord tone with this
-				probability.  Defaults to the motif's own ``fit`` (0.7 on
-				generated motifs, none on hand-written ones - typed degrees
-				are sacred); inactive without a chord context.  ChordTone
+				probability.  Defaults to each note's own ``fit`` (0.7 on
+				the notes ``Motif.generate()`` makes, none on hand-written
+				ones - typed degrees are sacred), so a written line beside a
+				generated one still plays as written; inactive without a
+				chord context.  ChordTone
 				and Approach events never snap - their harmony reading is
 				inherent (an Approach's chromaticism is the point).
 			fit_weights: Custom per-step metric weight list (the
@@ -937,12 +939,15 @@ class PatternBuilder(
 		if events is None or not hasattr(m, "length"):
 			raise TypeError(f"motif() places Motif-like values (.events/.length) — got {type(m).__name__}")
 
-		effective_fit = fit if fit is not None else getattr(m, "fit", None)
-		fit_table: typing.Optional[typing.List[float]] = None
-		snap_probability = 0.0
+		# The dial is each note's own (#3458): generate() gives the notes it
+		# makes 0.7 and a written note has none, so a written note beside a
+		# generated one plays as written.  fit= sets it for every note.
+		def note_fit (event: typing.Any) -> typing.Optional[float]:
+			return fit if fit is not None else getattr(event, "fit", None)
 
-		if effective_fit:
-			snap_probability = float(effective_fit)
+		fit_table: typing.Optional[typing.List[float]] = None
+
+		if any(note_fit(event) for event in events):
 			fit_table = list(fit_weights) if fit_weights is not None else subsequence.sequence_utils.build_metric_weights(
 				self.time_signature, grid = self._default_grid
 			)
@@ -967,12 +972,15 @@ class PatternBuilder(
 			# The fit dial reads only Degree/int content: drums have no
 			# pitch to snap, ChordTones already are chord tones, and an
 			# Approach's chromaticism is the point.
+			snap_probability = note_fit(event)
+
 			if (
 				fit_table is not None
+				and snap_probability
 				and isinstance(resolved, int)
 				and isinstance(event.pitch, (int, subsequence.motifs.Degree))
 			):
-				resolved = self._fit_snap(resolved, beat + event.beat, snap_probability, fit_table)
+				resolved = self._fit_snap(resolved, beat + event.beat, float(snap_probability), fit_table)
 
 			self.note(
 				pitch = resolved,
