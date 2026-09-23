@@ -1186,6 +1186,13 @@ class Sequencer:
 		MIDI CC configuration is shared before ports begin background draining.
 		"""
 
+		# A render reaches no device (#2995), inputs included (#3485).  It
+		# ignores an input's clock, and a control arriving mid-render would
+		# change the file - and resolving the name refused to render at all
+		# a piece whose controller was not plugged in.
+		if self.render_mode:
+			return
+
 		if self.input_device_name is not None and self._midi_input_queue is None:
 			self._input_loop = asyncio.get_running_loop()
 			self._midi_input_queue = asyncio.Queue()

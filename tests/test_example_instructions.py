@@ -54,11 +54,9 @@ def _velocities (source: str, tmp_path: pathlib.Path, monkeypatch: pytest.Monkey
 	"""Every note-on velocity in eight rendered bars of *source*."""
 
 	# The example configures logging for a musician's terminal; the suite has its own.
+	# The controller the instructions name is not plugged in here, which a render
+	# does not need (#3485).
 	monkeypatch.setattr(logging, "basicConfig", lambda **kwargs: None)
-
-	# A render still resolves the inputs a piece declares (#3485), so the fake rig
-	# has the controller the instructions name.
-	monkeypatch.setattr(mido, "get_input_names", lambda: ["Dummy MIDI", "My Controller"])
 
 	namespace: typing.Dict[str, typing.Any] = {"__name__": "example", "__file__": str(EXAMPLE)}
 	exec(compile(source, str(EXAMPLE), "exec"), namespace)

@@ -243,3 +243,86 @@ def test_a_render_says_it_ignored_the_clock_it_was_given (tmp_path: pathlib.Path
 
 	assert len(said) == 1
 	assert "clock_follow" in said[0] and "link()" in said[0]
+
+
+# ---------------------------------------------------------------------------
+# Inputs (#3485)
+# ---------------------------------------------------------------------------
+
+def _controlled_piece (*inputs: str) -> subsequence.Composition:
+
+	"""A piece written for controllers: a fader mapped with cc_map() sets its velocity."""
+
+	composition = subsequence.Composition(output_device = "Dummy MIDI", bpm = 960)
+
+	for index, device in enumerate(inputs):
+		composition.midi_input(device, name = None if index == 0 else f"input_{index}")
+
+	composition.cc_map(7, "swell", min_val = 55, max_val = 105)
+
+	@composition.pattern(channel = 1, beats = 4)
+	def lead (p) -> None:
+		p.note(60, beat = 0, velocity = round(p.data.get("swell", 80)), duration = 1)
+
+	return composition
+
+
+def _velocities (filename: pathlib.Path) -> typing.List[int]:
+
+	"""Every sounding note_on velocity in the rendered file."""
+
+	return [
+		message.velocity
+		for track in mido.MidiFile(str(filename)).tracks
+		for message in track
+		if message.type == "note_on" and message.velocity > 0
+	]
+
+
+def test_a_render_opens_no_input (tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+	"""Neither the primary input nor another: a control arriving mid-render would change the file."""
+
+	opened: typing.List[str] = []
+
+	class Port:
+
+		def close (self) -> None:
+			pass
+
+	def open_input (name: typing.Optional[str] = None, *args: typing.Any, **kwargs: typing.Any) -> Port:
+		opened.append(str(name))
+		return Port()
+
+	monkeypatch.setattr(mido, "get_input_names", lambda: ["Rig Keys", "Rig Pads"])
+	monkeypatch.setattr(mido, "open_input", open_input)
+
+	filename = tmp_path / "controlled.mid"
+	_controlled_piece("Rig Keys", "Rig Pads").render(bars = 1, filename = str(filename))
+
+	assert _velocities(filename) == [80]
+	assert opened == []
+
+
+def test_a_piece_whose_controller_is_not_plugged_in_still_renders (tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+	"""It refused, naming the missing device.  It renders as though no control had moved."""
+
+	monkeypatch.setattr(mido, "get_input_names", lambda: [])
+
+	filename = tmp_path / "unplugged.mid"
+	_controlled_piece("My Controller").render(bars = 1, filename = str(filename))
+
+	assert _velocities(filename) == [80]
+
+
+def test_a_piece_whose_second_controller_is_not_plugged_in_still_renders (tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+	"""An additional input is looked up by its own path, which refused the same way."""
+
+	monkeypatch.setattr(mido, "get_input_names", lambda: ["Rig Keys"])
+
+	filename = tmp_path / "half_plugged.mid"
+	_controlled_piece("Rig Keys", "My Pads").render(bars = 1, filename = str(filename))
+
+	assert _velocities(filename) == [80]

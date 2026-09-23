@@ -6736,6 +6736,11 @@ class Composition:
 		call of a function given to ``schedule()`` finishes before the render
 		moves on, so a seeded render is the same file every time.
 
+		A render reaches no MIDI device.  It sends nothing and opens no input,
+		and it keeps its own clock whatever ``clock_follow`` or ``link()`` asked
+		for.  So a piece written for a controller renders without it, as though
+		no control had moved.
+
 		Parameters:
 			bars: Number of bars to render, or ``None`` for no bar limit
 			      (default ``None``).  When both *bars* and *max_minutes* are
@@ -7001,11 +7006,14 @@ class Composition:
 
 		# 5. Open MIDI input ports early. Even without a deliberate sleep, opening
 		# them before pattern building minimizes the window for missed messages.
+		# A render opens none (#3485): see Sequencer._open_midi_inputs().
 		# Primary input
 		self._sequencer._open_midi_inputs()
 
 		# Additional inputs
-		for idx, (dev_name, alias, cf) in enumerate(self._additional_inputs, start=1):
+		additional_inputs = [] if self._sequencer.render_mode else self._additional_inputs
+
+		for idx, (dev_name, alias, cf) in enumerate(additional_inputs, start=1):
 			# Use the pre-calculated index
 			callback = self._sequencer._make_input_callback(idx)
 			open_name, port = subsequence.midi_utils.select_input_device(dev_name, callback)
