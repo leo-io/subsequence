@@ -10,8 +10,6 @@ Use your own gear. Subsequence provides the logic; your Eurorack, Elektron boxes
 
 > **What you need:** basic Python knowledge and any MIDI-controllable instrument. Whether you're an experienced coder or a musician learning Python for the first time, the API is designed to be approachable. Subsequence generates pure MIDI data; it does not produce sound itself.
 
-**Want to dive in?** Learn it with the **[guide ↗](https://subsystem.co/subsequence/guide/)**, look things up in the **[API reference ↗](https://subsystem.co/subsequence/reference/)**, or browse everything at **[subsystem.co ↗](https://subsystem.co/subsequence/)**.
-
 ## Why Subsequence?
 
 - **Between traditional and generative.** Most sequencers repeat a fixed loop; most live-coding environments are stateless. Subsequence rebuilds every pattern fresh each cycle with full context - current chord, section, history, shared data. Patterns that evolve, remember, and react.
@@ -83,14 +81,14 @@ New to Subsequence? The guide's **[Install and connect ↗](https://subsystem.co
 
 ## Documentation
 
-Full documentation lives at **[subsystem.co ↗](https://subsystem.co/subsequence/)**.
+**Full documentation: [https://subsystem.co/subsequence/](https://subsystem.co/subsequence/)**
 
-| Resource | What it's for |
-|---|---|
-| **[Guide ↗](https://subsystem.co/subsequence/guide/)** | **Learn it.** A fully runnable tutorial that builds one piece of music, from a first drum beat to a lead line that follows the weather, every concept earning the next. |
-| **[API reference ↗](https://subsystem.co/subsequence/reference/)** | **Look it up.** Every class, method, and function with full signatures and types, generated from source so it never drifts. |
-| **[`api-cheatsheet.md`](api-cheatsheet.md)** | **Fast recall.** One-line signatures for the whole public surface, here in the repo. |
-| **[`llms.txt` ↗](https://subsystem.co/subsequence/llms.txt)** | **For AI agents.** A clean entry point to every page of these docs. |
+- Guide: [https://subsystem.co/subsequence/guide/](https://subsystem.co/subsequence/guide/)
+- API reference: [https://subsystem.co/subsequence/reference/](https://subsystem.co/subsequence/reference/)
+- Cheat sheet: [https://subsystem.co/subsequence/cheatsheet/](https://subsystem.co/subsequence/cheatsheet/)
+- For AI agents: [https://subsystem.co/subsequence/llms.txt](https://subsystem.co/subsequence/llms.txt)
+
+The guide is a fully runnable tutorial that builds one piece of music, from a first drum beat to a lead line that follows the weather, with every concept earning the next. The API reference and the cheat sheet are generated from the source, so they describe the release you have rather than a copy kept by hand.
 
 ## Design principles
 
@@ -187,6 +185,8 @@ Subsequence makes use of these excellent open-source libraries:
 ## Author
 
 Subsequence was created by Simon Holliday ([simonholliday.com ↗](https://simonholliday.com/)), a senior technologist and a junior (but trying) musician. From running an electronic music label in the 2000s to prototyping new passive SONAR techniques for defence research, my work has often explored the intersection of code and sound. Subsequence was iterated over a series of proof-of-concept projects during 2025 and pulled together into this codebase in Spring 2026.
+
+This project is managed with [Subroutine](https://github.com/simonholliday/subroutine).
 
 ## License
 
