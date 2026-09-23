@@ -19,7 +19,9 @@ import it directly.
 """
 
 import atexit
+import codecs
 import logging
+import os
 import queue
 import select
 import sys
@@ -255,8 +257,10 @@ class KeystrokeListener:
 
 		Uses :func:`select.select` with a short timeout so the thread can
 		notice the ``_running = False`` signal without blocking indefinitely.
-		Terminal settings are restored in the ``finally`` block so they are
-		always cleaned up, even if an exception occurs.
+		Each wake-up reads everything the terminal holds, so keys typed
+		together arrive together.  The listener ends by itself if the terminal
+		closes.  Terminal settings are restored in the ``finally`` block so
+		they are always cleaned up, even if an exception occurs.
 		"""
 
 		# These imports are guaranteed safe here — _listen is only called
@@ -271,6 +275,13 @@ class KeystrokeListener:
 		# killed before the finally block runs (daemon threads at exit).
 		self._old_settings = old_settings
 
+		# Read the descriptor, not sys.stdin.  Its text wrapper takes every
+		# byte the kernel holds and hands back one character, and select()
+		# cannot see what it keeps, so a key typed with another waited for a
+		# third (#3479).  The decoder keeps a character split across two
+		# reads whole.
+		decoder = codecs.getincrementaldecoder(getattr(sys.stdin, "encoding", None) or "utf-8")(errors = "replace")
+
 		try:
 			# cbreak: one character at a time, no Enter required.
 			# Differs from raw in that Ctrl+C / Ctrl+Z still work normally.
@@ -278,10 +289,17 @@ class KeystrokeListener:
 
 			while self._running:
 				# Poll with a short timeout so we can check _running regularly.
-				ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+				ready, _, _ = select.select([fd], [], [], 0.1)
 				if ready:
-					char = sys.stdin.read(1)
-					if char:
+					data = os.read(fd, 1024)
+
+					# The terminal has gone: select() reports the end of
+					# input as ready for ever, and this loop spun a core on
+					# it until stop().
+					if not data:
+						break
+
+					for char in decoder.decode(data):
 						self._queue.put(char)
 
 		except Exception:
@@ -291,6 +309,11 @@ class KeystrokeListener:
 			logger.warning("Keystroke listener stopped after an unexpected error — hotkeys are now inactive", exc_info=True)
 
 		finally:
-			# Always restore terminal, even after exceptions.
-			termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+			# Always restore terminal, even after exceptions - and quietly: a
+			# terminal that has gone cannot be restored, and the error used to
+			# escape this thread.
+			try:
+				termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+			except Exception:
+				logger.debug("Could not restore the terminal settings", exc_info = True)
 			self.active = False
