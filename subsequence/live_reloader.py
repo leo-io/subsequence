@@ -86,6 +86,8 @@ import threading
 import traceback
 import typing
 
+import subsequence.live_server
+
 
 if typing.TYPE_CHECKING:
 	import subsequence.composition
@@ -294,6 +296,11 @@ class LiveReloader:
 
 		try:
 			await self._composition._apply_source_async(compiled, namespace, source_key = str(self._path))
+		except subsequence.live_server.Interrupted:
+			# Ctrl+C or SIGTERM stopped a save that held the loop; the signal has
+			# gone on to end the performance, which is not this save's failure.
+			logger.warning(f"LiveReloader: {self._path} was stopped while it ran, and the performance is stopping")
+			return
 		except Exception:
 			# Apply re-raises on exec failure; suppress here so the watcher
 			# keeps running.  The diff-and-unregister phase inside

@@ -4655,7 +4655,12 @@ class Composition:
 
 		# Bail before any state mutation if exec raises — propagates to
 		# the caller (load_patterns re-raises; LiveReloader catches + logs).
-		exec(compiled, namespace)
+		# The source runs on the loop the performance hears Ctrl+C and SIGTERM
+		# on, so it is lent them while it runs, as typed code is: a save whose
+		# top level never finished stopped the music and left the process deaf
+		# to both (#3378).
+		with subsequence.live_server.stop_signals_reach_the_code():
+			exec(compiled, namespace)
 
 		# Graduate newly-decorated patterns from _pending_patterns into
 		# _running_patterns so they start firing on the next reschedule.
