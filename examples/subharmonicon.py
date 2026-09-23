@@ -212,16 +212,22 @@ composition.conductor.lfo("VELOCITY_SWELL", shape="sine", cycle_beats=16,
 # using cc_map().  VELOCITY_SWELL is the most natural candidate - a single
 # expression pedal or fader replaces the LFO above.
 #
+# cc_map() writes what the controller sends into p.data, not into a conductor
+# signal, so the voices read the swell through _swell() below, which takes the
+# controller's value once it has arrived.
+#
 # Integer parameters (SUB FREQ divisors, RHYTHM DIV) can also be mapped, but
-# note that CC values are continuous (0–127) and will need rounding when read.
-# For example, cc_map(20, "VCO1_SUB1_FREQ", min_val=1, max_val=16) maps a
-# knob to divisor 1–16, but intermediate float values will appear in p.data
-# until rounded in the pattern code.
+# the voices read the constants at the top of this file, so a knob mapped to
+# one of them changes nothing until the pattern code reads p.data instead.
+# CC values are continuous (0–127) and need rounding when read.  For example,
+# cc_map(20, "VCO1_SUB1_FREQ", min_val=1, max_val=16) maps a knob to divisor
+# 1–16, and round(p.data.get("VCO1_SUB1_FREQ", VCO1_SUB1_FREQ)) reads it.
 #
 # To enable: uncomment the block below, replace "My Controller" with the exact
 # name of your MIDI input device, and assign your CC numbers to match the knobs
-# you want to use.  Then comment out the lfo() line above, since the hardware
-# control will take over that signal.
+# you want to use.  Then comment out the lfo() line above, and the swell sits
+# at 80 until you first move the fader.  Leave the LFO in and it plays the
+# swell until then.
 #
 # composition.midi_input("My Controller")
 #
@@ -232,6 +238,21 @@ composition.conductor.lfo("VELOCITY_SWELL", shape="sine", cycle_beats=16,
 
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+def _swell (p):
+	"""Return the current VELOCITY_SWELL as a MIDI velocity.
+
+	A controller mapped with cc_map() writes its value into p.data, so that wins
+	once it has arrived.  Otherwise the LFO sets the swell - and with neither,
+	which is the controller mapping before the fader has first moved, it sits
+	at 80.
+	"""
+	if "VELOCITY_SWELL" in p.data:
+		return round(p.data["VELOCITY_SWELL"])
+	if "VELOCITY_SWELL" in composition.conductor.signal_names:
+		return round(p.signal("VELOCITY_SWELL"))
+	return 80
+
 
 def _subharmonic_note (base_midi, divisor):
 	"""Return the MIDI note of a subharmonic oscillator at base_midi ÷ divisor.
@@ -329,9 +350,10 @@ if seq1_triggers:
 
 		@composition.pattern(channel=VCO1_CHANNEL, steps=seq1_cycle, step_duration=dur.QUARTER)
 		def vco1 (p):
-			# p.signal() reads the current value of a Conductor LFO - a slowly
-			# changing parameter that evolves over time (see VELOCITY_SWELL above).
-			vel = round(p.signal("VELOCITY_SWELL"))
+			# _swell() reads VELOCITY_SWELL: the Conductor LFO above - a slowly
+			# changing parameter that evolves over time - or a controller mapped
+			# to it (see PHYSICAL CONTROLLER MAPPING).
+			vel = _swell(p)
 
 			# Walk through each trigger position in the polyrhythmic cycle.
 			# enumerate() gives us both the index (trigger_idx) and the beat
@@ -355,7 +377,7 @@ if seq1_triggers:
 
 		@composition.pattern(channel=VCO1_SUB1_CHANNEL, steps=seq1_cycle, step_duration=dur.QUARTER)
 		def vco1_sub1 (p):
-			vel = round(p.signal("VELOCITY_SWELL"))
+			vel = _swell(p)
 			for trigger_idx, tick in enumerate(seq1_triggers):
 				# Step counter - same logic as vco1 above.
 				step = (p.cycle * len(seq1_triggers) + trigger_idx) % 4
@@ -374,7 +396,7 @@ if seq1_triggers:
 		@composition.pattern(channel=VCO1_SUB2_CHANNEL, steps=seq1_cycle, step_duration=dur.QUARTER)
 		def vco1_sub2 (p):
 			# Same structure as vco1_sub1 - see comments there.
-			vel = round(p.signal("VELOCITY_SWELL"))
+			vel = _swell(p)
 			for trigger_idx, tick in enumerate(seq1_triggers):
 				step      = (p.cycle * len(seq1_triggers) + trigger_idx) % 4
 				vco_pitch = SEQ1_STEPS[step] if SEQ1_ASSIGN_OSC1 else VCO1_FREQ
@@ -394,7 +416,7 @@ if seq2_triggers:
 
 		@composition.pattern(channel=VCO2_CHANNEL, steps=seq2_cycle, step_duration=dur.QUARTER)
 		def vco2 (p):
-			vel = round(p.signal("VELOCITY_SWELL"))
+			vel = _swell(p)
 			for trigger_idx, tick in enumerate(seq2_triggers):
 				step  = (p.cycle * len(seq2_triggers) + trigger_idx) % 4
 				pitch = SEQ2_STEPS[step]
@@ -406,7 +428,7 @@ if seq2_triggers:
 
 		@composition.pattern(channel=VCO2_SUB1_CHANNEL, steps=seq2_cycle, step_duration=dur.QUARTER)
 		def vco2_sub1 (p):
-			vel = round(p.signal("VELOCITY_SWELL"))
+			vel = _swell(p)
 			for trigger_idx, tick in enumerate(seq2_triggers):
 				step      = (p.cycle * len(seq2_triggers) + trigger_idx) % 4
 				vco_pitch = SEQ2_STEPS[step] if SEQ2_ASSIGN_OSC2 else VCO2_FREQ
@@ -419,7 +441,7 @@ if seq2_triggers:
 
 		@composition.pattern(channel=VCO2_SUB2_CHANNEL, steps=seq2_cycle, step_duration=dur.QUARTER)
 		def vco2_sub2 (p):
-			vel = round(p.signal("VELOCITY_SWELL"))
+			vel = _swell(p)
 			for trigger_idx, tick in enumerate(seq2_triggers):
 				step      = (p.cycle * len(seq2_triggers) + trigger_idx) % 4
 				vco_pitch = SEQ2_STEPS[step] if SEQ2_ASSIGN_OSC2 else VCO2_FREQ
