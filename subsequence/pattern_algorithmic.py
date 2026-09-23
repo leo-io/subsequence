@@ -4,6 +4,7 @@ This module is not intended to be used directly. ``PatternAlgorithmicMixin``
 is inherited by ``PatternBuilder`` in ``pattern_builder.py``.
 """
 
+import dataclasses
 import random
 import typing
 import warnings
@@ -2236,12 +2237,13 @@ class PatternAlgorithmicMixin:
 
 					sub_duration = max(1, int(round(slot_pulses * gate)))
 
-					sub_note = subsequence.pattern.Note(
-						pitch=note.pitch,
-						velocity=sub_velocity,
-						duration=sub_duration,
-						channel=note.channel,
-					)
+					# A copy of the note, so each sub-hit keeps its drum name
+					# and primary_unmapped: a mirror re-resolves the name
+					# through its own kit, and the primary stays silent for a
+					# voice it lacks.  Built field by field, a mirror played
+					# the primary's number and the primary sounded a
+					# placeholder (#3448).
+					sub_note = dataclasses.replace(note, velocity=sub_velocity, duration=sub_duration)
 
 					if sub_pulse not in new_steps:
 						new_steps[sub_pulse] = subsequence.pattern.Step()

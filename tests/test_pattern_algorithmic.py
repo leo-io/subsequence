@@ -1,5 +1,6 @@
 """Tests for PatternAlgorithmicMixin — evolve() and branch() methods."""
 
+import dataclasses
 import random
 import logging
 import typing
@@ -12,6 +13,7 @@ import subsequence.pattern
 import subsequence.pattern_algorithmic
 import subsequence.sequence_utils
 import subsequence.pattern_builder
+import subsequence.sequencer
 
 
 def _make_builder (
@@ -537,6 +539,70 @@ def test_ratchet_velocity_preserved_without_shaping () -> None:
 
 	notes = [n for pulse, step in pattern.steps.items() for n in step.notes]
 	assert all(n.velocity == 80 for n in notes)
+
+
+def _mirrored_kit () -> typing.Tuple[subsequence.pattern.Pattern, subsequence.pattern_builder.PatternBuilder]:
+
+	"""A snare both kits voice on different notes, and a clap only the mirror has."""
+
+	pattern = subsequence.pattern.Pattern(channel=9, length=4, mirrors=[(1, 9, {"snare": 40, "clap": 39})])
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern,
+		cycle=0,
+		default_grid=16,
+		drum_note_map={"snare": 38},
+		data={},
+	)
+	builder.hit_steps("snare", [4], velocity=100, duration=0.25)
+	builder.hit_steps("clap", [8], velocity=100, duration=0.25)
+	return pattern, builder
+
+
+def test_a_ratchet_changes_only_velocity_and_duration () -> None:
+
+	"""Each sub-hit is its note with a new velocity and duration, and nothing else (#3448).
+
+	Compared whole, so a field Note gains later is carried or fails here.
+	Built field by field, the sub-hits lost the drum name and
+	``primary_unmapped``.
+	"""
+
+	pattern, builder = _mirrored_kit()
+	parents = {pulse: step.notes[0] for pulse, step in pattern.steps.items()}
+
+	assert parents[48].primary_unmapped		# the clap, which only the mirror voices
+
+	builder.ratchet(2, velocity_start=0.5)
+
+	placed = {pulse: [note.velocity for note in step.notes] for pulse, step in pattern.steps.items()}
+
+	assert placed == {24: [50], 27: [100], 48: [50], 51: [100]}		# it did ratchet
+
+	for pulse, step in pattern.steps.items():
+		parent = parents[24 if pulse < 48 else 48]
+		for note in step.notes:
+			assert note == dataclasses.replace(parent, velocity=note.velocity, duration=note.duration)
+
+
+@pytest.mark.asyncio
+async def test_a_ratcheted_drum_hit_sounds_each_devices_own_voice (patch_midi: None) -> None:
+
+	"""Every sub-hit plays the mirror's own snare, and the primary stays silent for the clap (#3448).
+
+	Before, the mirror played the primary's snare number on its own kit, and the
+	primary sounded the clap's placeholder pitch, a voice it does not have.
+	"""
+
+	pattern, builder = _mirrored_kit()
+	builder.ratchet(2)
+
+	sequencer = subsequence.sequencer.Sequencer(output_device_name="Dummy MIDI", initial_bpm=120)
+	await sequencer.schedule_pattern(pattern, start_pulse=0)
+
+	note_ons = [event for event in sequencer.event_queue if event.message_type == 'note_on']
+
+	assert sorted(event.note for event in note_ons if event.device == 0) == [38, 38]
+	assert sorted(event.note for event in note_ons if event.device == 1) == [39, 39, 40, 40]
 
 
 # ── Degenerate-input handling (empty pools raise; zero resolution no-ops) ──
