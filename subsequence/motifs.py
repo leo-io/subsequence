@@ -301,6 +301,124 @@ def _folded_onset (beat: float, length: float) -> float:
 	return beat
 
 
+@dataclasses.dataclass(frozen=True)
+class _MirroredCurve:
+
+	"""A curve played backwards, ``1 - f(1 - t)``, so a reversed ramp retraces the original.
+
+	A dataclass, so two reversals of one curve compare equal, and reversing
+	again unwraps it (``_mirrored_shape``) rather than stacking wrappers.
+	"""
+
+	curve: typing.Callable[[float], float]
+
+	def __call__ (self, t: float) -> float:
+
+		"""The mirrored curve's value at *t*."""
+
+		return 1.0 - self.curve(1.0 - t)
+
+
+# Each named curve's mirror: 1 - f(1 - t) is the other quadratic or cubic, and
+# the symmetric ones are their own.
+_MIRRORED_SHAPES = {
+	"linear": "linear",
+	"ease_in": "ease_out",
+	"ease_out": "ease_in",
+	"ease_in_out": "ease_in_out",
+	"exponential": "logarithmic",
+	"logarithmic": "exponential",
+	"s_curve": "s_curve",
+}
+
+
+def _mirrored_shape (shape: typing.Any) -> typing.Any:
+
+	"""The curve that plays *shape* backwards: a named one by name, anything else wrapped."""
+
+	if isinstance(shape, _MirroredCurve):
+		return shape.curve
+
+	if not callable(shape) and shape in _MIRRORED_SHAPES:
+		return _MIRRORED_SHAPES[shape]
+
+	return _MirroredCurve(subsequence.easing.get_easing(shape))
+
+
+# Closer than this, two control moments are the same moment.
+_SAME_MOMENT = 1e-9
+
+
+def _mirrored_controls (controls: typing.Sequence["ControlEvent"], length: float) -> typing.Tuple["ControlEvent", ...]:
+
+	"""Every control gesture mirrored in time around the downbeat, one signal at a time (#3457).
+
+	A ramp runs the other way over its mirrored span, its curve and any slice
+	window mirrored with it.  A write holds its value until the next event on
+	the same signal, so it moves to where that hold ends, mirrored: 10 then
+	100 comes back as 100 then 10, not as the same steps a beat apart.  A ramp
+	followed by a gap held its last value through it, which the mirror has to
+	write where the gap now begins.  A write on the length closes the gesture
+	and carries its value into whatever follows, so it stays there.
+	"""
+
+	signals: typing.Dict[typing.Any, typing.List[ControlEvent]] = {}
+
+	for control in controls:
+		signals.setdefault(control.signal, []).append(control)
+
+	mirrored: typing.List[ControlEvent] = []
+
+	for events in signals.values():
+
+		closing = [c for c in events if c.end is None and c.beat >= length - _SAME_MOMENT]
+		inside = sorted((c for c in events if not (c.end is None and c.beat >= length - _SAME_MOMENT)), key = ControlEvent._sort_key)
+		ramps: typing.List[ControlEvent] = []
+		writes: typing.List[ControlEvent] = []
+
+		for index, control in enumerate(inside):
+
+			following = inside[index + 1].beat if index + 1 < len(inside) else inside[0].beat + length
+			hold_ends = (length - following) % length
+			finished = control.beat + control.span
+
+			if control.end is None:
+				# A write the next event replaces at once was never heard.
+				if following > control.beat + _SAME_MOMENT:
+					writes.append(dataclasses.replace(control, beat = hold_ends))
+				continue
+
+			ramps.append(dataclasses.replace(
+				control,
+				beat = (length - finished) % length,
+				start = control.end,
+				end = control.start,
+				shape = _mirrored_shape(control.shape),
+				shape_from = 1.0 - control.shape_to,
+				shape_to = 1.0 - control.shape_from,
+			))
+
+			if following > finished + _SAME_MOMENT:
+				writes.append(ControlEvent(beat = hold_ends, signal = control.signal, start = control.end, probability = control.probability))
+
+		def repeats_an_arrival (write: ControlEvent) -> bool:
+
+			"""Whether a ramp that surely plays has just arrived at this write's value, here."""
+
+			for ramp in ramps:
+				apart = (ramp.beat + ramp.span - write.beat + length / 2) % length - length / 2
+				if ramp.probability == 1.0 and ramp.end == write.start and abs(apart) < _SAME_MOMENT:
+					return True
+
+			return False
+
+		mirrored.extend(ramps)
+		mirrored.extend(write for write in writes if not repeats_an_arrival(write))
+		mirrored.extend(closing)
+
+	return tuple(mirrored)
+
+
 # ── Events ──────────────────────────────────────────────────────────────────
 
 @dataclasses.dataclass(frozen=True)
@@ -1411,23 +1529,29 @@ class Motif:
 
 	def reverse (self) -> "Motif":
 
-		"""Mirror the figure in time; ramps swap direction (a rising sweep falls)."""
+		"""Mirror the figure in time; ramps swap direction (a rising sweep falls).
 
+		Onsets mirror around the downbeat, as ``p.reverse()`` does, so a figure
+		on the grid stays on it and reversing twice gives it back: notes on
+		beats 0, 1, 2 and 3 come back on 0, 3, 2 and 1.  A ramp runs the other
+		way over its mirrored span with its curve mirrored too, so an
+		``ease_in`` sweep comes back as an ``ease_out`` one, and a slice of a
+		ramp plays the mirrored slice.  A control write holds its value until
+		the next one, so the steps of a stepped gesture come back in reverse
+		order; a write on the length itself closes the gesture, and stays.
+		"""
+
+		if self.length == 0:
+			return self
+
+		# Onsets, not note ends (#3457): mirroring each note's end put a clave
+		# with short notes off the sixteenth grid, and clamped a tie to 0.
 		events = tuple(
-			dataclasses.replace(e, beat=max(0.0, self.length - e.beat - e.duration))
+			dataclasses.replace(e, beat=_folded_onset((self.length - e.beat) % self.length, self.length))
 			for e in self.events
 		)
-		controls = tuple(
-			dataclasses.replace(
-				c,
-				beat = max(0.0, self.length - c.beat - c.span),
-				start = c.start if c.end is None else c.end,
-				end = c.end if c.end is None else c.start,
-			)
-			for c in self.controls
-		)
 
-		return Motif(events=events, length=self.length, controls=controls, fit=self.fit)
+		return Motif(events=events, length=self.length, controls=_mirrored_controls(self.controls, self.length), fit=self.fit)
 
 	def rotate (self, beats: float) -> "Motif":
 
