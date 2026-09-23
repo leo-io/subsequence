@@ -27,7 +27,10 @@ never expose the port to a network.
 """
 
 import asyncio
+import contextlib
 import logging
+import signal
+import threading
 import traceback
 import types
 import typing
@@ -49,6 +52,82 @@ MESSAGE_LIMIT = 16 * 1024 * 1024
 # removes only what that file stopped declaring and never the performer's
 # typing (#2999).
 REPL_SOURCE = "<repl>"
+
+# The signals a performance ends on (see run_until_stopped).
+STOPPING_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+
+
+class Interrupted (BaseException):
+
+	"""A stopping signal arrived while performer code held the event loop, and stopped that code.
+
+	A BaseException, as KeyboardInterrupt is, so the ``except Exception`` that
+	reports a submission's own errors does not swallow it.
+	"""
+
+	def __init__ (self, number: int) -> None:
+
+		"""Remember which signal it was."""
+
+		super().__init__(number)
+		self.number = number
+
+
+@contextlib.contextmanager
+def stop_signals_reach_the_code () -> typing.Iterator[None]:
+
+	"""While performer code holds the event loop, let Ctrl+C and SIGTERM stop it, then act as usual.
+
+	Typed code runs on the event loop (#2999), and a performance hears SIGINT
+	and SIGTERM through ``loop.add_signal_handler``, whose callbacks run on
+	that same loop.  So code that never returned - ``while True: pass``, or a
+	sleep - stopped the music AND left the process deaf to both signals: only
+	SIGKILL ended it, with every sounding note left hanging (#3367).
+
+	For as long as the code runs, each of those signals raises
+	:class:`Interrupted` inside it instead.  Once the code has stopped, the
+	signal goes on to whatever it would have reached, exactly once: under
+	``play()`` that is the handler that ends the performance, cleanly.  (asyncio
+	has already queued the wake-up that signal made, so its own Python-level
+	handler, which does nothing, is the one called here.)
+
+	Signals are only ever delivered to the main thread, so on any other thread
+	this changes nothing.
+	"""
+
+	if threading.current_thread() is not threading.main_thread():
+		yield
+		return
+
+	previous = {number: signal.getsignal(number) for number in STOPPING_SIGNALS}
+
+	# A handler installed from outside Python reads as None and cannot be put back.
+	swapped = [number for number, handler in previous.items() if handler is not None]
+	received: typing.List[signal.Signals] = []
+
+	def _interrupt (number: int, frame: typing.Optional[types.FrameType]) -> None:
+		received.append(signal.Signals(number))
+		raise Interrupted(number)
+
+	for number in swapped:
+		signal.signal(number, _interrupt)
+
+	try:
+		yield
+
+	finally:
+
+		for number in swapped:
+			signal.signal(number, previous[number])
+
+		for arrived in dict.fromkeys(received):
+
+			handler = previous[arrived]
+
+			if handler == signal.SIG_DFL:
+				signal.raise_signal(arrived)
+			elif callable(handler):
+				handler(arrived, None)
 
 
 class LiveServer:
@@ -236,14 +315,21 @@ class LiveServer:
 
 		try:
 
-			if expression is not None:
-				result = eval(expression, self._namespace)
-				return (repr(result) if result is not None else "OK"), True
+			with stop_signals_reach_the_code():
 
-			exec(statement, self._namespace)
-			return "OK", True
+				try:
 
-		except SystemExit:
-			return "SystemExit is not allowed in live mode.", False
-		except Exception:
-			return traceback.format_exc(), False
+					if expression is not None:
+						result = eval(expression, self._namespace)
+						return (repr(result) if result is not None else "OK"), True
+
+					exec(statement, self._namespace)
+					return "OK", True
+
+				except SystemExit:
+					return "SystemExit is not allowed in live mode.", False
+				except Exception:
+					return traceback.format_exc(), False
+
+		except Interrupted as interrupted:
+			return f"Interrupted by {signal.Signals(interrupted.number).name}.", False

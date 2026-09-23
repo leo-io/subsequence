@@ -4,10 +4,18 @@ A REPL is usually left connected in a terminal of its own for the whole set, so 
 must not wait for it.  From Python 3.12.1 the server's `wait_closed()` waits for every open
 connection, and nothing closed them: Ctrl+C silenced the music and `play()` then waited for
 the performer to quit the REPL (#3365).
+
+And typed code runs on the event loop, where the performance hears Ctrl+C and SIGTERM, so
+code that never returned left the process deaf to both (#3367).
 """
 
 import asyncio
 import contextlib
+import os
+import signal
+import sys
+import threading
+import time
 import typing
 
 import pytest
@@ -135,3 +143,134 @@ async def test_a_client_that_connects_as_the_server_stops_is_closed_too (composi
 	finally:
 		stopping.set()
 		await _release(server, [writer])
+
+
+# Code that holds the loop for six seconds, in the two ways that happen: a busy loop, and a call
+# that blocks.  Bounded, so a tree without the fix fails with an answer instead of hanging.
+_HOLDERS = {
+	"busy": b"import time\nuntil = time.monotonic() + 6\nwhile time.monotonic() < until: pass",
+	"sleep": b"import time\ntime.sleep(6)",
+}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="sends a signal to its own process")
+@pytest.mark.asyncio
+@pytest.mark.parametrize("holder", sorted(_HOLDERS))
+@pytest.mark.parametrize("number", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+async def test_a_stopping_signal_stops_typed_code_that_holds_the_loop (composition: subsequence.Composition, number: signal.Signals, holder: str) -> None:
+
+	"""The signal stops the code, and then still reaches the performance's own handler, once.
+
+	The handler is installed with `loop.add_signal_handler`, as `run_until_stopped` does, so its
+	callback runs on the loop the code was holding.  Before, the code ran its full six seconds
+	and the signal waited for it.
+	"""
+
+	loop = asyncio.get_running_loop()
+	heard: typing.List[float] = []
+	loop.add_signal_handler(number, lambda: heard.append(time.monotonic()))
+	server, port = await _started(composition)
+	reader, writer = await asyncio.open_connection("127.0.0.1", port)
+	timer = threading.Timer(0.3, os.kill, (os.getpid(), number))
+
+	try:
+		writer.write(_HOLDERS[holder] + SENTINEL)
+		await writer.drain()
+		sent = time.monotonic()
+		timer.start()
+
+		answer = await asyncio.wait_for(reader.readuntil(SENTINEL), timeout=10.0)
+		took = time.monotonic() - sent
+
+		# The signal's own wake-up is handled on the loop's next turn.
+		await asyncio.sleep(0.1)
+
+		assert answer == f"Interrupted by {number.name}.".encode() + SENTINEL
+		assert took < 3.0
+		assert len(heard) == 1
+
+	finally:
+		timer.cancel()
+		loop.remove_signal_handler(number)
+		await _release(server, [writer])
+
+
+def test_the_handlers_are_put_back_once_the_code_has_run (composition: subsequence.Composition) -> None:
+
+	"""A handler left swapped would raise into whatever Python ran next, long after the submission."""
+
+	server = subsequence.live_server.LiveServer(composition, port=0)
+	before = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+
+	assert server._evaluate("1 + 1") == ("2", True)
+	assert server._evaluate("raise ValueError('x')")[1] is False
+
+	assert {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)} == before
+
+
+def test_code_run_off_the_main_thread_is_left_alone (composition: subsequence.Composition) -> None:
+
+	"""Only the main thread may set a signal handler, and only it is ever sent one, so elsewhere nothing changes."""
+
+	server = subsequence.live_server.LiveServer(composition, port=0)
+	answers: typing.List[typing.Any] = []
+
+	def _run () -> None:
+		try:
+			answers.append(server._evaluate("1 + 1"))
+		except BaseException as error:
+			answers.append(error)
+
+	worker = threading.Thread(target=_run)
+	worker.start()
+	worker.join(timeout=5.0)
+
+	assert answers == [("2", True)]
+
+
+def _interrupted_on_the_main_thread (composition: subsequence.Composition, handler: typing.Any) -> typing.Tuple[typing.Any, float]:
+
+	"""Run held-up code with `handler` on SIGINT, send SIGINT 0.3 s in, and say what `_evaluate` did and how long it took."""
+
+	server = subsequence.live_server.LiveServer(composition, port=0)
+	previous = signal.signal(signal.SIGINT, handler)
+	timer = threading.Timer(0.3, os.kill, (os.getpid(), signal.SIGINT))
+	started = time.monotonic()
+
+	try:
+		timer.start()
+
+		try:
+			outcome: typing.Any = server._evaluate(_HOLDERS["busy"].decode())
+		except KeyboardInterrupt:
+			outcome = "KeyboardInterrupt"
+
+		return outcome, time.monotonic() - started
+
+	finally:
+		timer.cancel()
+		signal.signal(signal.SIGINT, previous)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="sends a signal to its own process")
+def test_a_plain_handler_hears_the_signal_that_stopped_the_code_once (composition: subsequence.Composition) -> None:
+
+	"""Where a performance could not use the loop's handlers, it hears Ctrl+C through a plain one, as on Windows."""
+
+	heard: typing.List[int] = []
+	outcome, took = _interrupted_on_the_main_thread(composition, lambda number, frame: heard.append(number))
+
+	assert outcome == ("Interrupted by SIGINT.", False)
+	assert took < 3.0
+	assert heard == [signal.SIGINT]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="sends a signal to its own process")
+def test_with_python_s_own_handler_ctrl_c_still_raises_once_the_code_has_stopped (composition: subsequence.Composition) -> None:
+
+	"""With nothing else installed, Ctrl+C is a KeyboardInterrupt, and it still arrives, just after the code stops."""
+
+	outcome, took = _interrupted_on_the_main_thread(composition, signal.default_int_handler)
+
+	assert outcome == "KeyboardInterrupt"
+	assert took < 3.0
