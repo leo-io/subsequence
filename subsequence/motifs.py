@@ -41,6 +41,7 @@ import typing
 import warnings
 
 import subsequence.cadences
+import subsequence.constants.pulses
 import subsequence.constants.velocity
 import subsequence.declarations
 import subsequence.easing
@@ -279,6 +280,25 @@ def _refuse_captured_drum (origin: typing.Optional[str], verb: str, moved: str) 
 			f"{verb} moves pitches — '{origin}' was captured from a drum name "
 			f"(a {moved} drum is a different instrument)"
 		)
+
+
+def _folded_onset (beat: float, length: float) -> float:
+
+	"""*beat*, or 0 if it would place on the motif's length: that is the next downbeat (#3455).
+
+	Wrapping modulo the length returns the length itself for a beat a
+	rounding error short of a whole cycle, and snapping to a grid can round
+	an onset up onto it.  A note there played on the next cycle's downbeat,
+	beside that cycle's own first note, or was dropped where a phrase kept
+	only the onsets inside each segment.  The test is the pulse the onset
+	places on, the same one placement uses, so nothing short of the length
+	moves.
+	"""
+
+	if length > 0 and subsequence.constants.pulses.beats_to_pulses(beat) >= subsequence.constants.pulses.beats_to_pulses(length):
+		return 0.0
+
+	return beat
 
 
 # ── Events ──────────────────────────────────────────────────────────────────
@@ -1386,7 +1406,9 @@ class Motif:
 		if self.length == 0:
 			return self
 
-		events = tuple(dataclasses.replace(e, beat=(e.beat + beats) % self.length) for e in self.events)
+		# A control write may sit on the length, closing a gesture (#3009);
+		# a note there is the next downbeat, so it folds to 0.
+		events = tuple(dataclasses.replace(e, beat=_folded_onset((e.beat + beats) % self.length, self.length)) for e in self.events)
 		controls = tuple(dataclasses.replace(c, beat=(c.beat + beats) % self.length) for c in self.controls)
 
 		return Motif(events=events, length=self.length, controls=controls, fit=self.fit)
@@ -1417,13 +1439,17 @@ class Motif:
 		up) - every midpoint moves the same way, the predictable behaviour
 		for a musician.  (Python's own ``round()`` is half-to-even, which
 		made exact midpoints snap in alternating directions.)
+
+		An onset that snaps to the end of the motif moves to its start, since
+		the end is the next downbeat: hits at 1, 2 and 3.8 in four beats,
+		snapped to half beats, play at 0, 1 and 2.
 		"""
 
 		if grid <= 0:
 			raise ValueError(f"Quantize grid must be positive — got {grid}")
 
 		events = tuple(
-			dataclasses.replace(e, beat=math.floor(e.beat / grid + 0.5) * grid)
+			dataclasses.replace(e, beat=_folded_onset(math.floor(e.beat / grid + 0.5) * grid, self.length))
 			for e in self.events
 		)
 
