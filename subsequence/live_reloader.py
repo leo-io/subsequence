@@ -11,16 +11,19 @@ How it works
 ``Composition.watch(path)`` constructs a ``LiveReloader`` and calls
 ``start()``.
 
-``start()`` performs an initial synchronous load - reads the file and
-delegates to ``Composition.load_patterns()``, which compiles and execs
-the source into a namespace that has ``composition`` and ``subsequence``
-in scope.  This is the first chance for ``@composition.pattern``
-decorators in the file to register with the composition.  If the initial
-load fails (``SyntaxError``, missing file), the exception propagates -
-the user should know immediately if their entry point is broken.
+``start()`` performs an initial synchronous load: it reads, compiles and
+execs the file itself, into a namespace that has ``composition`` and
+``subsequence`` in scope - not through ``Composition.load_patterns()``,
+which waits on the event loop and would deadlock if ``watch()`` were called
+from it.  This is the first chance for ``@composition.pattern`` decorators
+in the file to register with the composition.  If the initial load fails
+(``SyntaxError``, missing file), the exception propagates - the user should
+know immediately if their entry point is broken.
 
-A daemon thread is then spawned that polls the file's ``st_mtime`` every
-``poll_interval`` seconds.  When the mtime changes, the thread schedules
+A daemon thread is then spawned that looks at the file's modification time
+and size every ``poll_interval`` seconds.  A change is applied only once
+the file has held still for a whole poll, so a save caught half-written is
+never taken for the new version (#3375).  The thread then schedules
 ``_reload_async()`` onto the composition's event loop via
 ``asyncio.run_coroutine_threadsafe()``, so mutation happens on the event
 loop thread (where the rest of the sequencer lives).
@@ -44,7 +47,7 @@ Error handling
 
 ``SyntaxError`` during a reload - log a warning and skip the reload
 entirely.  Previous state is preserved.  The user fixes the file and
-saves again; the next mtime tick retries.
+saves again, and that save is picked up as any other.
 
 Runtime error during ``exec()`` (e.g. ``NameError``, ``ImportError``) -
 treated the same way: log a warning and skip the rest of the reload.
@@ -55,9 +58,12 @@ that decorators that already side-effect'd before the error fired
 cannot be rolled back - those builders will run their new bodies on
 the next reschedule.
 
-File missing or unreadable mid-poll - log a warning, skip, retry next
-tick.  Editor "atomic save" (write-temp-then-rename) is handled by
-catching ``OSError`` around the read.
+File missing or unreadable - wait, and try again at the next poll: a read
+that fails forgets what was applied, so the watcher looks again rather than
+waiting for the next save.  Editor "atomic save" (write-temp-then-rename)
+is handled by catching ``OSError`` around the stat and the read.  A file
+that changes while it is being read is left for the watcher to settle on
+again, rather than applied half-read.
 
 Module-level state in the watched file
 ──────────────────────────────────────
@@ -119,12 +125,12 @@ class LiveReloader:
 		Parameters:
 			composition: The live ``Composition`` instance to reload into.
 			path: Path to the Python file to watch.
-			poll_interval: Seconds between ``st_mtime`` polls.  Default
-				0.25 s gives a responsive feel for editor saves without
-				busy-waiting.
+			poll_interval: Seconds between looks at the file.  A save is
+				applied once it has held still for one of them, so it is
+				heard up to two polls after it lands.  Default 0.25 s.
 			skip_initial_exec: When ``True``, ``start()`` skips the
 				compile + exec phase of the initial load and only records
-				``_last_mtime``.  Set by ``Composition.watch()`` when it
+				what the file is now.  Set by ``Composition.watch()`` when it
 				detects a self-watch (the file calling ``watch()`` is the
 				file being watched), since the outer Python script execution
 				will already run the patterns at the module level - a second
@@ -136,9 +142,12 @@ class LiveReloader:
 		self._poll_interval = poll_interval
 		self._skip_initial_exec = skip_initial_exec
 
-		# Last known mtime; set by the initial load and updated on each
-		# detected change.  Used by the watcher loop to skip unchanged ticks.
-		self._last_mtime: typing.Optional[float] = None
+		# The file's (mtime, size) when it was last applied, and a change seen
+		# at the previous poll that has not held still long enough to apply
+		# yet.  A save caught half-written used to be applied at first sight,
+		# restarting every part it had not reached (#3375).
+		self._applied: typing.Optional[typing.Tuple[int, int]] = None
+		self._settling: typing.Optional[typing.Tuple[int, int]] = None
 
 		# Daemon thread state — created on start().
 		self._thread: typing.Optional[threading.Thread] = None
@@ -228,8 +237,8 @@ class LiveReloader:
 
 		When ``self._skip_initial_exec`` is ``True`` (single-file self-watch),
 		the compile+exec step is skipped - the outer Python script will run
-		the decorators itself.  We still stat for ``_last_mtime`` so the
-		watcher loop doesn't immediately re-trigger on the first poll.
+		the decorators itself.  We still record the file's (mtime, size) so
+		the watcher loop doesn't immediately re-trigger on the first poll.
 		"""
 
 		if not self._skip_initial_exec:
@@ -255,51 +264,86 @@ class LiveReloader:
 
 			self._composition._source_declared[str(self._path)] = set(self._composition._declared_names)
 
+		self._applied = self._signature()
+
+	def _signature (self) -> typing.Optional[typing.Tuple[int, int]]:
+
+		"""The file's modification time and size, which change whenever a save does, or None if it cannot be seen."""
+
 		try:
-			self._last_mtime = os.stat(self._path).st_mtime
+			stat = os.stat(self._path)
 		except OSError:
-			self._last_mtime = None
+			return None
+
+		return (stat.st_mtime_ns, stat.st_size)
+
+	def _due (self) -> typing.Optional[typing.Tuple[int, int]]:
+
+		"""One poll: the file's (mtime, size) if a change has now held still for a whole poll, else None.
+
+		A save is seen as it is written - truncated, then filled - so a change
+		is applied only once a second poll finds it just as the first did.  Any
+		difference at all counts as a change, older included: a
+		timestamp-preserving replacement (``mv backup.py watched.py``) can
+		legitimately go back in time.
+		"""
+
+		seen = self._signature()
+
+		# Missing or unreadable, as in an editor's rename: wait it out.
+		if seen is None:
+			return None
+
+		if seen == self._applied:
+			self._settling = None
+			return None
+
+		# New, or still moving: give it one more poll.
+		if seen != self._settling:
+			self._settling = seen
+			return None
+
+		return seen
+
+	def _poll (self) -> None:
+
+		"""One look at the file: once a change has held still for a whole poll, schedule its reload.
+
+		The reload is handed the (mtime, size) the watcher settled on, so it can
+		tell whether the file moved again while it was being read.
+		"""
+
+		due = self._due()
+
+		if due is None:
+			return
+
+		loop = self._composition._sequencer._event_loop
+
+		if loop is None:
+			# Event loop isn't running yet (watch() called before play(), or
+			# play() not called).  Nothing is applied, so the next poll finds the
+			# same settled change and tries again.
+			logger.debug("LiveReloader: no event loop yet, deferring reload")
+			return
+
+		self._applied = due
+		self._settling = None
+		asyncio.run_coroutine_threadsafe(self._reload_async(due), loop = loop)
 
 	def _watch_loop (self) -> None:
 
-		"""Polling loop running in the daemon thread.
-
-		Stats the file every ``poll_interval`` seconds; on detected mtime
-		change, schedules :meth:`_reload_async` onto the composition's
-		event loop via :func:`asyncio.run_coroutine_threadsafe`.
-		"""
+		"""Polling loop running in the daemon thread: :meth:`_poll` every ``poll_interval`` seconds."""
 
 		while not self._stop_event.is_set():
 
-			try:
-				mtime = os.stat(self._path).st_mtime
-			except OSError:
-				# File disappeared or became unreadable — wait it out.
-				# Editors that save via write-temp-then-rename can produce
-				# brief windows like this.
-				self._stop_event.wait(self._poll_interval)
-				continue
-
-			# != rather than >: a timestamp-preserving replacement (mv backup.py
-			# watched.py) can legitimately have an OLDER mtime.
-			if self._last_mtime is None or mtime != self._last_mtime:
-
-				loop = self._composition._sequencer._event_loop
-
-				if loop is None:
-					# Event loop isn't running yet (watch() called before play(),
-					# or play() not called).  Don't advance _last_mtime — the
-					# next poll will pick up the same change and try again.
-					logger.debug("LiveReloader: no event loop yet, deferring reload")
-				else:
-					self._last_mtime = mtime
-					asyncio.run_coroutine_threadsafe(self._reload_async(), loop = loop)
+			self._poll()
 
 			# Use the stop event's wait() so shutdown is instantaneous instead
 			# of having to wait out the full poll interval.
 			self._stop_event.wait(self._poll_interval)
 
-	async def _reload_async (self) -> None:
+	async def _reload_async (self, expected: typing.Optional[typing.Tuple[int, int]] = None) -> None:
 
 		"""Read, compile, apply - runs on the event loop thread.
 
@@ -311,12 +355,23 @@ class LiveReloader:
 		``run_coroutine_threadsafe``.
 
 		Errors are logged but do not abort the watcher.
+
+		``expected`` is the file's (mtime, size) the watcher settled on.  If
+		the file no longer matches it once read, it changed during the read:
+		what was read is dropped, and the watcher settles on it again.
 		"""
 
 		try:
 			content = self._path.read_text(encoding = "utf-8")
 		except OSError as exc:
 			logger.warning(f"LiveReloader: could not read {self._path}: {exc}")
+			# Forget what was applied, so the next poll tries again (#3375).
+			self._applied = None
+			return
+
+		if expected is not None and self._signature() != expected:
+			logger.debug(f"LiveReloader: {self._path} changed while it was read; waiting for it to settle")
+			self._applied = None
 			return
 
 		# Syntax check — bail early without touching state.

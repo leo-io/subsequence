@@ -4479,7 +4479,9 @@ class Composition:
 
 		Parameters:
 			path: Path to the Python file to watch.
-			poll_interval: Seconds between ``mtime`` polls (default 0.25 s).
+			poll_interval: Seconds between looks at the file (default 0.25 s).
+				A save is applied once it has held still for one of them, so
+				one caught half-written is never taken for the new version.
 
 		Example::
 

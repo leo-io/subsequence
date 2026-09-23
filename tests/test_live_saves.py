@@ -256,6 +256,82 @@ async def test_a_self_watching_file_can_delete_a_part_in_its_first_save (patch_m
 	assert sorted(composition._running_patterns) == ["drums", "pad"]
 
 
+def test_a_change_is_applied_only_once_the_file_has_held_still_for_a_poll (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""A save caught half-written was applied at first sight, restarting every part it had not reached yet (#3375).
+
+	Each call to `_due()` is one poll.  The half-written file is seen by one poll and changed by
+	the next, so it is never due; the whole file, seen twice the same, is.
+	"""
+
+	live_file = tmp_path / "parts.py"
+	live_file.write_text(_part("drums") + _part("bass"))
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+	composition.watch(live_file)
+	reloader = composition._live_reloader
+	assert reloader is not None
+	reloader.stop()
+
+	assert reloader._due() is None
+
+	live_file.write_text(_part("drums"))
+	half = reloader._due()
+
+	live_file.write_text(_part("drums") + _part("bass") + _part("fill"))
+	moved = reloader._due()
+	due = reloader._due()
+
+	assert (half, moved) == (None, None)
+	assert due is not None and due == reloader._signature()
+
+	reloader._applied = due
+	assert reloader._due() is None
+
+
+@pytest.mark.asyncio
+async def test_a_file_that_changes_while_it_is_read_is_left_for_the_watcher (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""What was read may be half of one save and half of the next, so it is dropped until the file settles."""
+
+	composition, live_file = await _watching(tmp_path, _part("drums"))
+	reloader = composition._live_reloader
+	assert reloader is not None
+
+	live_file.write_text(_part("drums") + _part("fill"))
+	await reloader._reload_async((0, 0))
+
+	assert "fill" not in composition._running_patterns
+	assert reloader._applied is None
+
+	await reloader._reload_async(reloader._signature())
+
+	assert "fill" in composition._running_patterns
+
+
+@pytest.mark.asyncio
+async def test_a_file_that_cannot_be_read_is_tried_again_at_the_next_poll (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The docstring promised a retry, but what was applied had already moved on, so nothing retried until the next save."""
+
+	composition, live_file = await _watching(tmp_path, _part("drums"))
+	reloader = composition._live_reloader
+	assert reloader is not None
+
+	# A directory where the file was: it can be looked at, and not read, on any system.
+	live_file.unlink()
+	live_file.mkdir()
+	reloader._applied = reloader._signature()
+	await reloader._reload_async()
+
+	assert reloader._applied is None
+
+	live_file.rmdir()
+	live_file.write_text(_part("drums"))
+
+	assert reloader._due() is None
+	assert reloader._due() == reloader._signature()
+
+
 def test_a_watched_file_that_failed_to_load_claims_none_of_the_script_s_parts (patch_midi: None, tmp_path: pathlib.Path) -> None:
 
 	"""Only a file that watches itself is the whole script; a two-file watch that failed to load is not.
@@ -280,3 +356,29 @@ def test_a_watched_file_that_failed_to_load_claims_none_of_the_script_s_parts (p
 	composition._live_reloader.claim_what_the_script_declared()
 
 	assert str(live_file) not in composition._source_declared
+
+
+@pytest.mark.asyncio
+async def test_the_watcher_hands_its_reload_what_it_settled_on (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The re-check after reading only works if the watcher passes on what it settled on; two polls, as its thread makes them."""
+
+	composition, live_file = await _watching(tmp_path, _part("drums"))
+	reloader = composition._live_reloader
+	assert reloader is not None
+	handed: typing.List[typing.Any] = []
+	reload = reloader._reload_async
+
+	async def _recording (expected: typing.Any = None) -> None:
+		handed.append(expected)
+		await reload(expected)
+
+	reloader._reload_async = _recording  # type: ignore[method-assign]
+	live_file.write_text(_part("drums") + _part("fill"))
+
+	await asyncio.to_thread(reloader._poll)
+	await asyncio.to_thread(reloader._poll)
+	await asyncio.sleep(0.1)
+
+	assert handed == [reloader._signature()]
+	assert "fill" in composition._running_patterns
