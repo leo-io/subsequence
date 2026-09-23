@@ -2416,6 +2416,14 @@ class PatternBuilder(
 		stretch of the groove each time round, which is how a long custom
 		groove shapes a short pattern.
 
+		Nothing plays before its own cycle begins, so a groove cannot pull a
+		note earlier than the pattern's first pulse: in a groove that pulls
+		notes early, a note on that first pulse stays where it is.
+
+		The verbs that read the grid - ``thin()``, ``scale_velocities()`` and
+		``ratchet(steps=)`` - still count each note as the step it was placed
+		on, so they can come before the groove or after it.
+
 		Parameters:
 			template: A ``Groove`` instance defining the timing/velocity template.
 			strength: How much of the groove to apply (0.0-1.0). 0.0 = no
@@ -2610,6 +2618,11 @@ class PatternBuilder(
 		grid step index. A factor of ``1.0`` leaves the velocity unchanged;
 		``0.0`` silences the note; ``0.5`` halves it.
 
+		A note takes the factor of the step it was placed on, however far
+		``swing()``, ``groove()`` or ``randomize()`` has since moved it, so a
+		duck map lands on the same notes whether it comes before the feel or
+		after it.
+
 		Parameters:
 			factors: Per-step multipliers, one float per grid step.
 				Values outside ``[0.0, 1.0]`` are valid - result is clamped to
@@ -2640,14 +2653,18 @@ class PatternBuilder(
 		pulses_per_step = step_duration * subsequence.constants.MIDI_QUARTER_NOTE
 
 		for pulse, step in self._pattern.steps.items():
-			# A note in the last half-step rounds up to idx == grid, which is
-			# really the wrap back to step 0 of the next cycle (patterns are
-			# cyclic) — wrap it so a note pushed late by swing/randomize scales
-			# by factors[0] rather than silently keeping its velocity.
-			idx = int(round(pulse / pulses_per_step)) % grid
 
-			if 0 <= idx < len(factors):
-				for note in step.notes:
+			for note in step.notes:
+
+				# By the step the note was placed on, however far swing, a
+				# groove or randomize() has moved it: read where it plays, a
+				# sixteenth swung half a step late took the next step's factor
+				# (#3447).  A note placed in the last half-step rounds up to
+				# idx == grid, which is really the wrap back to step 0 of the
+				# next cycle (patterns are cyclic), so it takes factors[0].
+				idx = int(round(self._pattern._placed_pulse(pulse, note) / pulses_per_step)) % grid
+
+				if 0 <= idx < len(factors):
 					note.velocity = max(0, min(127, int(note.velocity * factors[idx])))
 
 		return self
@@ -2721,6 +2738,10 @@ class PatternBuilder(
 				if velocity != 0.0:
 					scale = rng.uniform(1.0 - velocity, 1.0 + velocity)
 					note.velocity = max(1, min(127, int(round(note.velocity * scale))))
+
+				# Recorded, so the grid-reading transforms still count the note
+				# as the step it was placed on (#3447).
+				note.nudge += new_pulse - pulse
 
 				new_steps[new_pulse].notes.append(note)
 
@@ -3123,7 +3144,12 @@ class PatternBuilder(
 			if new_position not in new_steps:
 				new_steps[new_position] = subsequence.pattern.Step()
 
-			new_steps[new_position].notes.extend(step.notes)
+			# The step a note was placed on reflects with it, so a note the
+			# feel moved late now sits that far early of its step (#3447).
+			new_steps[new_position].notes.extend(
+				dataclasses.replace(note, nudge = -note.nudge) if note.nudge else note
+				for note in step.notes
+			)
 
 		self._pattern.steps = new_steps
 		return self
@@ -3173,6 +3199,9 @@ class PatternBuilder(
 				dataclasses.replace(
 					note,
 					duration = max(1, int(note.duration * factor)),
+					# The pulse it was placed on stretches with it, so the
+					# feel's nudge scales too (#3447).
+					nudge = new_position - int((position - note.nudge) * factor),
 				)
 				for note in step.notes
 			)
@@ -3215,6 +3244,8 @@ class PatternBuilder(
 			if new_position not in new_steps:
 				new_steps[new_position] = subsequence.pattern.Step()
 
+			# Each note's nudge stands as it is: the step it was placed on
+			# rotates by the same amount (#3447).
 			new_steps[new_position].notes.extend(step.notes)
 
 		self._pattern.steps = new_steps

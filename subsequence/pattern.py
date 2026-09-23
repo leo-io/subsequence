@@ -96,6 +96,7 @@ class Note:
 	channel: int
 	origin: typing.Optional[str] = None		# Original drum-name string (if the pitch was named), kept so mirror destinations can re-resolve it through their own drum_note_map.  None for numeric/pitched notes.
 	primary_unmapped: bool = False			# True when origin was NOT in the pattern's own (primary) drum_note_map — the primary device has no such voice, so it stays silent; only mirror destinations whose maps contain origin sound it.  pitch then holds a placeholder (a mirror's value) used only by transforms/display, never for playback.
+	nudge: int = 0							# Pulses that feel (swing, a groove, randomize()) has moved this note from the pulse it was placed on.  The transforms that read the grid count a note as the step it was placed on, however far the feel has carried it (see Pattern._placed_pulse, #3447).
 
 
 @dataclasses.dataclass
@@ -279,6 +280,30 @@ class Pattern:
 			finish()
 
 		self._unfinished_builds.clear()
+
+
+	def _placed_pulse (self, position: int, note: Note) -> int:
+
+		"""The pulse *note* was placed on, before any feel moved it to *position*.
+
+		Swing, a groove and ``randomize()`` record how far they move each note
+		(``Note.nudge``), so the transforms that read the grid - ``thin()``,
+		``scale_velocities()`` and ``ratchet(steps=)`` - count it as the step it
+		was placed on.  Classified where it plays, a sixteenth swung half a
+		step late counted as the next step, and one pulled a pulse early as the
+		step before (#3447).  A note nothing has moved gives back *position*,
+		so each transform keeps its own rule for it.
+		"""
+
+		if not note.nudge:
+			return position
+
+		placed = position - note.nudge
+		total_pulses = subsequence.constants.pulses.beats_to_pulses(self.length)
+
+		# rotate() and reverse() wrap a note round the cycle, which can leave
+		# the pulse it was placed on just outside the cycle: fold it back in.
+		return placed % total_pulses if total_pulses > 0 else placed
 
 
 	def add_note (self, position: int, pitch: int, velocity: int, duration: int, origin: typing.Optional[str] = None, primary_unmapped: bool = False) -> None:

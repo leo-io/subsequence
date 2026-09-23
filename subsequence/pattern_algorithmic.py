@@ -1912,6 +1912,18 @@ class PatternAlgorithmicMixin:
 			beat += spacing
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
+	def _placed_zone (self, position: int, note: subsequence.pattern.Note, step_pulses: float, grid: int) -> int:
+
+		"""The grid step *note* was placed on, as ``thin()`` and ``ratchet(steps=)`` count it.
+
+		Step N owns the pulses from ``N * step_pulses`` up to the next step's,
+		and a note is read where it was placed, not where swing, a groove or
+		``randomize()`` has since moved it (#3447).  A note placed past the
+		last step counts as the last.
+		"""
+
+		return min(int(self._pattern._placed_pulse(position, note) / step_pulses), grid - 1)
+
 	@subsequence.declarations.bounded
 	def thin (
 		self,
@@ -1950,8 +1962,10 @@ class PatternAlgorithmicMixin:
 		tonal patterns such as arpeggios where each step carries a different pitch.
 
 		Position classification is **zone-based**: each grid step owns the pulse range
-		``[N * step_pulses, (N + 1) * step_pulses)``, so notes shifted by swing or
-		groove are still classified correctly regardless of call order.
+		``[N * step_pulses, (N + 1) * step_pulses)``, and a note counts in the step
+		it was placed on, however far ``swing()``, ``groove()`` or ``randomize()``
+		has since moved it, early or late.  So ``thin`` can come before the feel
+		or after it.
 
 		Parameters:
 			pitch: Drum name or MIDI note number to target, or ``None`` to thin
@@ -2031,23 +2045,15 @@ class PatternAlgorithmicMixin:
 			# positions that thin() will prefer to remove from.
 			priorities = self.build_ghost_bias(grid, strategy, beats = self._pattern.length)
 
-		# Zone-based pulse classification.
-		# Zone N owns pulses in [ N * step_pulses, (N+1) * step_pulses ).
-		# Notes shifted by swing or groove remain in their original zone.
+		# Zone-based classification: zone N owns pulses in
+		# [ N * step_pulses, (N+1) * step_pulses ), and each note counts in the
+		# zone it was placed in, however far the feel has moved it (#3447).
 		total_pulses = self._pattern.length * subsequence.constants.MIDI_QUARTER_NOTE
 		step_pulses = total_pulses / grid
 
 		pulses_to_remove: typing.List[int] = []
 
 		for pulse, step in list(self._pattern.steps.items()):
-
-			zone = int(pulse / step_pulses)
-			if zone >= grid:
-				zone = grid - 1
-
-			priority = priorities[zone]
-			if priority <= 0.0:
-				continue
 
 			# Separate target notes from protected notes at this pulse.
 			if midi_pitch is None:
@@ -2057,8 +2063,15 @@ class PatternAlgorithmicMixin:
 				remaining = [n for n in step.notes if n.pitch != midi_pitch]
 				targets   = [n for n in step.notes if n.pitch == midi_pitch]
 
-			for note in targets:
-				if rng.random() >= priority * amount:
+			# Per note, since two notes sharing a pulse may have been placed
+			# on different steps: an early hat beside an unmoved kick.
+			note_priorities = [priorities[self._placed_zone(pulse, note, step_pulses, grid)] for note in targets]
+
+			if all(priority <= 0.0 for priority in note_priorities):
+				continue
+
+			for note, priority in zip(targets, note_priorities):
+				if priority <= 0.0 or rng.random() >= priority * amount:
 					remaining.append(note)
 				# else: note is dropped
 
@@ -2124,10 +2137,11 @@ class PatternAlgorithmicMixin:
 			gate: Sub-note duration as a fraction of each subdivision slot
 				(0.0–1.0).  ``1.0`` = legato (sub-hits touch), ``0.5`` =
 				staccato (half the slot).  Default 0.5.
-			steps: Grid positions to ratchet (e.g. ``[0, 4, 12]``).  Notes are
-				classified to grid zones the same way ``thin()`` works - swing-
-				shifted notes remain in their original zone.  ``None`` (default)
-				applies ratchet to all eligible notes.
+			steps: Grid positions to ratchet (e.g. ``[0, 4, 12]``).  Each note
+				counts as the step it was placed on, the same way ``thin()``
+				counts it, however far swing, a groove or ``randomize()`` has
+				moved it.  ``None`` (default) applies ratchet to all eligible
+				notes.
 			grid: Grid resolution used for ``steps`` zone classification.
 				Defaults to the pattern's ``default_grid``.
 			seed: Fix the probability gating for this call (an int); omit to
@@ -2180,26 +2194,19 @@ class PatternAlgorithmicMixin:
 
 		for pulse, step in self._pattern.steps.items():
 
-			# Zone classification for steps mask.
-			if target_zones is not None:
-				zone = int(pulse / step_pulses)
-				if zone >= grid:
-					zone = grid - 1
-				in_zone = zone in target_zones
-			else:
-				in_zone = True
+			# Separate targeted notes from passthrough notes.  The steps mask
+			# reads each note by the step it was placed on, as thin() does, so
+			# an early or swung note is ratcheted as its own step's (#3447).
+			targets: typing.List[subsequence.pattern.Note] = []
+			passthrough: typing.List[subsequence.pattern.Note] = []
 
-			# Separate targeted notes from passthrough notes.
-			if midi_pitch is None:
-				targets = list(step.notes) if in_zone else []
-				passthrough = [] if in_zone else list(step.notes)
-			else:
-				if in_zone:
-					targets = [n for n in step.notes if n.pitch == midi_pitch]
-					passthrough = [n for n in step.notes if n.pitch != midi_pitch]
+			for note in step.notes:
+				if midi_pitch is not None and note.pitch != midi_pitch:
+					passthrough.append(note)
+				elif target_zones is not None and self._placed_zone(pulse, note, step_pulses, grid) not in target_zones:
+					passthrough.append(note)
 				else:
-					targets = []
-					passthrough = list(step.notes)
+					targets.append(note)
 
 			# Passthrough notes keep their original pulse position.
 			if passthrough:

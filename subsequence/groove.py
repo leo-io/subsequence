@@ -350,7 +350,16 @@ def apply_groove (
 		if new_pulse not in new_steps:
 			new_steps[new_pulse] = subsequence.pattern.Step()
 
-		new_steps[new_pulse].notes.extend(step.notes)
+		# Each moved note records how far, so thin(), scale_velocities() and
+		# ratchet(steps=) still count it as the step it was placed on (#3447).
+		# Copies, as the velocity scaling makes, so the caller's notes are
+		# left as they were.
+		moved = new_pulse - old_pulse
+
+		if moved:
+			new_steps[new_pulse].notes.extend(dataclasses.replace(note, nudge = note.nudge + moved) for note in step.notes)
+		else:
+			new_steps[new_pulse].notes.extend(step.notes)
 
 	return new_steps
 
