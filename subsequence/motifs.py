@@ -1034,8 +1034,10 @@ class Motif:
 			length: Motif length in beats; defaults to the onsets rounded
 				up to a whole 4-beat bar.  In any other metre pass a length
 				in bars of ``p.bar_beats``.
-			scale: A scale name, an interval list, or an explicit MIDI
-				pitch pool.  ``None`` = the plain seven degrees.
+			scale: A scale name; a list of intervals above the tonic, from
+				0 to 12 (12 is the octave, the same as 0); or an explicit
+				MIDI pitch pool, every note above 12.  ``None`` = the plain
+				seven degrees.
 			contour: Envelope shaping the line's height over its span -
 				``"arch"``, ``"valley"``, ``"ascending"``, ``"descending"``.
 			end_on: Degree the line must end on - sugar for ``pins={-1: ...}``.
@@ -1060,10 +1062,11 @@ class Motif:
 			state: A ``MelodicState`` whose dials, scoring factors, and
 				melodic history seed the walk.  It is **copied** - building
 				a value never mutates a module-level live object.  The
-				candidate pool is not carried over: it is always rebuilt
-				from ``scale=`` (pass an explicit pool there instead),
-				though the state's key still sets the tonic that the NIR
-				closure rule lands on.
+				candidate pool is not carried over: it is rebuilt from
+				``scale=`` on the state's key, whose tonic is degree 1 and
+				the note the NIR closure rule lands on (pass an explicit
+				pool to ``scale=`` instead).  A history played in another
+				register moves by whole octaves to lie beside the pool.
 			nir_strength / pitch_diversity / tessitura_strength: The walk's
 				dials when no ``state`` is given.
 
@@ -1116,11 +1119,20 @@ class Motif:
 			intervals = list(subsequence.intervals.scale_pitch_classes(0, scale))
 		else:
 			values = [int(v) for v in scale]
-			if values and (min(values) != 0 or max(values) > 11):
+			# Values from 0 to 12 are intervals above the tonic, 12 the octave
+			# and so the same as 0.  Reading a list as MIDI unless it started
+			# on 0 and stopped below 12 sent [0, 7, 12] and [2, 4, 7, 9] to
+			# MIDI notes 0 to 12, far below hearing (#3456).
+			if all(0 <= value <= 12 for value in values):
+				intervals = sorted({value % 12 for value in values})
+			elif any(value <= 12 for value in values):
+				raise ValueError(
+					f"scale={values} mixes intervals (0 to 12) with MIDI notes - use intervals "
+					f"above the tonic, or MIDI note numbers throughout"
+				)
+			else:
 				absolute_pool = sorted(values)		# an explicit MIDI pool: absolute output
 				intervals = []
-			else:
-				intervals = sorted(set(values))
 
 		# Best-fit reference scale for degree spelling: whichever of major/
 		# minor contains more of the pool (ties to major).  Bound under a
@@ -1145,12 +1157,30 @@ class Motif:
 				chord_weight = 0.0,		# values have no chord context; fit applies at placement
 			)
 
+		# The walk's tonic: the state's key, at its nearest to 60 (ties go up,
+		# as placement resolves degrees), and so C at 60 without a state.  The
+		# pool, the pins and the spelling all count from it.  Anchored at 60
+		# whatever the state's key, an A state's closure rule aimed at A,
+		# degree 6 of a pool spelled from C (#3456).
+		tonic_distance = walker._tonic_pc % 12
+		anchor = 60 + tonic_distance if tonic_distance <= 6 else 60 + tonic_distance - 12
+
 		if absolute_pool is not None:
 			walker.set_pool(absolute_pool)
 		else:
-			# Offsets over ~1.5 octaves anchored at 60 — register is decided
-			# at placement (root=), so the anchor is arbitrary and erased.
-			walker.set_pool([60 + octave * 12 + interval for octave in (0, 1) for interval in intervals if octave * 12 + interval <= 19])
+			# Offsets over ~1.5 octaves from the anchor - register is decided
+			# at placement (root=), so the octave is arbitrary and erased.
+			walker.set_pool([anchor + octave * 12 + interval for octave in (0, 1) for interval in intervals if octave * 12 + interval <= 19])
+
+		# A state's history is absolute MIDI from wherever it last played.
+		# Outside the pool's span it reads as a leap nobody played, so it moves
+		# by whole octaves, its shape intact, to where it lies nearest the pool.
+		if walker.history:
+			low, high = walker._pitch_pool[0], walker._pitch_pool[-1]
+			last = walker.history[-1]
+			if not low <= last <= high:
+				shift = 12 * math.floor(((low + high) / 2 - last) / 12 + 0.5)
+				walker.history = [pitch + shift for pitch in walker.history]
 
 		if max_pitches is not None:
 			if max_pitches < 1:
@@ -1198,7 +1228,7 @@ class Motif:
 				degree = pin_spec if isinstance(pin_spec, Degree) else Degree(int(pin_spec))
 				step_index = (degree.step - 1) % len(reference)
 				carry = (degree.step - 1) // len(reference)
-				resolved_pins[index] = 60 + reference[step_index] + 12 * (carry + degree.octave) + degree.chroma
+				resolved_pins[index] = anchor + reference[step_index] + 12 * (carry + degree.octave) + degree.chroma
 
 		# --- The walk -----------------------------------------------------------
 		envelopes: typing.Dict[str, typing.Callable[[float], float]] = {
@@ -1240,7 +1270,7 @@ class Motif:
 			if absolute_pool is not None:
 				spec = pitch
 			else:
-				offset = pitch - 60
+				offset = pitch - anchor
 				octave, pc = divmod(offset, 12)
 				if pc in reference:
 					spec = Degree(reference.index(pc) + 1, octave = octave)
