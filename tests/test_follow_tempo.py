@@ -18,6 +18,7 @@ a longer one reaches 0, which the review saw. A gap now starts the window again.
 """
 
 import asyncio
+import pathlib
 import time
 import typing
 
@@ -73,7 +74,7 @@ def _tempo_events (sequencer: subsequence.sequencer.Sequencer) -> typing.List[in
 
 @pytest.mark.asyncio
 async def test_the_tempo_is_what_the_cable_sent_however_slowly_it_was_read (
-	patch_midi: None,
+	patch_midi: None, tmp_path: pathlib.Path,
 ) -> None:
 
 	"""Ticks stamped a steady 120 BPM apart read 120, whatever the loop was doing.
@@ -88,6 +89,7 @@ async def test_the_tempo_is_what_the_cable_sent_however_slowly_it_was_read (
 
 	sequencer = _follower()
 	sequencer.recording = True
+	sequencer.record_filename = str(tmp_path / "take.mid")
 
 	await sequencer.start()
 
@@ -116,7 +118,7 @@ async def test_the_tempo_is_what_the_cable_sent_however_slowly_it_was_read (
 
 
 @pytest.mark.asyncio
-async def test_a_steady_master_writes_one_tempo_into_the_recording (patch_midi: None) -> None:
+async def test_a_steady_master_writes_one_tempo_into_the_recording (patch_midi: None, tmp_path: pathlib.Path) -> None:
 
 	"""The consequence a musician meets: the .mid's tempo map.
 
@@ -126,6 +128,7 @@ async def test_a_steady_master_writes_one_tempo_into_the_recording (patch_midi: 
 
 	sequencer = _follower()
 	sequencer.recording = True
+	sequencer.record_filename = str(tmp_path / "take.mid")
 
 	await sequencer.start()
 
@@ -151,12 +154,13 @@ async def test_a_steady_master_writes_one_tempo_into_the_recording (patch_midi: 
 
 
 @pytest.mark.asyncio
-async def test_a_real_tempo_change_is_still_followed (patch_midi: None) -> None:
+async def test_a_real_tempo_change_is_still_followed (patch_midi: None, tmp_path: pathlib.Path) -> None:
 
 	"""The control. Stamping arrival must not stop it hearing a genuine change."""
 
 	sequencer = _follower()
 	sequencer.recording = True
+	sequencer.record_filename = str(tmp_path / "take.mid")
 
 	await sequencer.start()
 

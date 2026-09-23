@@ -1,3 +1,4 @@
+import os
 import typing
 
 import mido
@@ -107,6 +108,30 @@ def _fake_open_input (name: str, callback: typing.Optional[typing.Callable] = No
 	fake = FakeMidiIn(callback=callback)
 	_current_fake_input = fake
 	return fake
+
+
+@pytest.fixture(autouse = True)
+def nothing_written_into_the_working_directory () -> typing.Iterator[None]:
+
+	"""Fail any test that leaves a new file in the directory the suite was run from.
+
+	Nothing a test runs may write there: run from the share the rig plays out of,
+	a plain write into it is the kind that wedged the mount (#2438).  Written as a
+	rule, it was still broken - two render tests wrote ``dummy.mid`` for months,
+	and three tempo-following tests wrote a ``session_*.mid`` on every run, both
+	hidden by ``.gitignore`` - so it is checked here, for every test, where the
+	next one will be caught the day it is written.  The directory is the one the
+	test started in, so a test that moves into ``tmp_path`` is not affected.
+	"""
+
+	where = os.getcwd()
+	before = set(os.listdir(where))
+
+	yield
+
+	added = sorted(set(os.listdir(where)) - before)
+
+	assert not added, f"this test wrote {added} into the working directory {where}: write into tmp_path instead"
 
 
 @pytest.fixture(autouse = True)
