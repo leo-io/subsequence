@@ -115,6 +115,14 @@ def generate_bresenham_sequence_weighted (steps: int, weights: typing.List[float
 
 	"""
 	Generate a sequence that distributes weighted indices across steps.
+
+	Every step goes to exactly one index, and each index takes a share of
+	the steps in proportion to its weight: ``[0.5, 0.25]`` gives the first
+	index two steps for each one of the second's, and so does ``[2, 1]``.
+	There are no rests here; to leave steps silent, give the silence an index
+	of its own, as ``PatternBuilder.bresenham_poly()`` does.
+
+	Raises ``ValueError`` for a negative weight, or when every weight is zero.
 	"""
 
 	if steps <= 0:
@@ -122,6 +130,25 @@ def generate_bresenham_sequence_weighted (steps: int, weights: typing.List[float
 
 	if not weights:
 		raise ValueError("Weights cannot be empty")
+
+	if any(weight < 0 for weight in weights):
+		raise ValueError(f"Weights cannot be negative - got {weights}")
+
+	# Each chosen index pays back one whole step, which divides the steps in
+	# proportion only when the weights add up to 1.  Otherwise every index
+	# drifts by the same amount each step: above 1 a light weight fell
+	# further behind every step and never played, and below 1 the shares
+	# flattened towards equal (#3450).  fsum() is correctly rounded on every
+	# Python, and a total within rounding of 1 is left alone: on 3.10 the rest
+	# voice bresenham_poly() adds can leave 0.9999999999999999, and dividing
+	# by that would change 540 typed splits' patterns.
+	total = math.fsum(weights)
+
+	if total <= 0:
+		raise ValueError("Weights cannot all be zero")
+
+	if not math.isclose(total, 1.0):
+		weights = [weight / total for weight in weights]
 
 	acc = [0.0] * len(weights)
 	sequence: typing.List[int] = []

@@ -387,7 +387,10 @@ class PatternAlgorithmicMixin:
 		Each step is assigned to exactly one voice - voices never overlap, producing
 		interlocking rhythmic patterns. Density weights control how frequently each
 		voice fires. If the weights sum to less than 1.0, the remainder becomes
-		evenly-distributed rests (silent steps).
+		evenly-distributed rests (silent steps).  Weights adding up to more than
+		1.0 are scaled down in proportion, so every voice keeps its share of the
+		steps: ``{"kick_1": 1.0, "hi_hat_closed": 1.0, "snare_1": 0.1}`` still
+		plays its snare.
 
 		Because notes are placed via ``self.note()``, all post-placement transforms
 		(``groove``, ``randomize``, ``velocity_shape``, ``rotate``, etc.) work normally.
@@ -395,7 +398,8 @@ class PatternAlgorithmicMixin:
 		Parameters:
 			parts: Mapping of pitch (MIDI note or drum name) to density weight.
 				Higher weight means more hits per bar. Weights in the range (0, 1]
-				are typical; a weight of 0.5 targets roughly one hit every two steps.
+				are typical; a weight of 0.5 targets roughly one hit every two steps
+				while the weights add up to 1 or less.
 			velocity: Either a single MIDI velocity applied to all voices, or a dict
 				mapping each pitch to its own velocity. Pitches absent from the dict
 				fall back to the default velocity (100).

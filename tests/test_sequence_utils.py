@@ -1,4 +1,9 @@
+import functools
+import math
+import operator
 import random
+
+import pytest
 
 import subsequence.midi_utils
 import subsequence.sequence_utils
@@ -443,6 +448,70 @@ def test_bresenham_weighted_empty_weights_raises () -> None:
 	import pytest
 	with pytest.raises(ValueError):
 		subsequence.sequence_utils.generate_bresenham_sequence_weighted(16, [])
+
+
+def test_bresenham_weighted_shares_the_steps_in_proportion_below_one () -> None:
+
+	"""Weights adding up to less than 1 still share the steps in proportion (#3450).
+
+	``[0.5, 0.1]`` is 5 to 1.  Each chosen index paid back a whole step, so
+	below 1 every index gained the shortfall, split evenly, and the shares
+	flattened to 0.7 and 0.3.
+	"""
+
+	sequence = subsequence.sequence_utils.generate_bresenham_sequence_weighted(60, [0.5, 0.1])
+
+	assert (sequence.count(0), sequence.count(1)) == (50, 10)
+
+
+def test_bresenham_weighted_shares_the_steps_in_proportion_above_one () -> None:
+
+	"""Only the proportions count: ``[2, 1]`` divides the steps as ``[0.5, 0.25]`` does (#3450).
+
+	Above 1 every index lost the excess, split evenly, each step, so a weight
+	lighter than that fell further behind every step and never played.
+	"""
+
+	heavy = subsequence.sequence_utils.generate_bresenham_sequence_weighted(24, [2.0, 1.0])
+	light = subsequence.sequence_utils.generate_bresenham_sequence_weighted(24, [0.5, 0.25])
+	starved = subsequence.sequence_utils.generate_bresenham_sequence_weighted(21, [1.0, 1.0, 0.1])
+
+	assert heavy == light
+	assert (heavy.count(0), heavy.count(1)) == (16, 8)
+	assert starved.count(2) == 1
+
+
+def test_bresenham_weighted_refuses_weights_that_share_nothing () -> None:
+
+	"""A negative weight, or weights that are all zero, cannot share out the steps (#3450)."""
+
+	with pytest.raises(ValueError, match="negative"):
+		subsequence.sequence_utils.generate_bresenham_sequence_weighted(16, [0.5, -0.1])
+
+	with pytest.raises(ValueError, match="all be zero"):
+		subsequence.sequence_utils.generate_bresenham_sequence_weighted(16, [0.0, 0.0])
+
+
+def test_bresenham_weighted_uses_weights_that_add_up_to_one_as_given () -> None:
+
+	"""A split that misses 1 by a rounding error is used exactly as given (#3450).
+
+	Python 3.10 adds floats one at a time, so the rest voice
+	``bresenham_poly()`` adds to {0.05, 0.1, 0.2} brings the total to
+	0.9999999999999999, not 1.  Rescaling by that would change the pattern
+	of 540 such typed splits.  This passed before the fix as well: it pins
+	that every pattern within 1 is unchanged, whichever Python plays it.
+	"""
+
+	parts = [0.05, 0.1, 0.2]
+	weights = parts + [1.0 - functools.reduce(operator.add, parts)]
+	rescaled = [weight / math.fsum(weights) for weight in weights]
+
+	assert math.fsum(weights) != 1.0		# a rounding error short of 1
+
+	as_given = subsequence.sequence_utils.generate_bresenham_sequence_weighted(64, weights)
+
+	assert as_given != subsequence.sequence_utils.generate_bresenham_sequence_weighted(64, rescaled)
 
 
 # --- perlin_1d ---

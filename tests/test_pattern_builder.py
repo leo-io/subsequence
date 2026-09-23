@@ -3983,6 +3983,31 @@ def test_bresenham_poly_deterministic_with_seed () -> None:
 	assert build(42) == build(42)
 
 
+@pytest.mark.parametrize("snare", [0.1, 0.25, 0.5])
+def test_bresenham_poly_over_one_keeps_every_voice_in_proportion (snare: float) -> None:
+
+	"""Beside two voices at full weight, a light snare keeps its share of the bar (#3450).
+
+	The weights add up to more than 1, and each voice used to lose the
+	excess, split evenly, every step: a voice lighter than that never played,
+	so the snare was silent at every weight up to 0.5.
+	"""
+
+	drum_map = {"kick": 36, "snare": 38, "hat": 42}
+	pattern, builder = _make_builder(length=4, drum_note_map=drum_map)
+
+	parts = {"hat": 1.0, "kick": 1.0, "snare": snare}
+	builder.bresenham_poly(parts=parts, velocity=100)
+
+	counts = {name: sum(1 for step in pattern.steps.values() for note in step.notes if note.pitch == drum_map[name]) for name in parts}
+
+	assert sum(counts.values()) == 16
+	assert counts["snare"] >= 1
+
+	for name, weight in parts.items():
+		assert abs(counts[name] - 16 * weight / sum(parts.values())) < 1
+
+
 # --- no_overlap ---
 
 def test_bresenham_no_overlap_skips_existing_pitch () -> None:
