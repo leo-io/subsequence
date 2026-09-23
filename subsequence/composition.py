@@ -1958,6 +1958,32 @@ class Composition:
 
 		return start
 
+	def _pending_snapshot (self) -> typing.List[_PendingPattern]:
+
+		"""The parts waiting to start, for a declaration pass to roll back to if it fails (#3377).
+
+		The list holds the entries themselves, so none can be collected and have
+		its identity reused while the pass runs.
+		"""
+
+		return list(self._pending_patterns)
+
+	def _roll_back_pending (self, snapshot: typing.List[_PendingPattern]) -> None:
+
+		"""Forget every part a failed declaration pass added to those waiting to start (#3377).
+
+		A decorator puts a new part into ``_pending_patterns`` the moment it
+		runs, so a save, a typed line or a ``load_patterns()`` that raised
+		partway left the parts it had reached waiting - and the next pass to
+		finish, or ``play()``, started them, with no source to own them and so
+		no later save able to remove them.  Parts pending before the pass stay,
+		and one the pass removed stays removed; a running part the pass
+		hot-swapped before it raised cannot be undone, and plays its new body.
+		"""
+
+		kept = {id(pending) for pending in snapshot}
+		self._pending_patterns = [pending for pending in self._pending_patterns if id(pending) in kept]
+
 	async def _activate_new_pending_patterns (self) -> None:
 
 		"""Build and schedule any pending patterns whose names are not yet running.
@@ -4616,7 +4642,14 @@ class Composition:
 			# but RECORD what this source declares so a later post-play
 			# reload under the same label can tear down its deletions.
 			self._declared_names = set()
-			exec(compiled, namespace)
+			before = self._pending_snapshot()
+
+			try:
+				exec(compiled, namespace)
+			except BaseException:
+				self._roll_back_pending(before)
+				raise
+
 			self._source_declared[source_label] = set(self._declared_names)
 
 	async def _apply_source_async (
@@ -4659,8 +4692,16 @@ class Composition:
 		# on, so it is lent them while it runs, as typed code is: a save whose
 		# top level never finished stopped the music and left the process deaf
 		# to both (#3378).
-		with subsequence.live_server.stop_signals_reach_the_code():
-			exec(compiled, namespace)
+		# A pass that raised starts none of the parts it added, now or later
+		# (#3377).
+		before = self._pending_snapshot()
+
+		try:
+			with subsequence.live_server.stop_signals_reach_the_code():
+				exec(compiled, namespace)
+		except BaseException:
+			self._roll_back_pending(before)
+			raise
 
 		# Graduate newly-decorated patterns from _pending_patterns into
 		# _running_patterns so they start firing on the next reschedule.

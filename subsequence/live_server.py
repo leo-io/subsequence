@@ -432,11 +432,15 @@ class LiveServer:
 		# into a second one, because the name it would have reused was still
 		# taken.
 		composition._declared_names = set()
+		before = composition._pending_snapshot()
 
 		with self._watching(client):
 			response, declared = self._evaluate(code)
 
+		# A submission that raised, or was interrupted, starts nothing - and
+		# neither does the next one on its behalf (#3377).
 		if not declared:
+			composition._roll_back_pending(before)
 			return response
 
 		# Bring anything newly declared into rotation.  A part that was

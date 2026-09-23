@@ -91,3 +91,100 @@ async def test_a_stopping_signal_stops_a_save_that_holds_the_loop (patch_midi: N
 		timer.cancel()
 		loop.remove_signal_handler(number)
 		composition._live_reloader.stop()
+
+
+def _pending_names (composition: subsequence.Composition) -> typing.List[str]:
+
+	"""The parts waiting to start, by name."""
+
+	return [pending.builder_fn.__name__ for pending in composition._pending_patterns]
+
+
+@pytest.mark.asyncio
+async def test_a_save_that_raises_starts_none_of_its_new_parts_now_or_later (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The failed save's new part used to wait, and the next good save - which never declared it - started it (#3377).
+
+	Nothing owned it then, so no later save could take it out again.
+	"""
+
+	composition, live_file = await _watching(tmp_path, _part("drums"))
+	assert composition._live_reloader is not None
+
+	live_file.write_text(_part("drums") + _part("fill") + "raise RuntimeError('half way')\n")
+	await composition._live_reloader._reload_async()
+
+	assert "fill" not in composition._running_patterns
+	assert "fill" not in _pending_names(composition)
+
+	live_file.write_text(_part("drums"))
+	await composition._live_reloader._reload_async()
+
+	assert sorted(composition._running_patterns) == ["drums"]
+
+
+@pytest.mark.asyncio
+async def test_a_typed_line_that_raises_starts_none_of_its_new_parts_now_or_later (patch_midi: None) -> None:
+
+	"""The line was answered with its traceback and started nothing; the next line started its part (#3377)."""
+
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+	composition.live(port=0)
+	loop = asyncio.get_running_loop()
+	composition._event_loop = loop
+	composition._sequencer._event_loop = loop
+	composition._open_output_devices()
+	server = composition._live_server
+	assert server is not None
+	await server.start()
+	assert server._server is not None
+	port = server._server.sockets[0].getsockname()[1]
+	reader, writer = await asyncio.open_connection("127.0.0.1", port)
+
+	async def _typed (code: str) -> str:
+		writer.write(code.encode() + subsequence.live_server.SENTINEL)
+		await writer.drain()
+		answer = await asyncio.wait_for(reader.readuntil(subsequence.live_server.SENTINEL), timeout=5.0)
+		return answer[:-1].decode().strip().splitlines()[-1]
+
+	try:
+		assert await _typed(_part("lead") + "raise RuntimeError('half way')") == "RuntimeError: half way"
+		assert "lead" not in composition._running_patterns
+
+		assert await _typed("1 + 1") == "2"
+		assert "lead" not in composition._running_patterns
+		assert "lead" not in _pending_names(composition)
+
+	finally:
+		writer.close()
+		await server.stop()
+
+
+def test_a_load_that_raises_before_play_leaves_only_what_was_pending_before_it (patch_midi: None) -> None:
+
+	"""play() would have started the failed load's part; a part declared before the load still waits, as it should."""
+
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+
+	@composition.pattern(channel=1, beats=4)
+	def keep (p: subsequence.PatternBuilder) -> None:
+		pass
+
+	with pytest.raises(RuntimeError, match="half way"):
+		composition.load_patterns(_part("extra") + "raise RuntimeError('half way')\n", "extra")
+
+	assert _pending_names(composition) == ["keep"]
+
+
+def test_a_first_load_that_raises_leaves_nothing_of_its_own_pending (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""watch() still raises, so a broken entry point is loud; its parts do not wait for play()."""
+
+	live_file = tmp_path / "parts.py"
+	live_file.write_text(_part("drums") + "raise RuntimeError('half way')\n")
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+
+	with pytest.raises(RuntimeError, match="half way"):
+		composition.watch(live_file)
+
+	assert _pending_names(composition) == []

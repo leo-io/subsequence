@@ -218,7 +218,16 @@ class LiveReloader:
 			# already diff against what this file declares now — recording
 			# only this file's names, not the wrapper script's.
 			self._composition._declared_names = set()
-			exec(compiled, namespace)
+			before = self._composition._pending_snapshot()
+
+			try:
+				exec(compiled, namespace)
+			except BaseException:
+				# The error still reaches the caller; the parts the file reached
+				# before it do not wait for play() to start them (#3377).
+				self._composition._roll_back_pending(before)
+				raise
+
 			self._composition._source_declared[str(self._path)] = set(self._composition._declared_names)
 
 		try:
