@@ -8,7 +8,9 @@ Protocol
 ────────
 Messages are delimited by ``\\x04`` (ASCII EOT). The server reads until it
 receives this sentinel, evaluates the code, and sends the result (or error
-traceback) followed by ``\\x04``.
+traceback) followed by ``\\x04``.  Messages may be sent back to back without
+waiting for each answer, and each is answered in turn; an empty message is
+answered ``OK``.
 
 Each message is a declaration pass in its own right, run on the loop that owns
 the composition: whatever it declares afresh is brought in at the next whole
@@ -36,6 +38,11 @@ if typing.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SENTINEL = b"\x04"
+
+# The longest message the server will wait for, sentinel included.  asyncio's
+# default is 64 KiB, which a pasted composition file can pass; past this a
+# connection is closed rather than buffered without end.
+MESSAGE_LIMIT = 16 * 1024 * 1024
 
 # What the REPL declares is filed under this name, so a watched file's save
 # removes only what that file stopped declaring and never the performer's
@@ -65,7 +72,8 @@ class LiveServer:
 		self._server = await asyncio.start_server(
 			self._handle_connection,
 			host = "127.0.0.1",
-			port = self._port
+			port = self._port,
+			limit = MESSAGE_LIMIT
 		)
 
 		logger.info(f"Live server listening on 127.0.0.1:{self._port}")
@@ -96,7 +104,7 @@ class LiveServer:
 				if code is None:
 					break
 
-				response = await self._submit(code)
+				response = await self._submit(code) if code else "OK"
 				writer.write(response.encode() + SENTINEL)
 				await writer.drain()
 
@@ -116,30 +124,23 @@ class LiveServer:
 
 	async def _read_message (self, reader: asyncio.StreamReader) -> typing.Optional[str]:
 
-		"""Read bytes until the sentinel or EOF, returning the decoded string or None."""
+		"""Read one message, up to its sentinel, or None once the client has gone.
 
-		chunks: typing.List[bytes] = []
+		Whatever follows the sentinel stays in the reader for the next call, so
+		messages sent back to back, or one split across two sends, each arrive
+		whole.  This used to read in chunks and keep only what came before the
+		first sentinel in each, so a second message in the same read was lost and
+		its client waited forever, and an empty message read as the client
+		leaving (#3364).  Bytes after the last sentinel when the client closes are
+		a message it never finished, and are dropped.
+		"""
 
-		while True:
+		try:
+			raw = await reader.readuntil(SENTINEL)
+		except (asyncio.IncompleteReadError, ConnectionResetError):
+			return None
 
-			try:
-				chunk = await reader.read(4096)
-			except ConnectionResetError:
-				return None
-
-			if not chunk:
-				return None
-
-			if SENTINEL in chunk:
-				before, _, _ = chunk.partition(SENTINEL)
-				chunks.append(before)
-				break
-
-			chunks.append(chunk)
-
-		data = b"".join(chunks).decode("utf-8").strip()
-
-		return data if data else None
+		return raw[:-len(SENTINEL)].decode("utf-8", errors = "replace").strip()
 
 	async def _submit (self, code: str) -> str:
 
