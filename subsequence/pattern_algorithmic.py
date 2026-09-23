@@ -39,6 +39,10 @@ logger = logging.getLogger(__name__)
 # already advises a window of 2 to 4 for practical bar lengths.
 _MAX_GENERATED_SYMBOLS = 4096
 
+# How much thin("offbeat") thins the e and a: lightly, so it straightens the
+# groove where "upbeat" removes only the & (#3462).
+_OFFBEAT_THINS_THE_SIXTEENTHS = 0.3
+
 # Which budget overruns have already been warned about: de_bruijn's (verb,
 # pitch-pool size, window) and lsystem's (verb, axiom, rules, generations).
 # A rebuild runs every bar, so warning per call would fill the log for as long
@@ -1919,6 +1923,52 @@ class PatternAlgorithmicMixin:
 			beat += spacing
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
+	@staticmethod
+	def _thin_priorities (grid: int, strategy: str, beats: float) -> typing.List[float]:
+
+		"""thin()'s own table: 1 where a strategy removes a position, 0 where it keeps it (#3462).
+
+		Positions are named as ``build_ghost_bias()`` names them - the beat, the
+		& midway through it, the step just before or just after it - so the two
+		vocabularies stay one.  Only ``"offbeat"`` weighs anything between: it
+		thins the e and a lightly, which is what sets it apart from ``"upbeat"``.
+		"""
+
+		steps_per_beat = PatternAlgorithmicMixin._steps_per_beat(grid, beats)
+		priorities: typing.List[float] = []
+
+		for index in range(grid):
+
+			position = index % steps_per_beat
+			on_the_beat = position == 0
+			on_the_and = steps_per_beat > 1 and position == steps_per_beat // 2
+
+			if strategy == "uniform":
+				priority = 1.0
+			elif strategy == "sixteenths":
+				priority = 0.0 if on_the_beat or on_the_and else 1.0
+			elif strategy == "offbeat":
+				priority = 0.0 if on_the_beat else 1.0 if on_the_and else _OFFBEAT_THINS_THE_SIXTEENTHS
+			elif strategy == "e_and_a":
+				priority = 0.0 if on_the_beat else 1.0
+			elif strategy == "upbeat":
+				priority = 1.0 if on_the_and else 0.0
+			elif strategy == "downbeat":
+				priority = 1.0 if on_the_beat else 0.0
+			elif strategy == "before":
+				priority = 1.0 if not on_the_beat and position == steps_per_beat - 1 else 0.0
+			elif strategy == "after":
+				priority = 1.0 if steps_per_beat > 1 and position == 1 else 0.0
+			else:
+				raise ValueError(
+					f"Unknown thin() strategy {strategy!r}. Use 'strength', 'uniform', 'offbeat', "
+					f"'sixteenths', 'before', 'after', 'downbeat', 'upbeat', 'e_and_a', or a list of floats."
+				)
+
+			priorities.append(priority)
+
+		return priorities
+
 	def _placed_zone (self, position: int, note: subsequence.pattern.Note, step_pulses: float, grid: int) -> int:
 
 		"""The grid step *note* was placed on, as ``thin()`` and ``ratchet(steps=)`` count it.
@@ -1947,17 +1997,21 @@ class PatternAlgorithmicMixin:
 
 		This is the musical inverse of :meth:`ghost_fill()`.  Where ``ghost_fill``
 		uses bias weights to decide where to *add* ghost notes, ``thin`` uses the
-		same position vocabulary to decide where to *remove* notes.  A high
-		strategy weight on a position means that position is dropped first.
+		same position vocabulary to decide where to *remove* notes.
 
 		The strategy names match those in :meth:`build_ghost_bias()` and carry the
-		same rhythmic meaning:
+		same rhythmic meaning, taken at its word: a position a strategy keeps is
+		never touched, whatever the ``amount``, and a position it removes goes
+		with probability ``amount``.
 
 		- ``"sixteenths"`` - removes 16th-note subdivisions (e/a), keeps beats and &.
-		- ``"offbeat"``    - removes the & position, straightens the groove.
+		- ``"offbeat"``    - removes the & position, straightens the groove, and
+		  thins the e/a lightly, which sets it apart from ``"upbeat"``.
 		- ``"e_and_a"``    - removes all non-downbeat positions, keeps only beats.
 		- ``"downbeat"``   - removes beat positions (floating/displaced effect).
 		- ``"upbeat"``     - removes only the & position.
+		- ``"before"``     - removes only the step just before each beat.
+		- ``"after"``      - removes only the step just after each beat.
 		- ``"uniform"``    - removes from all positions equally (per-instrument dropout).
 		- ``"strength"``   - progressive thinning: weakest positions (e/a) drop first,
 		  strongest (downbeat) last. Useful for Perlin-driven density control.
@@ -2019,10 +2073,10 @@ class PatternAlgorithmicMixin:
 
 		# Build the per-step drop-priority weights.
 		#
-		# Strategy names are shared with ghost_fill's bias vocabulary.  The per-step
-		# weights from build_ghost_bias() are reused directly, with semantics inverted:
-		#   ghost_fill:  high weight → place a note here
-		#   thin:        high weight → drop a note from here
+		# Strategy names are shared with ghost_fill's bias vocabulary, but the
+		# weights are thin's own (#3462): ghost_fill's floor of 0.05 on the beat
+		# and 0.3 on the & suit placing a ghost note, and made thin drop what its
+		# strategy said it kept.
 		#
 		# "strength" is defined only for thin() - it expresses a thinning hierarchy
 		# (weakest positions drop first) which has no meaningful ghost_fill equivalent.
@@ -2047,10 +2101,7 @@ class PatternAlgorithmicMixin:
 				)
 			priorities = list(strategy)
 		else:
-			# Reuse build_ghost_bias() weights for all shared strategy names.
-			# The positions that ghost_fill prefers to add to are the same
-			# positions that thin() will prefer to remove from.
-			priorities = self.build_ghost_bias(grid, strategy, beats = self._pattern.length)
+			priorities = self._thin_priorities(grid, strategy, self._pattern.length)
 
 		# Zone-based classification: zone N owns pulses in
 		# [ N * step_pulses, (N+1) * step_pulses ), and each note counts in the
