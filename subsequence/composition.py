@@ -3458,26 +3458,52 @@ class Composition:
 		logger.info("\n".join(lines))
 
 
-	def _process_hotkeys (self, bar: int) -> None:
+	def _keys_arrived (self) -> None:
 
-		"""Drain pending keystrokes and execute due actions.
+		"""Hand newly typed keys to the clock's loop, to be taken at once.
 
-		Called on every ``"bar"`` event by the sequencer when hotkeys are
-		enabled.  Handles both immediate (``quantize=0``) and quantised actions.
+		The keystroke listener calls this on its own thread, so it only hands
+		the work over.  Keys used to be taken on the bar event alone, so an
+		immediate hotkey waited for the next bar line (#3480).  Before the
+		sequencer has a loop there is nowhere to hand them: the first bar takes
+		them instead.
+		"""
 
-		Both kinds run here, on the bar-event callback (the event loop): the
-		keystroke listener thread only enqueues keypresses (``drain()``), it
-		never executes actions.  Immediate (``quantize=0``) bindings fire as soon
-		as the key is drained; quantised ones wait for their next boundary.
+		loop = self._sequencer._event_loop
 
-		Args:
-		    bar: The current global bar number from the sequencer.
+		if loop is None:
+			return
+
+		try:
+			loop.call_soon_threadsafe(self._take_typed_hotkeys)
+		except RuntimeError:
+			# The loop has closed: the piece is over, and so are its hotkeys.
+			pass
+
+	def _take_typed_hotkeys (self) -> None:
+
+		"""Take the keys the listener has just announced - unless the piece has stopped.
+
+		Runs on the clock's loop.  A key that arrives as the piece stops runs
+		nothing, as it never could when only the bar event took keys.
+		"""
+
+		if self._sequencer.running:
+			self._take_hotkeys()
+
+	def _take_hotkeys (self) -> None:
+
+		"""Take the keys typed since the last look: run immediate actions, queue quantised ones.
+
+		Runs on the clock's loop, whether as keys arrive or on a bar, so every
+		action runs where it is safe for all mutation methods: the keystroke
+		listener's thread only queues keypresses (``drain()``), it never runs
+		actions.
 		"""
 
 		if self._keystroke_listener is None:
 			return
 
-		# Process newly arrived keys.
 		for key in self._keystroke_listener.drain():
 
 			if key == _HOTKEY_RESERVED:
@@ -3489,8 +3515,7 @@ class Composition:
 				continue
 
 			if binding.quantize == 0:
-				# Immediate — execute now (we're on the bar-event callback,
-				# which is safe for all mutation methods).
+				# Immediate: execute now.
 				try:
 					binding.action()
 					logger.info(f"Hotkey '{key}' \u2192 {binding.label}")
@@ -3501,6 +3526,24 @@ class Composition:
 				self._pending_hotkey_actions.append(
 					_PendingHotkeyAction(binding=binding)
 				)
+
+	def _process_hotkeys (self, bar: int) -> None:
+
+		"""Take any keys still waiting, then run the quantised actions whose bar has come.
+
+		Called on every ``"bar"`` event by the sequencer when hotkeys are
+		enabled.  Keys are taken as they arrive (:meth:`_take_hotkeys`); this
+		takes any the listener's wake-up did not reach, and it is where a
+		quantised action waits for its boundary.
+
+		Args:
+		    bar: The current global bar number from the sequencer.
+		"""
+
+		if self._keystroke_listener is None:
+			return
+
+		self._take_hotkeys()
 
 		# Fire any pending actions whose bar boundary has arrived.
 		still_pending: typing.List[_PendingHotkeyAction] = []
@@ -7283,12 +7326,14 @@ class Composition:
 
 			# Start keystroke listener if hotkeys are enabled and not in render mode.
 			if self._hotkeys_enabled and not self._sequencer.render_mode:
-				self._keystroke_listener = subsequence.keystroke.KeystrokeListener()
+				self._keystroke_listener = subsequence.keystroke.KeystrokeListener(on_key = self._keys_arrived)
 				self._keystroke_listener.start()
 
 				if self._keystroke_listener.active:
-					# Listener started successfully — register the bar handler
-					# and show all bindings so the user knows what's available.
+					# Listener started successfully: keys are taken as they
+					# arrive, and the bar handler runs quantised actions on
+					# their bar.  Show all bindings so the user knows what's
+					# available.
 					self._sequencer.on_event("bar", self._process_hotkeys)
 					self._list_hotkeys()
 				# If not active, KeystrokeListener.start() already logged a warning.

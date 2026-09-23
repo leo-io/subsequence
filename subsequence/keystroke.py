@@ -108,7 +108,9 @@ class KeystrokeListener:
 
 	Puts stdin into *cbreak* mode so each keypress is delivered immediately,
 	without waiting for Enter.  Keystrokes are placed in a thread-safe queue
-	and retrieved by the caller via :meth:`drain`.
+	and retrieved by the caller via :meth:`drain`.  An ``on_key`` callback
+	tells the caller when keys arrive, so it can drain them at once rather
+	than at its next look.
 
 	Terminal settings are always restored on shutdown, even if an exception
 	occurs, so a crashed listener will not leave the terminal in a broken state.
@@ -129,14 +131,21 @@ class KeystrokeListener:
 		listener.stop()
 	"""
 
-	def __init__ (self) -> None:
+	def __init__ (self, on_key: typing.Optional[typing.Callable[[], None]] = None) -> None:
 
-		"""Initialise the listener in a stopped state."""
+		"""Initialise the listener in a stopped state.
+
+		Args:
+		    on_key: Called with no arguments each time keys arrive, once they
+		        are in the queue.  It runs on the listener's own thread, so it
+		        should only hand the work to the thread that will :meth:`drain`.
+		"""
 
 		self._queue: queue.Queue[str] = queue.Queue()
 		self._thread: typing.Optional[threading.Thread] = None
 		self._running: bool = False
 		self._old_settings: typing.Optional[typing.List[typing.Any]] = None
+		self._on_key = on_key
 
 		#: ``True`` after a successful :meth:`start` on a supported platform.
 		self.active: bool = False
@@ -299,8 +308,13 @@ class KeystrokeListener:
 					if not data:
 						break
 
-					for char in decoder.decode(data):
+					keys = decoder.decode(data)
+
+					for char in keys:
 						self._queue.put(char)
+
+					if keys and self._on_key is not None:
+						self._on_key()
 
 		except Exception:
 			# A broken listener must not crash the composition — but dying

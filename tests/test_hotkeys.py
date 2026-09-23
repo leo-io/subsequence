@@ -285,7 +285,8 @@ class TestProcessHotkeys:
 
 	# --- immediate actions --------------------------------------------------
 
-	def test_immediate_action_fires_on_bar (self) -> None:
+	def test_a_key_the_wake_up_missed_is_taken_at_the_bar (self) -> None:
+		# Keys are taken as they arrive (#3480); the bar takes any still waiting.
 		called = []
 		self._register("a", lambda: called.append(True))
 		self.mock_listener.drain.return_value = ["a"]
