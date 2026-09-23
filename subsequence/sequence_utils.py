@@ -2184,7 +2184,7 @@ def generate_cellular_automaton_2d (
 	return grid
 
 
-def thue_morse (n: int) -> typing.List[int]:
+def thue_morse (n: int, offset: int = 0) -> typing.List[int]:
 
 	"""
 	Generate the Thue-Morse sequence.
@@ -2198,21 +2198,31 @@ def thue_morse (n: int) -> typing.List[int]:
 
 	Parameters:
 		n: Number of values to generate.
+		offset: How far into the sequence to start.  Default 0, its start.
 
 	Returns:
 		Binary list of length ``n`` (0s and 1s).
+
+	Raises:
+		ValueError: If ``offset`` is negative.
 
 	Example:
 		```python
 		# 16-step Thue-Morse rhythm - first 8 values: 0 1 1 0 1 0 0 1
 		seq = subsequence.sequence_utils.thue_morse(16)
+
+		# The next 16, which are the first 16 with every value flipped
+		seq = subsequence.sequence_utils.thue_morse(16, offset=16)
 		```
 	"""
+
+	if offset < 0:
+		raise ValueError(f"thue_morse offset must be 0 or more, not {offset}")
 
 	if n <= 0:
 		return []
 
-	return [bin(i).count("1") % 2 for i in range(n)]
+	return [bin(i).count("1") % 2 for i in range(offset, offset + n)]
 
 
 _MORSE_CODE = {

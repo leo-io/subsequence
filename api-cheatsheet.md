@@ -172,7 +172,7 @@ The musician's 'palette' for creating musical content.
 | `invert(pivot) -> PatternBuilder` | Invert all pitches around a pivot note. |
 | `legato(ratio) -> PatternBuilder` | Adjust note durations to fill the gap until the next note. |
 | `lorenz(pitches, spacing, velocity, duration, dt, sigma, rho, beta, x0, y0, z0, mapping) -> subsequence.pattern_builder.PatternBuilder` | Generate a note sequence driven by the Lorenz strange attractor. |
-| `lsystem(pitch_map, axiom, rules, generations, spacing, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a note sequence using L-system string rewriting. |
+| `lsystem(pitch_map, axiom, rules, generations, spacing, velocity, duration, offset, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a note sequence using L-system string rewriting. |
 | `markov(transitions, pitch_map, velocity, duration, spacing, start, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a sequence by walking a first-order Markov chain. |
 | `melody(state, spacing, velocity, duration, chord_tones, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melodic line by querying a persistent :class:`~subsequence.melodic_state.MelodicState`. |
 | `motif(m, beat, span, root, velocity, fit, fit_weights, resolution) -> PatternBuilder` | Place an immutable :class:`~subsequence.motifs.Motif` onto the pattern. |
@@ -216,7 +216,7 @@ The musician's 'palette' for creating musical content.
 | `swing(percent, grid, strength) -> PatternBuilder` | Apply swing feel to all notes in the pattern, in steps of a whole pulse (a 24th of a beat). |
 | `sysex(data, beat) -> subsequence.pattern_builder.PatternBuilder` | Send a System Exclusive (SysEx) message at a beat position. |
 | `thin(pitch, strategy, amount, grid, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Remove notes from the pattern based on their rhythmic position. |
-| `thue_morse(pitch, velocity, duration, pitch_b, velocity_b, no_overlap, probability, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes using the Thue-Morse aperiodic binary sequence. |
+| `thue_morse(pitch, velocity, duration, pitch_b, velocity_b, no_overlap, probability, offset, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes using the Thue-Morse aperiodic binary sequence. |
 | `transpose(semitones, within) -> PatternBuilder` | Shift all note pitches up or down. |
 | `velocity_shape(low, high) -> PatternBuilder` | Apply organic velocity variation to all notes in the pattern. |
 
@@ -595,7 +595,7 @@ Functions for generating and transforming sequences.
 | `sieve(classes, hi, lo) -> List[int]` | Xenakis sieve: the sorted integers in ``[lo, hi)`` in any of the classes. |
 | `syncopation(onsets, grid, time_signature, weights) -> float` | How much a rhythm pulls away from its metric strong points. |
 | `threshold(sequence, cutoff) -> List[int]` | Gate a per-step field into a deterministic 0/1 sequence. |
-| `thue_morse(n) -> List[int]` | Generate the Thue-Morse sequence. |
+| `thue_morse(n, offset) -> List[int]` | Generate the Thue-Morse sequence. |
 | `tile(sequence, length) -> List[~T]` | Cycle a sequence to an exact length. |
 | `vl_distance(source, target, pitch_classes) -> int` | Voice-leading distance between two chords (Tymoczko's taxicab metric). |
 | `warp_stack(value, amounts) -> Union[float, List[float]]` | Apply several density knobs to ``value`` so they compound. |

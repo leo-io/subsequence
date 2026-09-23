@@ -1110,6 +1110,7 @@ class PatternAlgorithmicMixin:
 			beat += spacing
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
+	@subsequence.declarations.bounded
 	def lsystem (
 		self,
 		pitch_map: typing.Dict[str, typing.Union[int, str]],
@@ -1119,6 +1120,7 @@ class PatternAlgorithmicMixin:
 		spacing: typing.Optional[subsequence.declarations.GridBeats] = None,
 		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_GENERATIVE_VELOCITY,
 		duration: subsequence.declarations.GateBeats = 0.2,
+		offset: typing.Annotated[int, subsequence.declarations.Span(0)] = 0,
 		seed: typing.Optional[int] = None,
 		rng: typing.Optional[random.Random] = None,
 	) -> "subsequence.pattern_builder.PatternBuilder":
@@ -1132,15 +1134,27 @@ class PatternAlgorithmicMixin:
 
 		The defining musical property is self-similarity: patterns repeat
 		at different time scales.  The Fibonacci-word rule (``A → AB``,
-		``B → A``) spaces hits evenly but never quite repeats, so the pattern
-		keeps shifting against the bar.  Koch and dragon curve rules produce
-		fractal melodic contours.  (Hits land on the grid here - for events
-		placed *off* the grid by the golden ratio, see :meth:`golden`.)
+		``B → A``) spaces hits evenly but never quite repeats within the
+		string.  Koch and dragon curve rules produce fractal melodic
+		contours.  (Hits land on the grid here - for events placed *off* the
+		grid by the golden ratio, see :meth:`golden`.)
 
 		With ``spacing=None`` (default) the entire expanded string is fitted
-		into the bar: each generation makes notes twice as dense while
-		preserving the overall shape.  With a fixed ``spacing`` the string is
-		truncated to fit and the density stays constant.
+		into the bar: each generation makes the notes denser by as much as
+		the rules lengthen the string - about 1.6 times for the Fibonacci
+		word below - while preserving the overall shape.  With a fixed
+		``spacing`` the string is truncated to fit and the density stays
+		constant.
+
+		On its own every bar plays the same string from its start.
+		``offset=`` treats the string as a loop and starts the bar that many
+		symbols in, wrapping round to its start.  With ``spacing=None`` the
+		bar still holds the whole string, turned: ``offset=p.cycle`` turns it
+		a symbol further each bar - 21 different bars for the six-generation
+		Fibonacci word before it comes round again.  With a fixed
+		``spacing``, ``offset=p.cycle * 16`` (sixteen quarter-beat symbols to
+		a four-beat bar) walks on through the string a bar at a time; more
+		generations make a longer walk before it wraps.
 
 		Parameters:
 			pitch_map: Maps single characters to MIDI notes or drum names.
@@ -1156,6 +1170,9 @@ class PatternAlgorithmicMixin:
 			velocity: MIDI velocity.  An ``(low, high)`` tuple randomises
 				per note.
 			duration: Note duration in beats.
+			offset: How many symbols into the string the bar starts, wrapping
+				round to its start.  0 (the default) starts every bar at the
+				beginning.
 			seed: Fix the stochastic-rule choices and velocity draws for this
 				call (an int); omit to use the pattern's RNG.
 			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
@@ -1169,6 +1186,16 @@ class PatternAlgorithmicMixin:
 			    rules={"A": "AB", "B": "A"},
 			    generations=6,
 			    velocity=80,
+			)
+
+			# The same word, turned a symbol further each bar
+			p.lsystem(
+			    pitch_map={"A": "kick_1"},
+			    axiom="A",
+			    rules={"A": "AB", "B": "A"},
+			    generations=6,
+			    velocity=80,
+			    offset=p.cycle,
 			)
 
 			# Fractal melody over scale notes
@@ -1211,6 +1238,11 @@ class PatternAlgorithmicMixin:
 		if not expanded:
 			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
+		# The string is a loop and offset says where on it the bar starts, so
+		# with spacing=None the bar still holds all of it, turned (#3470).
+		turn = offset % len(expanded)
+		expanded = expanded[turn:] + expanded[:turn]
+
 		auto_step, n_steps = self._fit_spacing("lsystem", len(expanded), spacing, noun="symbols")
 		symbols = expanded[:n_steps]
 
@@ -1238,6 +1270,7 @@ class PatternAlgorithmicMixin:
 		velocity_b: typing.Optional[subsequence.declarations.VelocityValue] = None,
 		no_overlap: bool = False,
 		probability: subsequence.declarations.UnitInterval = 1.0,
+		offset: typing.Annotated[int, subsequence.declarations.Span(0)] = 0,
 		seed: typing.Optional[int] = None,
 		rng: typing.Optional[random.Random] = None,
 	) -> "subsequence.pattern_builder.PatternBuilder":
@@ -1246,9 +1279,18 @@ class PatternAlgorithmicMixin:
 
 		The Thue-Morse sequence (0 1 1 0 1 0 0 1 1 0 0 1 0 1 1 0 …) is
 		perfectly balanced, overlap-free, and self-similar but never periodic.
-		It produces rhythmic patterns that feel structured yet never settle into
-		a simple repeating loop - a quality distinct from Euclidean rhythms
-		(evenly spaced) and cellular automata (rule-driven evolution).
+		Within a bar it never settles into a simple repeating figure - a quality
+		distinct from Euclidean rhythms (evenly spaced) and cellular automata
+		(rule-driven evolution).
+
+		On its own it plays the start of the sequence, so every bar is the
+		same.  ``offset=`` starts further in, and ``offset=p.cycle * p.grid``
+		carries the sequence on from bar to bar.  On 8, 16 or 32 steps that
+		alternates the first bar with its mirror image - hits and rests
+		swapped, or the two pitches - and the bars themselves fall in
+		Thue-Morse order; on 12 or 24 steps it gives six different bars.
+		``offset=p.cycle`` slides it on a step a bar instead, for far more
+		variety: 46 different bars in 64 on 16 steps.
 
 		In **single-pitch mode** (default), notes are placed at positions where
 		the sequence is 1.  In **two-pitch mode** (``pitch_b`` given), ``pitch``
@@ -1268,6 +1310,8 @@ class PatternAlgorithmicMixin:
 			    tuple).  Defaults to ``velocity``.
 			no_overlap: Skip steps where ``pitch`` is already sounding.
 			probability: Chance (0.0–1.0) that each active step plays - 1.0 places them all, lower thins.
+			offset: How many steps into the sequence the bar starts.  0 (the
+			    default) plays its start every bar.
 			seed: Fix the thinning for this call (an int); omit to use the pattern's RNG.
 			rng: Advanced determinism form - a ``random.Random`` (wins over ``seed=``).
 
@@ -1278,11 +1322,14 @@ class PatternAlgorithmicMixin:
 
 			# Two-pitch mode: alternate kick and snare
 			p.thue_morse("kick_1", pitch_b="snare_1", velocity=100)
+
+			# Carried on from bar to bar: the first bar, then its mirror, in Thue-Morse order
+			p.thue_morse("kick_1", pitch_b="snare_1", offset=p.cycle * p.grid)
 			```
 		"""
 		rng = self._rng_from(seed, rng)
 
-		sequence = subsequence.sequence_utils.thue_morse(self._default_grid)
+		sequence = subsequence.sequence_utils.thue_morse(self._default_grid, offset=offset)
 
 		if not sequence:
 			return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
