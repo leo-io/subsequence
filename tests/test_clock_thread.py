@@ -218,3 +218,42 @@ async def test_a_bad_section_from_another_thread_is_still_heard_by_the_caller (c
 		messages.append(str(box.get("error")).split(":")[0])
 
 	assert messages == ["jump_to", "queue_next"]
+
+
+@pytest.mark.asyncio
+async def test_a_trigger_from_another_thread_is_built_on_the_clock_s_loop (composition: subsequence.Composition) -> None:
+
+	"""A one-shot's builder ran on whichever thread called trigger(), beside a loop reading the same state (#3383).
+
+	Every pattern's builder runs on the clock's loop, which here is the test's own - the main
+	thread's.  The one-shot is not built at all until that loop turns.
+	"""
+
+	playing = _playing(composition)
+	built_on: typing.List[bool] = []
+
+	def one_shot (p: subsequence.PatternBuilder) -> None:
+		built_on.append(threading.current_thread() is threading.main_thread())
+		p.note(60, beat=0, velocity=90, duration=0.25)
+
+	caller, box = _from_another_thread(lambda: playing.trigger(one_shot, channel=1))
+	caller.join()
+
+	assert "error" not in box
+	assert built_on == []
+
+	await asyncio.sleep(0.05)
+
+	assert built_on == [True]
+
+
+@pytest.mark.asyncio
+async def test_a_bad_trigger_from_another_thread_is_still_heard_by_the_caller (composition: subsequence.Composition) -> None:
+
+	"""The arguments are checked on the caller's thread; only the build waits for the loop."""
+
+	playing = _playing(composition)
+	caller, box = _from_another_thread(lambda: playing.trigger(lambda p: None, channel=99))
+	caller.join()
+
+	assert type(box.get("error")).__name__ == "ValueError"

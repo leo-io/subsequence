@@ -6504,103 +6504,112 @@ class Composition:
 		resolved_device_idx = self._resolve_device_id(device)
 		resolved_mirrors = self._resolve_mirrors(mirrors, primary=(resolved_device_idx, resolved_channel))
 
-		# A one-shot's randomness follows the composition's seed, so a seeded
-		# piece renders the same file twice (decision 13 of #2991). The stream
-		# is named for the function and for how many times it has fired, so
-		# two triggers in a bar differ from each other and the tenth differs
-		# from the first — while an unseeded composition keeps fresh
-		# randomness, as it does everywhere else.
-		trigger_name = getattr(fn, "__name__", "trigger")
-		self._trigger_counts[trigger_name] = self._trigger_counts.get(trigger_name, 0) + 1
-		trigger_rng = self._stream(
-			f"trigger:{trigger_name}:{self._trigger_counts[trigger_name]}"
-		) or random.Random()
+		# Everything from here reads or changes what the clock reads - the pulse
+		# count, the form, the harmony plan, the seeded streams, the held notes -
+		# and runs the performer's builder, which every pattern runs on the loop.
+		# From another thread it ran there instead (#3383), so it is made on the
+		# clock; the checks above are not, so a bad argument is heard at once.
+		def _fire () -> None:
 
-		# Create a temporary Pattern
-		pattern = subsequence.pattern.Pattern(channel=resolved_channel, length=beat_length, device=resolved_device_idx, mirrors=resolved_mirrors)
+			# A one-shot's randomness follows the composition's seed, so a seeded
+			# piece renders the same file twice (decision 13 of #2991). The stream
+			# is named for the function and for how many times it has fired, so
+			# two triggers in a bar differ from each other and the tenth differs
+			# from the first — while an unseeded composition keeps fresh
+			# randomness, as it does everywhere else.
+			trigger_name = getattr(fn, "__name__", "trigger")
+			self._trigger_counts[trigger_name] = self._trigger_counts.get(trigger_name, 0) + 1
+			trigger_rng = self._stream(
+				f"trigger:{trigger_name}:{self._trigger_counts[trigger_name]}"
+			) or random.Random()
 
-		# Calculate the start pulse based on quantize, before the build, so the
-		# builder knows where on the song's timeline it will play (a groove
-		# counts its slots from there, #2788).
-		current_pulse = self._sequencer.pulse_count
-		pulses_per_beat = subsequence.constants.MIDI_QUARTER_NOTE
+			# Create a temporary Pattern
+			pattern = subsequence.pattern.Pattern(channel=resolved_channel, length=beat_length, device=resolved_device_idx, mirrors=resolved_mirrors)
 
-		if quantize == 0:
-			# Immediate: use current pulse
-			start_pulse = current_pulse
+			# Calculate the start pulse based on quantize, before the build, so the
+			# builder knows where on the song's timeline it will play (a groove
+			# counts its slots from there, #2788).
+			current_pulse = self._sequencer.pulse_count
+			pulses_per_beat = subsequence.constants.MIDI_QUARTER_NOTE
 
-		else:
-			# Quantize to the next multiple of (quantize * pulses_per_beat)
-			quantize_pulses = subsequence.constants.pulses.beats_to_pulses(quantize, pulses_per_beat)
-			start_pulse = ((current_pulse // quantize_pulses) + 1) * quantize_pulses
-
-		pattern._cycle_start_pulse = start_pulse
-
-		# Resolve the section context once: the one-shot inherits the section's
-		# effective key/scale (so a triggered degree resolves like everywhere
-		# else) and a harmony view at the current playhead (so ChordTone /
-		# Approach resolve too).
-		trigger_section = self._form_state.get_section_info() if self._form_state else None
-		trigger_key, trigger_scale = self._effective_key_scale(trigger_section)
-
-		# Anchor the view where the one-shot LANDS, not where trigger() was
-		# called (#3087).  start_pulse is already computed above for exactly
-		# this reason - the builder is meant to know where on the song's
-		# timeline it will play - and the harmony was the one thing still
-		# reading the playhead.  Quantized to the next bar, every one-shot was
-		# built against the bar before its own.
-		start_beat = start_pulse / pulses_per_beat
-
-		trigger_harmony: typing.Optional[HarmonyView] = None
-		if not self._harmony_horizon.is_empty:
-			trigger_harmony = HarmonyView(self._harmony_horizon, start_beat)
-
-		# Create a PatternBuilder
-		builder = subsequence.pattern_builder.PatternBuilder(
-			pattern=pattern,
-			cycle=0,  # One-shot patterns don't rebuild, so cycle is always 0
-			drum_note_map=drum_note_map,
-			cc_name_map=cc_name_map,
-			nrpn_name_map=nrpn_name_map,
-			section=trigger_section,
-			bar=self._builder_bar,
-			conductor=self.conductor,
-			rng=trigger_rng,
-			tweaks={},
-			default_grid=default_grid,
-			data=self.data,
-			# A one-shot resolves key-relative content against the same
-			# effective key/scale as the section it fires into (previously
-			# omitted entirely — degrees raised even in a keyed composition).
-			key=trigger_key,
-			scale=trigger_scale,
-			time_signature=self.time_signature,
-			held_notes=self._sequencer._held_notes,
-			harmony=trigger_harmony,
-			energy=self._current_energy(trigger_section),
-			zero_indexed_channels=self._zero_indexed_channels,
-		)
-
-		# Call the builder function
-		try:
-
-			current_chord = self._chord_sounding_at(start_beat) if chord else None
-
-			if current_chord is not None:
-				injected = _InjectedChord(current_chord, None)  # No voice leading for one-shots
-				fn(builder, injected)
+			if quantize == 0:
+				# Immediate: use current pulse
+				start_pulse = current_pulse
 
 			else:
-				fn(builder)
+				# Quantize to the next multiple of (quantize * pulses_per_beat)
+				quantize_pulses = subsequence.constants.pulses.beats_to_pulses(quantize, pulses_per_beat)
+				start_pulse = ((current_pulse // quantize_pulses) + 1) * quantize_pulses
 
-			builder._finish_build()
-			self._apply_composition_tuning(pattern, builder, drum_note_map, part = None)
+			pattern._cycle_start_pulse = start_pulse
 
-		except Exception:
-			logger.exception("Error in trigger builder — pattern will be silent")
-			return
+			# Resolve the section context once: the one-shot inherits the section's
+			# effective key/scale (so a triggered degree resolves like everywhere
+			# else) and a harmony view at the current playhead (so ChordTone /
+			# Approach resolve too).
+			trigger_section = self._form_state.get_section_info() if self._form_state else None
+			trigger_key, trigger_scale = self._effective_key_scale(trigger_section)
 
-		self._schedule_one_shot(pattern, start_pulse)
+			# Anchor the view where the one-shot LANDS, not where trigger() was
+			# called (#3087).  start_pulse is already computed above for exactly
+			# this reason - the builder is meant to know where on the song's
+			# timeline it will play - and the harmony was the one thing still
+			# reading the playhead.  Quantized to the next bar, every one-shot was
+			# built against the bar before its own.
+			start_beat = start_pulse / pulses_per_beat
+
+			trigger_harmony: typing.Optional[HarmonyView] = None
+			if not self._harmony_horizon.is_empty:
+				trigger_harmony = HarmonyView(self._harmony_horizon, start_beat)
+
+			# Create a PatternBuilder
+			builder = subsequence.pattern_builder.PatternBuilder(
+				pattern=pattern,
+				cycle=0,  # One-shot patterns don't rebuild, so cycle is always 0
+				drum_note_map=drum_note_map,
+				cc_name_map=cc_name_map,
+				nrpn_name_map=nrpn_name_map,
+				section=trigger_section,
+				bar=self._builder_bar,
+				conductor=self.conductor,
+				rng=trigger_rng,
+				tweaks={},
+				default_grid=default_grid,
+				data=self.data,
+				# A one-shot resolves key-relative content against the same
+				# effective key/scale as the section it fires into (previously
+				# omitted entirely — degrees raised even in a keyed composition).
+				key=trigger_key,
+				scale=trigger_scale,
+				time_signature=self.time_signature,
+				held_notes=self._sequencer._held_notes,
+				harmony=trigger_harmony,
+				energy=self._current_energy(trigger_section),
+				zero_indexed_channels=self._zero_indexed_channels,
+			)
+
+			# Call the builder function
+			try:
+
+				current_chord = self._chord_sounding_at(start_beat) if chord else None
+
+				if current_chord is not None:
+					injected = _InjectedChord(current_chord, None)  # No voice leading for one-shots
+					fn(builder, injected)
+
+				else:
+					fn(builder)
+
+				builder._finish_build()
+				self._apply_composition_tuning(pattern, builder, drum_note_map, part = None)
+
+			except Exception:
+				logger.exception("Error in trigger builder — pattern will be silent")
+				return
+
+			self._schedule_one_shot(pattern, start_pulse)
+
+		self._sequencer._on_the_clock(_fire)
 
 	def _schedule_one_shot (self, pattern: subsequence.pattern.Pattern, start_pulse: int) -> None:
 
