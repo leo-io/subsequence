@@ -1661,13 +1661,14 @@ class PatternAlgorithmicMixin:
 
 		return typing.cast("subsequence.pattern_builder.PatternBuilder", self)
 
+	@subsequence.declarations.bounded
 	def lorenz (
 		self,
 		pitches: typing.Sequence[subsequence.declarations.Pitch],
 		spacing: subsequence.declarations.GridBeats = 0.25,
 		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_GENERATIVE_VELOCITY,
 		duration: subsequence.declarations.GateBeats = 0.2,
-		dt: float = 0.01,
+		dt: typing.Annotated[float, subsequence.declarations.Span(0.001, 0.5)] = 0.01,
 		sigma: float = 10.0,
 		rho: float = 28.0,
 		beta: float = 8.0 / 3.0,
@@ -1699,12 +1700,14 @@ class PatternAlgorithmicMixin:
 		assignment, or return ``None`` for a rest.
 
 		Parameters:
-			pitches: Pitch pool.  The x-axis selects an index: ``int(x * len(pitches)) % len(pitches)``.
+			pitches: Pitch pool.  The x-axis selects an index, low to high: ``min(int(x * len(pitches)), len(pitches) - 1)``.
 			spacing: Time between notes in beats.  Default 0.25 (16th note).
 			velocity: Fixed velocity or ``(low, high)`` tuple.  Overridden by ``mapping``.
 			duration: Maximum note duration.  z is scaled to ``[0.05, duration]``.
 			    Overridden by ``mapping``.
-			dt: Integration time step.  Default 0.01.
+			dt: Time along the trajectory between one note and the next, 0.001 to 0.5.
+			    Longer steps move further round the attractor per note; any length is
+			    integrated in steps of at most 0.01, so it never runs off.  Default 0.01.
 			sigma, rho, beta: Lorenz parameters.  Defaults produce the classic
 			    butterfly attractor (chaotic regime).
 			x0, y0, z0: Initial conditions.  Use ``x0=p.cycle * small_delta``
@@ -1740,7 +1743,9 @@ class PatternAlgorithmicMixin:
 					p_pitch, p_vel, p_dur = result
 					self.note(pitch=p_pitch, beat=beat, velocity=p_vel, duration=p_dur)
 			else:
-				pitch_idx = int(x * len(pitches)) % len(pitches)
+				# The trajectory's highest point is x = 1.0 exactly, and a modulo sent
+				# it round to the lowest pitch (M17); it plays the highest instead.
+				pitch_idx = min(int(x * len(pitches)), len(pitches) - 1)
 				p_pitch = pitches[pitch_idx]
 				if isinstance(velocity, (tuple, list)):
 					p_vel = int(velocity[0] + y * (velocity[1] - velocity[0]))

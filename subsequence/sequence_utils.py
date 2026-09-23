@@ -2553,6 +2553,10 @@ def golden_rhythm (count: int, length: float = 4.0) -> typing.List[float]:
 	return positions
 
 
+# The longest single Euler step lorenz_attractor takes (M17 of the 2026-09-19 review).
+_LORENZ_STEP = 0.01
+
+
 def lorenz_attractor (
 	steps: int,
 	dt: float = 0.01,
@@ -2574,7 +2578,9 @@ def lorenz_attractor (
 	independent but correlated modulation sources - ideal for simultaneously
 	shaping pitch, velocity, and duration from a single generative process.
 
-	Integration uses the Euler method with step ``dt``.  Each axis is
+	Integration uses the Euler method, in steps of at most 0.01: a longer
+	``dt`` is the time between points, taken as several short steps so the
+	trajectory never runs off to infinity.  Each axis is
 	independently min-max normalised to ``[0.0, 1.0]`` across the full
 	trajectory so that outputs span the full musical range regardless of
 	the chosen parameters.
@@ -2598,7 +2604,7 @@ def lorenz_attractor (
 		points = subsequence.sequence_utils.lorenz_attractor(16, x0=p.cycle * 0.001)
 		pitches = [60, 62, 64, 65, 67, 69, 71, 72]
 		for i, (x, y, z) in enumerate(points):
-		    pitch = pitches[int(x * len(pitches)) % len(pitches)]
+		    pitch = pitches[min(int(x * len(pitches)), len(pitches) - 1)]
 		    vel   = int(40 + y * 87)
 		    p.note(pitch=pitch, beat=i * 0.25, velocity=vel, duration=0.05 + z * 0.2)
 		```
@@ -2612,13 +2618,29 @@ def lorenz_attractor (
 	ys: typing.List[float] = []
 	zs: typing.List[float] = []
 
+	# Euler is stable only for short steps: from about 0.025 the classic system
+	# ran off to infinity and every rebuild raised, silencing the part.  So a
+	# longer dt is taken as several steps of at most _LORENZ_STEP - dt stays the
+	# time between points, and anything up to that integrates exactly as before.
+	substeps = max(1, math.ceil(dt / _LORENZ_STEP))
+	h = dt / substeps
+
 	for _ in range(steps):
-		dx = sigma * (y - x) * dt
-		dy = (x * (rho - z) - y) * dt
-		dz = (x * y - beta * z) * dt
-		x += dx
-		y += dy
-		z += dz
+
+		for _ in range(substeps):
+			dx = sigma * (y - x) * h
+			dy = (x * (rho - z) - y) * h
+			dz = (x * y - beta * z) * h
+			x += dx
+			y += dy
+			z += dz
+
+		if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+			raise ValueError(
+				f"the Lorenz system ran off to infinity with sigma={sigma:g}, rho={rho:g}, beta={beta:g} - "
+				"values nearer the classic 10, 28 and 8/3 stay on the attractor"
+			)
+
 		xs.append(x)
 		ys.append(y)
 		zs.append(z)
