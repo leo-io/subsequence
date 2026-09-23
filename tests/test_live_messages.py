@@ -2,7 +2,8 @@
 
 The bundled REPL sends one message and waits for its answer, but the module invites editor
 plugins and raw sockets, which send messages back to back and split them wherever a write
-happens to end.  Each message has to arrive whole and be answered in turn (#3364).
+happens to end.  Each message has to arrive whole and be answered in turn (#3364), and has
+to run exactly once (#3366).
 """
 
 import asyncio
@@ -137,3 +138,22 @@ async def test_a_message_past_asyncios_default_limit_still_arrives (composition:
 
 		assert await _sent(writer, b"len('" + b"a" * 200_000 + b"')" + SENTINEL)
 		assert await _answers(reader, 1) == ["200000"]
+
+
+@pytest.mark.asyncio
+async def test_an_expression_that_raises_syntax_error_as_it_runs_runs_once (composition: subsequence.Composition) -> None:
+
+	"""A SyntaxError raised by running code used to read as "not an expression", and send it round again as a statement."""
+
+	async with _connected(composition) as (reader, writer):
+
+		writer.write(b"hits = []" + SENTINEL)
+		writer.write(b"hits.append(1) or compile('1 +', 'typed', 'eval')" + SENTINEL)
+		writer.write(b"len(hits)" + SENTINEL)
+		await writer.drain()
+
+		made, raised, counted = await _answers(reader, 3)
+
+		assert made == "OK"
+		assert raised.strip().splitlines()[-1].startswith("SyntaxError")
+		assert counted == "1"

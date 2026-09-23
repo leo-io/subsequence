@@ -29,6 +29,7 @@ never expose the port to a network.
 import asyncio
 import logging
 import traceback
+import types
 import typing
 
 if typing.TYPE_CHECKING:
@@ -202,25 +203,30 @@ class LiveServer:
 
 		# Validate syntax before executing - never run invalid code.
 		try:
-			compile(code, "<live>", "exec")
+			statement = compile(code, "<live>", "exec")
 		except SyntaxError:
 			return traceback.format_exc(), False
 
-		# Try as an expression first (returns a value).
+		# An expression answers with its value, and anything else runs as a
+		# statement.  Which one it is gets settled here, before anything runs,
+		# so the code runs exactly once.  This used to try eval() and fall back
+		# to exec() on any SyntaxError, so an expression that raised one while
+		# RUNNING - compile() or eval() on bad text - was run a second time as a
+		# statement, side effects and all (#3366).
 		try:
-			result = eval(compile(code, "<live>", "eval"), self._namespace)
-			return (repr(result) if result is not None else "OK"), True
+			expression: typing.Optional[types.CodeType] = compile(code, "<live>", "eval")
 		except SyntaxError:
-			pass
-		except SystemExit:
-			return "SystemExit is not allowed in live mode.", False
-		except Exception:
-			return traceback.format_exc(), False
+			expression = None
 
-		# Fall back to statement execution.
 		try:
-			exec(compile(code, "<live>", "exec"), self._namespace)
+
+			if expression is not None:
+				result = eval(expression, self._namespace)
+				return (repr(result) if result is not None else "OK"), True
+
+			exec(statement, self._namespace)
 			return "OK", True
+
 		except SystemExit:
 			return "SystemExit is not allowed in live mode.", False
 		except Exception:
