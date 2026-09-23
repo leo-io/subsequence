@@ -1717,21 +1717,36 @@ class Progression:
 
 		return dataclasses.replace(self, spans=spans)
 
-	def over (self, bass: typing.Union[int, str], only: typing.Optional[typing.List[int]] = None) -> "Progression":
+	def over (self, bass: typing.Optional[typing.Union[int, str]], only: typing.Optional[typing.List[int]] = None) -> "Progression":
 
 		"""Put the progression over a slash/pedal bass - *the* trance/techno move.
 
 		*bass* is a pitch class int, a note name (``"G"``), or ``"tonic"``.  A
 		note name is key-independent, so it resolves to its pitch class right
 		here; ``"tonic"`` follows the key and stays relative until the
-		progression is resolved.  ``only=`` restricts it to the given 1-based
-		slots (slash chords rather than a full pedal).
+		progression is resolved.  ``None`` takes the bass away.  ``only=``
+		restricts it to the given 1-based slots (slash chords rather than a
+		full pedal).
+
+		Raises:
+			TypeError: If *bass* is anything else - a list of basses, one per
+				chord, is written as one ``over()`` per bass with ``only=``.
 		"""
 
-		if isinstance(bass, str) and bass != "tonic":
-			bass = subsequence.chords.key_name_to_pc(bass)	# note names are key-independent — resolve now
-		elif isinstance(bass, int) and not 0 <= bass <= 11:
-			raise ValueError(f"a bass pitch class must be 0–11, got {bass}")
+		if isinstance(bass, str):
+			if bass != "tonic":
+				bass = subsequence.chords.key_name_to_pc(bass)	# note names are key-independent - resolve now
+		elif isinstance(bass, int) and not isinstance(bass, bool):
+			if not 0 <= bass <= 11:
+				raise ValueError(f"a bass pitch class must be 0–11, got {bass}")
+		elif bass is not None:
+			# Anything else used to pass straight through: a list printed itself
+			# into every chord's name (C/['G', None]) and sounded no bass, and
+			# True, being an int, became a C# (#3017).
+			raise TypeError(
+				f"over() takes one bass - a pitch class 0-11, a note name like 'G', or 'tonic' - not {bass!r}. "
+				"For a different bass under some chords, give each its own over(..., only=[slot])"
+			)
 
 		slots = set(range(len(self.spans))) if only is None else {_check_slot(s, len(self.spans)) for s in only}
 
