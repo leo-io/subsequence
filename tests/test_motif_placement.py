@@ -45,7 +45,7 @@ def _builder (key: str = "A", scale: str = "minor", length: float = 4.0, seed: i
 
 def _placed (p: subsequence.pattern_builder.PatternBuilder) -> list:
 
-	"""(beat, pitch) pairs for every placed note, in pulse order."""
+	"""(beat, pitch) pairs for every placed note, in pulse order - for reading which notes, and when."""
 
 	out = []
 
@@ -54,6 +54,21 @@ def _placed (p: subsequence.pattern_builder.PatternBuilder) -> list:
 			out.append((pulse / PPQ, note.pitch))
 
 	return out
+
+
+def _everything (p: subsequence.pattern_builder.PatternBuilder) -> typing.Tuple[list, list]:
+
+	"""Every note whole, with its pulse, and every control event - for claiming two builds are the same.
+
+	(beat, pitch) was the comparison, and a replay that lost a velocity, a
+	duration, the feel's nudge or a drum's name passed it (M26 of the
+	2026-09-19 review; M14's lost drum names got through it).
+	"""
+
+	notes = [(pulse, note) for pulse in sorted(p._pattern.steps) for note in p._pattern.steps[pulse].notes]
+	controls = sorted(p._pattern.cc_events, key=lambda event: (event.pulse, event.message_type, event.control, event.value))
+
+	return notes, controls
 
 
 # ── degree resolution ───────────────────────────────────────────────────────
@@ -254,7 +269,7 @@ def test_placement_homomorphism () -> None:
 	separate.motif(a)
 	separate.motif(b)
 
-	assert _placed(merged) == _placed(separate)
+	assert _everything(merged) == _everything(separate)
 
 
 def test_beat_offset_shifts_the_whole_motif () -> None:
@@ -410,10 +425,14 @@ def test_fit_is_accepted () -> None:
 
 def test_capture_round_trip () -> None:
 
-	"""Placed notes read back as an absolute-MIDI motif that replaces identically."""
+	"""Placed notes read back as an absolute-MIDI motif that replaces identically.
+
+	Each note has a velocity and a length of its own, so a capture that lost
+	either cannot match by landing on the default.
+	"""
 
 	source = _builder()
-	source.motif(M.notes([60, 64, 67], beats=[0.0, 1.5, 3.0], durations=0.5))
+	source.motif(M.notes([60, 64, 67], beats=[0.0, 1.5, 3.0], velocities=[70, 90, 110], durations=[0.5, 0.75, 1.0]))
 
 	captured = source.capture(beat=0.0, span=4.0)
 
@@ -424,7 +443,7 @@ def test_capture_round_trip () -> None:
 	replay = _builder()
 	replay.motif(captured)
 
-	assert _placed(replay) == _placed(source)
+	assert _everything(replay) == _everything(source)
 
 
 def test_capture_is_absolute_even_for_degrees () -> None:
@@ -569,7 +588,7 @@ def test_a_captured_drum_replaces_identically () -> None:
 	replay = _drum_builder()
 	replay.motif(source.capture(beat=0.0, span=4.0))
 
-	assert _placed(replay) == _placed(source)
+	assert _everything(replay) == _everything(source)
 
 
 # Every public Motif method that returns a Motif, with arguments that exercise it.
