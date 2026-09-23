@@ -14,7 +14,7 @@ rather than sudden jumps.
 
 ISS parameter : musical role
   latitude    : BPM, kick dropout, snare probability, hi-hat velocity,
-                arp direction, chord-graph gravity
+                arp direction, chord-graph key pull
   longitude   : arp velocity
   altitude    : chord voicing count (3 or 4 notes)
   velocity    : (fetched and logged; very stable, available for experimentation)

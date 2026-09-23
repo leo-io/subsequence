@@ -5,7 +5,7 @@ engine and lock them to form sections, so the verse always plays the same
 chords and the chorus always plays the same chords — while leaving the
 bridge to generate freely each time.
 
-Key idea: call composition.harmony() with different gravity/nir_strength
+Key idea: call composition.harmony() with different key_pull/nir_strength
 values before each freeze() call.  The engine advances through each call,
 so the sections feel harmonically connected even though they repeat.
 
@@ -65,7 +65,7 @@ chorus = composition.freeze(4)  # 4 chord changes
 composition.harmony(
 	style="suspended",
 	cycle_beats=4,
-	gravity=0.5,
+	key_pull=0.5,
 	nir_strength=0.5,
 )
 
