@@ -2683,11 +2683,25 @@ def lorenz_attractor (
 	return list(zip(_normalise(xs), _normalise(ys), _normalise(zs)))
 
 
+# When a Gray-Scott field holds no pattern (#3464).  A field whose peak is under
+# a millionth has died out, and one that varies by less than a hundredth of its
+# own peak has evened out.  Normalising either stretched what was left - 1e-40
+# of a chemical, or a ripple of 1e-15 - into a bar of hits.  Measured over feed
+# 0 to 0.1 by kill 0.03 to 0.08, on rings of 8 to 64 cells, from 100 to 20000
+# steps: every field these two lines silence is dead or even by 20000 steps, and
+# none of them was on its way to a pattern.  Evenness is relative because a
+# fading ripple is not rounding noise: a millionth there too left eleven of them
+# playing at 16 cells and 1000 steps, peaks of 0.14 to 0.37 varying by 1e-6 to
+# 3e-4.
+_DIED_OUT = 1e-6
+_EVENED_OUT = 1e-2
+
+
 def reaction_diffusion_1d (
 	width: int,
 	steps: int = 1000,
-	feed_rate: float = 0.055,
-	kill_rate: float = 0.062,
+	feed_rate: float = 0.08,
+	kill_rate: float = 0.061,
 	du: float = 0.16,
 	dv: float = 0.08,
 ) -> typing.List[float]:
@@ -2698,38 +2712,66 @@ def reaction_diffusion_1d (
 	The Gray-Scott model describes two interacting chemicals U and V
 	on a 1D ring.  V is introduced as a small seed in the centre; the
 	simulation evolves until a stable spatial pattern forms.  The resulting
-	V-concentration profile - spots, stripes, or travelling waves depending
-	on the feed/kill parameters - is returned as a normalised float sequence.
+	V-concentration profile is returned as a normalised float sequence.  On a
+	ring the size of a bar the patterns are spots: runs of cells, each
+	weakest at its edges.
 
 	This is fundamentally different from cellular automata: the state is
 	continuous, the update rule is a PDE (not a binary function), and the
 	patterns are governed by diffusion rates rather than neighbour counts.
 	The spatial structure maps naturally to a rhythm grid.
 
+	Only a narrow band of feed and kill rates forms a pattern.  Too much kill
+	for the feed and V dies out; too little and it evens out around the whole
+	ring.  Either way there is no pattern, and every value returned is 0.0.
+
 	Parameters:
 		width: Number of cells (maps to the pattern's step grid).
 		steps: Number of simulation iterations.  More steps = more developed
 		       pattern.  Default 1000.
-		feed_rate: Rate at which U is replenished.  Default 0.055.
-		kill_rate: Rate at which V is removed.  Default 0.062.
+		feed_rate: Rate at which U is replenished.  Default 0.08.
+		kill_rate: Rate at which V is removed.  Default 0.061.
 		du: Diffusion rate for U.  Default 0.16.
 		dv: Diffusion rate for V.  Default 0.08.
 
 	Returns:
 		List of ``width`` floats in ``[0.0, 1.0]`` representing final V
-		concentration.
+		concentration, or all 0.0 when it holds no pattern.
+
+	Raises:
+		ValueError: If the rates are so far from that band that the
+		    simulation blows up.
 
 	Example:
 		```python
 		# Use as a rhythm grid - threshold to place notes
 		conc = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=2000)
 		hits = [i for i, v in enumerate(conc) if v > 0.5]
-		p.hit_steps("kick_1", hits, velocity=90)
+		p.hit_steps("kick", hits, velocity=90)
 		```
 	"""
 
+	return _reaction_diffusion_reporting(width, steps, feed_rate, kill_rate, du, dv)[0]
+
+
+def _reaction_diffusion_reporting (
+	width: int,
+	steps: int,
+	feed_rate: float,
+	kill_rate: float,
+	du: float = 0.16,
+	dv: float = 0.08,
+) -> typing.Tuple[typing.List[float], typing.Optional[str]]:
+
+	"""Simulate the ring for :func:`reaction_diffusion_1d`, and say why when it holds no pattern.
+
+	Returns the profile and ``None``, or all zeros and what happened to the
+	field: ``"died out"`` or ``"evened out"``.  The builder needs the reason
+	to say which way the rates were off.
+	"""
+
 	if width <= 0:
-		return []
+		return [], None
 
 	u = [1.0] * width
 	v = [0.0] * width
@@ -2755,14 +2797,25 @@ def reaction_diffusion_1d (
 		u = new_u
 		v = new_v
 
+	# Checked first: min() and max() skip a NaN or return it depending on
+	# where it sits, so a blown-up field would otherwise normalise into NaN.
+	if not all(math.isfinite(x) for x in v):
+		raise ValueError(
+			f"the Gray-Scott simulation blew up with feed_rate={feed_rate:g}, kill_rate={kill_rate:g}, "
+			f"du={du:g}, dv={dv:g} - values nearer the defaults stay stable"
+		)
+
 	lo = min(v)
 	hi = max(v)
 
-	if hi == lo:
-		return [0.0] * width
+	if hi < _DIED_OUT:
+		return [0.0] * width, "died out"
+
+	if hi - lo < _EVENED_OUT * hi:
+		return [0.0] * width, "evened out"
 
 	span = hi - lo
-	return [(x - lo) / span for x in v]
+	return [(x - lo) / span for x in v], None
 
 
 # A step is a step; a leap is the exception that keeps a line from sounding

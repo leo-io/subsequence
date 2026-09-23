@@ -1502,10 +1502,15 @@ def test_reaction_diffusion_1d_has_structure () -> None:
 
 def test_reaction_diffusion_1d_different_rates_differ () -> None:
 
-	"""Different feed/kill rates produce different patterns."""
+	"""Different feed/kill rates produce different patterns.
 
-	a = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=300, feed_rate=0.055, kill_rate=0.062)
-	b = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=300, feed_rate=0.037, kill_rate=0.060)
+	Both hold one: the second pair here used to be 0.037 and 0.060, whose field
+	had all but died, so this compared a pattern with noise (#3464).
+	"""
+
+	a = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=1000, feed_rate=0.08, kill_rate=0.061)
+	b = subsequence.sequence_utils.reaction_diffusion_1d(16, steps=1000, feed_rate=0.066, kill_rate=0.061)
+	assert any(a) and any(b)
 	assert a != b
 
 

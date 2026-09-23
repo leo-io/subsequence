@@ -50,6 +50,20 @@ _OFFBEAT_THINS_THE_SIXTEENTHS = 0.3
 # in declarations.bounded.
 _warned_budgets: typing.Set[typing.Tuple[typing.Any, ...]] = set()
 
+# The reaction_diffusion settings already warned about as holding no pattern:
+# (grid, steps, feed_rate, kill_rate).  Once each, for the same reason (#3464).
+_warned_no_pattern: typing.Set[typing.Tuple[int, int, float, float]] = set()
+
+# Which way the rates were off, by what happened to the field.  Only which way:
+# the band that forms a pattern moves with the grid, so there is no one step to
+# advise, and at a low feed_rate on 16 steps no kill_rate at all lands in it
+# (#3464).  The warning points at the defaults instead, which form one on every
+# grid of 8 steps or more.
+_NO_PATTERN_CAUSE = {
+	"died out": "too much kill for the feed",
+	"evened out": "too little kill for the feed",
+}
+
 
 def _fit_to_budget (verb: str, alphabet: int, window: int) -> int:
 
@@ -1775,8 +1789,8 @@ class PatternAlgorithmicMixin:
 		threshold: subsequence.declarations.UnitInterval = 0.5,
 		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_GENERATIVE_VELOCITY,
 		duration: subsequence.declarations.GateBeats = 0.1,
-		feed_rate: float = 0.055,
-		kill_rate: float = 0.062,
+		feed_rate: typing.Annotated[float, subsequence.declarations.Span(0.0, 0.2)] = 0.08,
+		kill_rate: typing.Annotated[float, subsequence.declarations.Span(0.0, 0.07)] = 0.061,
 		steps: typing.Annotated[int, subsequence.declarations.Span(1, 20000)] = 1000,
 		no_overlap: bool = False,
 		probability: subsequence.declarations.UnitInterval = 1.0,
@@ -1793,14 +1807,25 @@ class PatternAlgorithmicMixin:
 
 		Unlike cellular automata - where rules are discrete and the state is
 		binary - reaction-diffusion evolves a continuous concentration field
-		governed by diffusion rates and chemical reactions.  The resulting
-		spatial patterns (spots, stripes, travelling waves) have an organic,
-		biological character that maps naturally to rhythm.
+		governed by diffusion rates and chemical reactions.  On a ring the size
+		of a bar it settles into spots - runs of hits - and a ``(low, high)``
+		velocity follows the chemical along each one: a short run swells to its
+		middle, and a long one is loudest just inside each end.
 
-		The ``feed_rate`` and ``kill_rate`` parameters control pattern type:
-		typical values that produce spots (useful rhythms) range from 0.020–0.062
-		for feed and 0.045–0.069 for kill.  The defaults (F=0.055, k=0.062)
-		produce a stable spotted pattern.
+		Only a narrow band of ``feed_rate`` and ``kill_rate`` forms a pattern.
+		Too much kill for the feed and the chemical dies out; too little and it
+		evens out around the whole bar.  Either way there is no pattern, so the
+		call plays nothing, and the log says which happened, once per setting.
+		Raising ``steps`` does not help: a setting with no pattern at 1000
+		steps has none at 20000.
+
+		The default rates form a pattern on any grid of 8 steps or more: a run
+		of 4 on 8 steps, a run of 6 on 12 or 16, and two runs of 5 on 24 or 32.
+		On 16 steps at the default kill, ``feed_rate`` sets how long the run
+		is: 0.058 plays 12 steps, 0.066 plays 10, 0.072 plays 8, 0.08 plays 6
+		and 0.088 plays 4, and below about 0.048 or above about 0.094 it dies
+		out.  More kill shortens the runs too, over a narrower range; from
+		about 0.065 every setting dies out.
 
 		Parameters:
 			pitch: MIDI note number or drum name.
@@ -1808,11 +1833,13 @@ class PatternAlgorithmicMixin:
 			    Lower values produce denser patterns.
 			velocity: MIDI velocity.  An ``(low, high)`` tuple is NOT random:
 			    each step's local V-concentration is mapped into the range
-			    deterministically, so notes are louder where the pattern is
-			    denser.
+			    deterministically, so notes are louder where the chemical is
+			    stronger and softest at the edges of each run.
 			duration: Note duration in beats.
-			feed_rate: Rate of U replenishment.  Default 0.055.
-			kill_rate: Rate of V removal.  Default 0.062.
+			feed_rate: How fast the chemical the pattern lives on is
+			    replenished, 0 to 0.2.  Default 0.08.
+			kill_rate: How fast the pattern's own chemical is removed, 0 to
+			    0.07.  Default 0.061.
 			steps: Number of simulation iterations.  More = more developed
 			    pattern.  Default 1000, and bounded at 20000 - the cost is
 			    linear (about 3 ms per thousand) and a rebuild that overruns
@@ -1825,18 +1852,32 @@ class PatternAlgorithmicMixin:
 
 		Example:
 			```python
-			# Organic kick pattern from reaction-diffusion
-			p.reaction_diffusion("kick_1", threshold=0.4, feed_rate=0.037, kill_rate=0.060)
+			# Six closed-hat sixteenths across the middle of the bar,
+			# swelling to their centre
+			p.reaction_diffusion("hi_hat_closed", velocity=(50, 110))
+
+			# Ten, loudest just inside each end
+			p.reaction_diffusion("hi_hat_closed", feed_rate=0.066, velocity=(50, 110))
 			```
 		"""
 		rng = self._rng_from(seed, rng)
 
-		concentrations = subsequence.sequence_utils.reaction_diffusion_1d(
-			width=self._default_grid,
-			steps=steps,
-			feed_rate=feed_rate,
-			kill_rate=kill_rate,
+		concentrations, lost = subsequence.sequence_utils._reaction_diffusion_reporting(
+			width = self._default_grid,
+			steps = steps,
+			feed_rate = feed_rate,
+			kill_rate = kill_rate,
 		)
+
+		# Nothing clears the threshold in the zeros that come back with a
+		# reason, so saying why is all that is left to do.
+		if lost is not None and (self._default_grid, steps, feed_rate, kill_rate) not in _warned_no_pattern:
+			_warned_no_pattern.add((self._default_grid, steps, feed_rate, kill_rate))
+			logger.warning(
+				f"reaction_diffusion(feed_rate={feed_rate:g}, kill_rate={kill_rate:g}) on {self._default_grid} steps: "
+				f"the chemical {lost}, with {_NO_PATTERN_CAUSE[lost]}, so there is no pattern to play. "
+				"The default rates form one on any grid of 8 steps or more."
+			)
 
 		sequence = [1 if c > threshold else 0 for c in concentrations]
 
