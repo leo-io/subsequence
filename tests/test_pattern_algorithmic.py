@@ -605,6 +605,34 @@ async def test_a_ratcheted_drum_hit_sounds_each_devices_own_voice (patch_midi: N
 	assert sorted(event.note for event in note_ons if event.device == 1) == [39, 39, 40, 40]
 
 
+@pytest.mark.parametrize("percent", [57, 67, 75, 88, 99])
+def test_a_roll_made_after_swing_moves_whole_with_its_note (percent: int) -> None:
+
+	"""Swing first, then ratchet, and every roll keeps its shape wherever its note went (#3449).
+
+	The order ``ratchet()``'s docstring advises, pinned so the advice stays
+	true.  It used to advise the other, which moves only a roll's first
+	sub-hit: squeezed at 57%, both sub-hits on one pulse at 75%, and the
+	two in reverse order at 88%.
+	"""
+
+	pattern, builder = _make_builder(length=1)
+
+	for step in range(4):
+		builder.note(60 + step, beat=step * 0.25, velocity=100, duration=0.25)
+
+	builder.swing(percent)
+	swung = {note.pitch: pulse for pulse, step in pattern.steps.items() for note in step.notes}
+
+	assert swung[61] > 6		# the offbeat did move
+
+	builder.ratchet(2)
+
+	for pitch, start in swung.items():
+		onsets = sorted(pulse for pulse, step in pattern.steps.items() for note in step.notes if note.pitch == pitch)
+		assert onsets == [start, start + 3]
+
+
 # ── Degenerate-input handling (empty pools raise; zero resolution no-ops) ──
 #
 # An empty PITCH POOL is a genuine usage error (nothing to choose from) and

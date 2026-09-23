@@ -2110,9 +2110,11 @@ class PatternAlgorithmicMixin:
 		rolls, decrescendo buzzes, and flat repeats are all one parameter apart.
 
 		Call ``ratchet()`` after note-placement methods (``euclidean``,
-		``hit_steps``, ``arpeggio``, etc.) and before ``swing`` or ``groove``
-		so that the subdivisions sit inside the original note slot and swing
-		displacement still affects the parent position.
+		``hit_steps``, ``arpeggio``, etc.) and after ``swing`` or ``groove``,
+		so that each roll moves with its note.  A groove moves only the notes
+		that sit near a grid line, so a roll made before it has only its first
+		sub-hit moved: the roll is squeezed, and with enough swing its sub-hits
+		land on one pulse or play in the wrong order.
 
 		Parameters:
 			subdivisions: Number of sub-hits replacing each note (default 2).
