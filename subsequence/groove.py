@@ -196,32 +196,59 @@ class Groove:
 
 		slot_count = max(1, int(round(clip_length / grid)))
 
-		# Bind each note to its NEAREST grid line (robust to rests under an
-		# explicit grid — empty cells keep a neutral offset), refusing
-		# ambiguous clips instead of importing a garbage feel.
 		slot_offsets = [0.0] * slot_count
 		slot_velocities: typing.List[typing.Optional[float]] = [None] * slot_count
 
-		for time, velocity in zip(times, velocities_raw):
+		if note_count == slot_count:
 
-			slot = int(round(time / grid))
+			# One note per cell - the standard groove clip, and what an inferred
+			# grid assumes - so the i-th note belongs to cell i, however far its
+			# feel moves it.  Binding each note to its NEAREST grid line instead
+			# put a note swung half a cell or more late into the next cell: 75%
+			# sixteenth swing, inside the useful range, could not be imported, and
+			# the error suggested the grid already in use (#3404).
+			for index, (time, velocity) in enumerate(zip(times, velocities_raw)):
 
-			if not 0 <= slot < slot_count:
-				raise ValueError(
-					f"{path}: note at beat {time:g} falls outside the {slot_count}-cell "
-					f"grid (grid={grid:g}, clip length {clip_length:g}) — pass grid= "
-					"matching the clip's note spacing"
-				)
+				if index and abs(time - times[index - 1]) < 1e-9:
+					raise ValueError(
+						f"{path}: two notes start together at beat {time:g} (a chord) - a "
+						"groove clip plays one note per grid cell, and no grid= can separate them"
+					)
 
-			if slot_velocities[slot] is not None:
-				raise ValueError(
-					f"{path}: two notes share grid cell {slot} (a chord, or a grid "
-					"coarser than the clip's note spacing) — pass grid= matching the "
-					"clip (e.g. grid=0.25 for 16ths)"
-				)
+				if abs(time - index * grid) >= grid:
+					raise ValueError(
+						f"{path}: note {index + 1} at beat {time:g} is a whole cell or more from "
+						f"its own (grid={grid:g}) - pass grid= matching the clip's note spacing"
+					)
 
-			slot_offsets[slot] = (time - slot * grid) * timing_scale
-			slot_velocities[slot] = velocity
+				slot_offsets[index] = (time - index * grid) * timing_scale
+				slot_velocities[index] = velocity
+
+		else:
+
+			# Rests (fewer notes than cells, under an explicit grid): bind each
+			# note to its nearest grid line, and empty cells keep a neutral
+			# offset.  Refuse an ambiguous clip rather than import a wrong feel.
+			for time, velocity in zip(times, velocities_raw):
+
+				slot = int(round(time / grid))
+
+				if not 0 <= slot < slot_count:
+					raise ValueError(
+						f"{path}: note at beat {time:g} falls outside the {slot_count}-cell "
+						f"grid (grid={grid:g}, clip length {clip_length:g}) - pass grid= "
+						"matching the clip's note spacing"
+					)
+
+				if slot_velocities[slot] is not None:
+					raise ValueError(
+						f"{path}: two notes fall nearest grid cell {slot} (grid={grid:g}): a "
+						"chord, a grid coarser than the clip's notes, or notes moved half a "
+						"cell or more off their lines, which a clip with rests cannot place"
+					)
+
+				slot_offsets[slot] = (time - slot * grid) * timing_scale
+				slot_velocities[slot] = velocity
 
 		# Calculate velocity scales (relative to max velocity in the file),
 		# blended toward 1.0 by VelocityAmount; empty cells stay neutral (1.0).

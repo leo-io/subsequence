@@ -1,5 +1,7 @@
 import os
 import pathlib
+import re
+import struct
 import typing
 
 import mido
@@ -257,6 +259,58 @@ def test_from_agr_matches_swing_factory () -> None:
 	for i in range(16):
 		slot = i % len(factory_groove.offsets)
 		assert abs(agr_groove.offsets[i] - factory_groove.offsets[slot]) < 0.001
+
+
+def _swing_clip (tmp_path: pathlib.Path, percent: int, grid: float) -> str:
+
+	"""The tracked Ableton asset with its notes moved to a given swing, times stored as Ableton stores them (float32)."""
+
+	template = pathlib.Path(os.path.dirname(os.path.dirname(__file__)), "examples", "assets", "Swing 16ths 57.agr").read_text()
+	count = int(round(4 / grid))
+	late = (percent / 100 - 0.5) * 2 * grid
+	times = [struct.unpack("f", struct.pack("f", index * grid + (late if index % 2 else 0.0)))[0] for index in range(count)]
+	events = "".join(
+		f'<MidiNoteEvent Time="{time!r}" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="{index + 1}" />'
+		for index, time in enumerate(times)
+	)
+	body = re.sub(r"(<Notes>\s*)(?:<MidiNoteEvent[^>]*/>\s*)+", lambda match: match.group(1) + events, template, count=1)
+	assert body.count("<MidiNoteEvent") == count, "the template's notes were not replaced"
+
+	path = tmp_path / f"swing_{percent}_{grid:g}.agr"
+	path.write_text(body)
+
+	return str(path)
+
+
+@pytest.mark.parametrize("grid", [0.25, 0.5], ids=["sixteenths", "eighths"])
+def test_from_agr_imports_every_swing_amount (tmp_path: pathlib.Path, grid: float) -> None:
+
+	"""Swing of 75% or more would not import: each late note was bound to the NEXT grid line (#3404).
+
+	Every amount from straight to 99% must import - with the grid inferred and passed in - as
+	exactly the swing Groove.swing() makes.  It worked before July, and 75% is inside the range
+	the docstring calls useful.
+	"""
+
+	wrong = []
+
+	for percent in range(50, 100):
+
+		clip = _swing_clip(tmp_path, percent, grid)
+		expected = subsequence.groove.Groove.swing(percent=percent, grid=grid).offsets
+
+		for given in (None, grid):
+
+			try:
+				offsets = subsequence.groove.Groove.from_agr(clip, grid=given).offsets
+			except ValueError as error:
+				wrong.append((percent, given, str(error)[-60:]))
+				continue
+
+			if any(abs(offsets[index] - expected[index % 2]) > 1e-4 for index in range(len(offsets))):
+				wrong.append((percent, given, [round(offset, 4) for offset in offsets[:2]]))
+
+	assert wrong == []
 
 
 def _write_agr (path: str, timing_amount: float = 100.0, velocity_amount: float = 100.0, note_times_and_velocities = None) -> None:
