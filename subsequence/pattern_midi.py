@@ -699,8 +699,8 @@ class PatternMidiMixin:
 		To select a patch in a specific bank, provide ``bank_msb`` and/or
 		``bank_lsb``.  The bank select CC messages (CC 0 for MSB, CC 32 for
 		LSB) are sent at the same beat position immediately before the
-		program change, in the order the synthesizer expects.  All of them
-		reach the synthesizer before any note starting on the same beat, so
+		program change, in the order the synthesiser expects.  All of them
+		reach the synthesiser before any note starting on the same beat, so
 		that note already plays with the new patch.
 
 		Parameters:
@@ -761,7 +761,7 @@ class PatternMidiMixin:
 		"""
 		Send a System Exclusive (SysEx) message at a beat position.
 
-		SysEx messages allow deep integration with synthesizers and other
+		SysEx messages allow deep integration with synthesisers and other
 		hardware: patch dumps, parameter control, and vendor-specific commands.
 		The ``data`` argument should contain only the inner payload bytes,
 		without the surrounding ``0xF0`` / ``0xF7`` framing - mido adds those

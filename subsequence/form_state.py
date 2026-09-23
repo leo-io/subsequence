@@ -147,7 +147,7 @@ class FormState:
 	) -> None:
 
 		"""
-		Initialize from a Form, list, iterator, or dict of weighted section transitions.
+		Initialise from a Form, list, iterator, or dict of weighted section transitions.
 
 		Parameters:
 			sections: Form definition. A :class:`~subsequence.forms.Form`
@@ -625,7 +625,7 @@ class FormState:
 		``first_bar``.  The section then plays one fewer full bar than its
 		length.  That is deliberate rather than an oversight: the form stays on
 		the global bar grid, where counting the interrupted bar as a whole one
-		would push every later section a part-bar late (#2484).  This is the same natural quantization that
+		would push every later section a part-bar late (#2484).  This is the same natural quantisation that
 		applies to all ``composition.data`` writes and
 		``composition.tweak()`` calls.
 

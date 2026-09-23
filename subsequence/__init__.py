@@ -62,11 +62,11 @@ Composition tools:
   and explicit note on/off events (``p.drone()``, ``p.drone_off()``,
   ``p.silence()``),
   groove templates (``Groove.swing()``, ``Groove.from_agr()``), swing via
-  ``p.swing()`` (a shortcut for ``Groove.swing()``), randomize,
+  ``p.swing()`` (a shortcut for ``Groove.swing()``), randomise,
   velocity shaping and ramps (``p.build_velocity_ramp()``), dropout, per-step
   probability, and polyrhythms via independent pattern lengths.
 - **Melody generation.** ``p.melody()`` with ``MelodicState`` applies
-  the Narmour Implication-Realization model to single-note lines:
+  the Narmour Implication-Realisation model to single-note lines:
   continuation after small steps, reversal after large leaps, chord-tone
   weighting, range gravity, and pitch-diversity penalty.  History persists
   across bar rebuilds for natural phrase continuity.
@@ -74,7 +74,7 @@ Composition tools:
   progression - generated from a chord-graph style or given explicitly - at a
   declared *harmonic rhythm*: a fixed length, a shaped ``[WHOLE, HALF, HALF]``
   sequence, or ``between(WHOLE, 3 * WHOLE, step=WHOLE)`` for chords of varying,
-  quantized length.  Voicing density, ``detached`` articulation, and a seed for
+  quantised length.  Voicing density, ``detached`` articulation, and a seed for
   a fixed phrase are all declarative.
 - **Expression.** CC messages/ramps, pitch bend, note-correlated
   bend/portamento/slide, program changes, SysEx, and OSC output - all
@@ -103,7 +103,7 @@ Composition tools:
   (``seed=`` on any generator, with ``rng=`` for an explicit instance -
   precedence ``rng`` > ``seed`` > the pattern's ``p.rng``).
 - **Pattern transforms.** Legato, detached, fixed gate (``p.duration()``),
-  reverse, time-stretch, rotate, transpose, invert, randomize, and
+  reverse, time-stretch, rotate, transpose, invert, randomise, and
   conditional ``p.every()``.
 
 Integration:
@@ -137,7 +137,7 @@ Integration:
 - **Live coding.** Hot-swap patterns, change tempo, mute/unmute, and
   tweak parameters during playback via a built-in TCP eval server.
 - **Hotkeys.** Single keystrokes to jump sections, toggle mutes, or
-  fire any action - with optional bar-boundary quantization.
+  fire any action - with optional bar-boundary quantisation.
 - **Real-time pattern triggering.** ``composition.trigger()`` generates
   one-shot patterns in response to sensors, OSC, or any event.
 - **Terminal display.** Live status line (BPM, bar, section, chord).
@@ -147,7 +147,7 @@ Integration:
   Add ``grid_scale=2`` to zoom in horizontally, revealing swing and
   groove micro-timing.
 - **Web UI Dashboard (Beta).** Enable with ``composition.web_ui()`` to 
-  broadcast live composition metadata and visualize piano-roll pattern 
+  broadcast live composition metadata and visualise piano-roll pattern 
   grids in a reactive HTTP/WebSocket browser dashboard.
 - **Ableton Link.** Industry-standard wireless tempo/phase sync
   (``comp.link()``; requires ``pip install subsequence[link]``).

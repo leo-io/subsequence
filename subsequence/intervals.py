@@ -286,7 +286,7 @@ def quantize_pitch (pitch: int, scale_pcs: typing.Sequence[int]) -> int:
 	upward direction is preferred.
 
 	Parameters:
-		pitch: MIDI note number to quantize.
+		pitch: MIDI note number to quantise.
 		scale_pcs: Pitch classes accepted by the scale (0–11). Typically
 		           the output of :func:`scale_pitch_classes`.
 

@@ -1,6 +1,6 @@
 """Vermona DRM1 MKIV drum note map.
 
-Note assignments for the Vermona DRM1 analog drum synthesizer.
+Note assignments for the Vermona DRM1 analogue drum synthesiser.
 These note numbers correspond to the factory default trigger assignments.
 
 Two ways to use this module:

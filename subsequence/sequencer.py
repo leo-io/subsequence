@@ -549,7 +549,7 @@ class Sequencer:
 		_jitter_log: typing.Optional[typing.List[float]] = None
 	) -> None:
 
-		"""Initialize the sequencer with MIDI devices and initial BPM.
+		"""Initialise the sequencer with MIDI devices and initial BPM.
 
 		Parameters:
 			output_device_name: MIDI output device name. When omitted, auto-discovers
@@ -1106,7 +1106,7 @@ class Sequencer:
 
 	def _init_midi_output (self) -> None:
 
-		"""Initialize the primary MIDI output port (device 0).
+		"""Initialise the primary MIDI output port (device 0).
 
 		When ``output_device_name`` was provided, opens that device directly.
 		When omitted, auto-discovers available devices: uses the only one if
@@ -1149,7 +1149,7 @@ class Sequencer:
 
 	def _init_midi_input (self) -> None:
 
-		"""Initialize the primary MIDI input port (device 0) with a callback."""
+		"""Initialise the primary MIDI input port (device 0) with a callback."""
 
 		if self.input_device_name is None:
 			return

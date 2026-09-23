@@ -133,7 +133,7 @@ class ChordTone:
 
 	def __init__ (self, index_or_name: typing.Union[int, str], octave: int = 0) -> None:
 
-		"""Normalize a tone name to its 1-based index."""
+		"""Normalise a tone name to its 1-based index."""
 
 		if isinstance(index_or_name, str):
 			if index_or_name not in _CHORD_TONE_NAMES:

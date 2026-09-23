@@ -2664,7 +2664,7 @@ class PatternBuilder(
 		Add random variations to note timing and velocity.
 
 		Introduces small imperfections - the micro-variations that distinguish
-		a played performance from a perfectly quantized sequence.
+		a played performance from a perfectly quantised sequence.
 
 		Called with no arguments, only timing variation is applied
 		(velocity defaults to 0.0 - no change). Pass a velocity value

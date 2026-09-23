@@ -43,7 +43,7 @@ class LFO(Signal):
 	def __init__ (self, shape: str = "sine", cycle_beats: float = 16.0, min_val: float = 0.0, max_val: float = 1.0, phase: float = 0.0) -> None:
 		
 		"""
-		Initialize an LFO.
+		Initialise an LFO.
 		
 		Parameters:
 			shape: The waveform shape ("sine", "triangle", "saw", "square").
@@ -107,7 +107,7 @@ class Line(Signal):
 	def __init__ (self, start_val: float, end_val: float, duration_beats: float, start_beat: float = 0.0, loop: bool = False, shape: typing.Union[str, subsequence.easing.EasingFn] = "linear") -> None:
 
 		"""
-		Initialize a ramp signal.
+		Initialise a ramp signal.
 
 		Parameters:
 			start_val: Initial value.

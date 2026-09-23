@@ -1415,7 +1415,7 @@ def perlin_2d (x: float, y: float, seed: int = 0) -> float:
 	in a hundred is above 0.9.
 	Same coordinates and *seed* always produce the same output. Use to drive
 	correlated parameters that should weave around each other organically over time,
-	or for spatialized parameter wandering.
+	or for spatialised parameter wandering.
 
 	Parameters:
 		x: Position along the X axis of the noise field.

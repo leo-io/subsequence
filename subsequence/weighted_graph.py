@@ -15,7 +15,7 @@ class WeightedGraph (typing.Generic[NodeType]):
 	def __init__ (self) -> None:
 
 		"""
-		Initialize an empty weighted graph.
+		Initialise an empty weighted graph.
 		"""
 
 		self._edges: typing.Dict[NodeType, typing.Dict[NodeType, int]] = {}

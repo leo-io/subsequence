@@ -340,7 +340,7 @@ An index into the current chord's tones - 1-based, resolved at placement.
 
 | Method | Description |
 |---|---|
-| `__init__(index_or_name, octave) -> None` | Normalize a tone name to its 1-based index. |
+| `__init__(index_or_name, octave) -> None` | Normalise a tone name to its 1-based index. |
 
 
 ## `Approach`

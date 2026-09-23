@@ -27,7 +27,7 @@ class EventEmitter:
 	def __init__ (self) -> None:
 
 		"""
-		Initialize an empty event registry.
+		Initialise an empty event registry.
 		"""
 
 		self._listeners: typing.Dict[str, typing.List[CallbackType]] = {}

@@ -12,7 +12,7 @@ WEIGHT_WEAK = subsequence.chord_graphs.WEIGHT_WEAK
 
 class PhrygianMinor (subsequence.chord_graphs.ChordGraph):
 
-	"""Minor chord graph utilizing Phrygian and Plagal motion.
+	"""Minor chord graph using Phrygian and Plagal motion.
 
 	Consists of four minor chords: i, bii, iv, v.
 	The Phrygian bII (major) is replaced here by a minor bii for a darker,

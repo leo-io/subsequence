@@ -96,7 +96,7 @@ class HarmonicState:
 	) -> None:
 
 		"""
-		Initialize the harmonic state using a chord transition graph.
+		Initialise the harmonic state using a chord transition graph.
 
 		Parameters:
 			key_name: Note name for the key (e.g., ``"C"``, ``"F#"``).
@@ -104,7 +104,7 @@ class HarmonicState:
 			include_dominant_7th: Include V7 chords in the graph (default True).
 			key_gravity_blend: Balance between functional and diatonic gravity
 				(0.0 = functional only, 1.0 = full diatonic). Default 1.0.
-			nir_strength: Melodic inertia from Narmour's Implication-Realization
+			nir_strength: Melodic inertia from Narmour's Implication-Realisation
 				model (0.0 = off, 1.0 = full). Default 0.5.
 			minor_turnaround_weight: For turnaround style, weight toward minor
 				turnarounds (0.0 to 1.0). Default 0.0.
@@ -154,7 +154,7 @@ class HarmonicState:
 	def _calculate_nir_score (self, source: subsequence.chords.Chord, target: subsequence.chords.Chord) -> float:
 
 		"""
-		Calculate a Narmour Implication-Realization (NIR) score for a transition.
+		Calculate a Narmour Implication-Realisation (NIR) score for a transition.
 		Returns a multiplier (default 1.0, >1.0 for boost).
 		"""
 

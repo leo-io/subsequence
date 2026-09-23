@@ -1,7 +1,7 @@
 """General MIDI Continuous Controller (CC) constants.
 
 Standard MIDI CC assignments (0-127). These are supported by virtually all GM-compatible
-instruments, synthesizers, and DAWs.
+instruments, synthesisers, and DAWs.
 
 Two ways to use this module:
 

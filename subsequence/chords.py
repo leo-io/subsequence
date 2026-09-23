@@ -158,7 +158,7 @@ class Chord:
 		closest to the provided ``root`` argument.
 
 		Parameters:
-			root: MIDI note number (e.g., 60 = middle C) to center the chord around.
+			root: MIDI note number (e.g., 60 = middle C) to centre the chord around.
 			inversion: Chord inversion (0 = root position, 1 = first, 2 = second, ...).
 				Wraps around for values >= number of notes.
 			count: Number of notes to return. When set, the chord intervals cycle

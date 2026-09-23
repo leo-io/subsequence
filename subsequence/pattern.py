@@ -205,7 +205,7 @@ class Pattern:
 	def __init__ (self, channel: int, length: float = 16, reschedule_lookahead: float = 1, device: int = 0, mirrors: typing.Optional[typing.Iterable[MirrorSpec]] = None) -> None:
 
 		"""
-		Initialize a new pattern with MIDI channel, length in beats, and reschedule lookahead.
+		Initialise a new pattern with MIDI channel, length in beats, and reschedule lookahead.
 
 		Parameters:
 			channel: The MIDI channel (0-15) this pattern will output to.

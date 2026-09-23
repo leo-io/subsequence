@@ -2,7 +2,7 @@
 
 All 128 GM Level 1 instrument assignments, organised into 16 families of 8.
 Use these constants with ``p.program_change()`` to select instruments on
-GM-compatible synthesizers and sound modules.
+GM-compatible synthesisers and sound modules.
 
 Usage::
 

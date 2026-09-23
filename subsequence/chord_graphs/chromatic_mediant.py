@@ -19,7 +19,7 @@ class ChromaticMediant (subsequence.chord_graphs.ChordGraph):
 
 	Many transitions connect chords whose roots are a major or minor third
 	apart (the characteristic motion); others are chromatic, fourth-, or
-	fifth-related, creating dramatic, colorful shifts that sound both surprising
+	fifth-related, creating dramatic, colourful shifts that sound both surprising
 	and connected through shared common tones. No dominant-tonic functional
 	motion is used; the one subdominant-tonic edge is the minor-plagal
 	iv → I close from the subdominant-minor connector.

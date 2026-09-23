@@ -85,7 +85,7 @@ class HotkeyBinding:
 @dataclasses.dataclass
 class _PendingHotkeyAction:
 
-	"""An action that has been triggered but is waiting for its quantize boundary."""
+	"""An action that has been triggered but is waiting for its ``quantize`` boundary."""
 
 	binding: HotkeyBinding
 
@@ -1627,7 +1627,7 @@ class Composition:
 	
 	Typical workflow:
 
-	1. Initialize ``Composition`` with BPM and Key.
+	1. Initialise ``Composition`` with BPM and Key.
 	2. Define harmony and form (optional).
 	3. Register patterns using the ``@composition.pattern`` decorator.
 	4. Call ``composition.play()`` to start the music.
@@ -2137,7 +2137,7 @@ class Composition:
 
 		"""The chord sounding at an absolute *beat*, or ``None`` without harmony.
 
-		:meth:`current_chord` is this read at the playhead.  A *quantized*
+		:meth:`current_chord` is this read at the playhead.  A *quantised*
 		one-shot needs it where the one-shot lands instead, which is a bar or
 		a beat ahead of the call (#3087).
 		"""
@@ -3244,7 +3244,7 @@ class Composition:
 		Most actions - form jumps, ``composition.data`` writes, and
 		:meth:`tweak` calls - should use ``quantize=0`` (the default).  Their
 		musical effect is naturally delayed to the next pattern rebuild cycle,
-		which provides automatic musical quantization without extra configuration.
+		which provides automatic musical quantisation without extra configuration.
 
 		Use ``quantize=N`` for actions where you want an explicit bar-boundary
 		guarantee, such as :meth:`mute` / :meth:`unmute`.
@@ -3312,7 +3312,7 @@ class Composition:
 
 		The musical effect is heard at the *next pattern rebuild cycle* - already-
 		queued MIDI notes are unaffected.  This natural delay means ``form_jump``
-		is effective without needing explicit quantization.  During playback a
+		is effective without needing explicit quantisation.  During playback a
 		jump is a section change like any other: ``on_section`` callbacks hear
 		the section it lands on, and parts muted by ``transition()`` for the
 		boundary it skipped play again.  A jump part-way
@@ -3429,12 +3429,12 @@ class Composition:
 		"""Drain pending keystrokes and execute due actions.
 
 		Called on every ``"bar"`` event by the sequencer when hotkeys are
-		enabled.  Handles both immediate (``quantize=0``) and quantized actions.
+		enabled.  Handles both immediate (``quantize=0``) and quantised actions.
 
 		Both kinds run here, on the bar-event callback (the event loop): the
 		keystroke listener thread only enqueues keypresses (``drain()``), it
 		never executes actions.  Immediate (``quantize=0``) bindings fire as soon
-		as the key is drained; quantized ones wait for their next boundary.
+		as the key is drained; quantised ones wait for their next boundary.
 
 		Args:
 		    bar: The current global bar number from the sequencer.
@@ -3655,7 +3655,7 @@ class Composition:
 
 		Engine-side state, so it survives live reload (it is never a builder
 		swap): a locked pattern re-deals its stream from the same effective
-		seed on every rebuild, so every cycle realizes identically, and
+		seed on every rebuild, so every cycle realises identically, and
 		``reroll()`` refuses with a message until ``unlock()``.
 
 		Parameters:
@@ -4037,7 +4037,7 @@ class Composition:
 		when playback begins, a Clock tick (0xF8) on every pulse (24 PPQN),
 		and a Stop message (0xFC) when playback ends.
 
-		This allows hardware synthesizers, drum machines, and effect units to
+		This allows hardware synthesisers, drum machines, and effect units to
 		slave their tempo to Subsequence automatically.
 
 		**Note:** Clock output is automatically disabled when ``midi_input()``
@@ -5844,7 +5844,7 @@ class Composition:
 				the very latest state (a held chord, a just-moved control) and
 				its downbeat sounds late by however long that build takes.
 			voice_leading: If True, chords in this pattern will automatically
-				use inversions that minimize voice movement.
+				use inversions that minimise voice movement.
 			mirrors: Optional list of additional ``(device, channel)`` destinations
 				to duplicate every event from this pattern onto.  Notes, CCs, pitch
 				bend, NRPN/RPN bursts, program changes, SysEx, and drone events are
@@ -6392,7 +6392,7 @@ class Composition:
 		This is useful for real-time response to sensors, OSC messages, or other
 		external events. The builder function is called immediately with a fresh
 		PatternBuilder, and the generated events are injected into the queue at
-		the specified quantize boundary.
+		the boundary ``quantize`` names.
 
 		The builder function has the same API as a ``@composition.pattern``
 		decorated function and can use all PatternBuilder methods: ``p.note()``,
@@ -6589,7 +6589,7 @@ class Composition:
 		Start the composition.
 
 		This call blocks until the program is interrupted (e.g., via Ctrl+C).
-		It initializes the MIDI hardware, launches the background sequencer,
+		It initialises the MIDI hardware, launches the background sequencer,
 		and begins playback.
 
 		A Composition runs once: the performance closes its ports and takes
@@ -7299,7 +7299,7 @@ class Composition:
 			def __init__ (self, pending: _PendingPattern, pattern_rng: typing.Optional[random.Random] = None) -> None:
 
 				"""
-				Initialize the decorator pattern from pending registration details.
+				Initialise the decorator pattern from pending registration details.
 				"""
 
 				super().__init__(

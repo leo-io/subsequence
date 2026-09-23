@@ -1,7 +1,7 @@
 """Persistent melodic context for NIR-guided single-note line generation.
 
 Provides :class:`MelodicState`, a stateful object that tracks recent pitch
-history across bar rebuilds and applies the Narmour Implication-Realization
+history across bar rebuilds and applies the Narmour Implication-Realisation
 (NIR) model to score candidate pitches.  Because pattern builders are
 recreated fresh each cycle, this state must live at module level (the same
 pattern as :class:`~subsequence.easing.EasedValue`) so melodic continuity

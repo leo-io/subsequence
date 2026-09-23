@@ -1,5 +1,5 @@
 """
-Groove templates - repeating timing and velocity feels applied to quantized patterns.
+Groove templates - repeating timing and velocity feels applied to quantised patterns.
 
 Exports the public Groove class: build one by hand, from a swing percentage,
 or from an Ableton ``.agr`` file, then apply it with ``p.groove(template)``.
@@ -127,7 +127,7 @@ class Groove:
 
 		``RandomAmount`` (use ``p.randomize()`` separately for random
 		jitter) and ``QuantizationAmount`` (not applicable - Subsequence
-		notes are already grid-quantized by construction).
+		notes are already grid-quantised by construction).
 
 		Other ``MidiNoteEvent`` fields (``Duration``, ``VelocityDeviation``,
 		``OffVelocity``, ``Probability``) are also ignored.

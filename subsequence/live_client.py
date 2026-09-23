@@ -29,7 +29,7 @@ class LiveClient:
 
 	def __init__ (self) -> None:
 
-		"""Initialize with no connection."""
+		"""Initialise with no connection."""
 
 		self._sock: typing.Optional[socket.socket] = None
 
