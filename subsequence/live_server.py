@@ -63,6 +63,7 @@ class LiveServer:
 		self._port = port
 		self._server: typing.Optional[asyncio.AbstractServer] = None
 		self._namespace: typing.Dict[str, typing.Any] = {}
+		self._clients: typing.Set[asyncio.StreamWriter] = set()
 
 	async def start (self) -> None:
 
@@ -81,10 +82,21 @@ class LiveServer:
 
 	async def stop (self) -> None:
 
-		"""Close the server and wait for it to shut down."""
+		"""Close the server, and every client still connected, then wait for it to shut down.
+
+		From Python 3.12.1 ``wait_closed()`` waits for every open connection, and
+		a REPL left connected in another terminal never closes by itself: Ctrl+C
+		silenced the music and ``play()`` then waited for that client to quit
+		(#3365).  ``Server.close_clients()`` would do this from Python 3.13; the
+		server keeps its own list so it works on every version this supports.
+		"""
 
 		if self._server is not None:
 			self._server.close()
+
+			for writer in list(self._clients):
+				writer.close()
+
 			await self._server.wait_closed()
 			self._server = None
 			logger.info("Live server stopped")
@@ -95,10 +107,13 @@ class LiveServer:
 
 		peer = writer.get_extra_info("peername")
 		logger.info(f"Live client connected: {peer}")
+		self._clients.add(writer)
 
 		try:
 
-			while True:
+			# A client that connected just as stop() began is not in the list it
+			# closed, so it leaves here instead of waiting to be read from.
+			while self._server is not None and self._server.is_serving():
 
 				code = await self._read_message(reader)
 
@@ -116,6 +131,7 @@ class LiveServer:
 			logger.warning(f"Live connection error: {exc}")
 
 		finally:
+			self._clients.discard(writer)
 			writer.close()
 			try:
 				await writer.wait_closed()
