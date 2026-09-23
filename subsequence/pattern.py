@@ -124,6 +124,12 @@ class CcEvent:
 	# is the user addressing whatever they last selected themselves.
 	parameter: typing.Optional[typing.Tuple[str, int]] = None
 
+	# For a pitch bend laid by portamento() or slide(): the (from pitch, to
+	# pitch, laid amount) of the glide it belongs to.  A glide is laid in 12-TET
+	# semitones, so a tuning re-aims it at the target as tuned, keeping each
+	# bend's share of the way (#3476).  None on every other bend.
+	glide: typing.Optional[typing.Tuple[int, int, float]] = None
+
 
 @dataclasses.dataclass
 class RawNoteEvent:

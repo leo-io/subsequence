@@ -186,6 +186,26 @@ class Tuning:
 
 	# ── Core calculation ──────────────────────────────────────────────────────
 
+	def _continuous_pitch (self, midi_note: int, reference_note: int = 60) -> float:
+
+		"""The pitch *midi_note* sounds at under this tuning, as a fractional 12-TET note number.
+
+		The note is read as a scale degree counted from ``reference_note``.
+		"""
+
+		if self.size == 0:
+			return float(midi_note)
+
+		steps_from_root = midi_note - reference_note
+		degree = steps_from_root % self.size
+		octave = steps_from_root // self.size
+
+		# Cent value for this degree (degree 0 = 0.0, degree k = cents[k-1])
+		degree_cents = 0.0 if degree == 0 else self.cents[degree - 1]
+
+		# Total cents from the root, as a 12-TET note number (100 cents a semitone)
+		return reference_note + (octave * self.period_cents + degree_cents) / 100.0
+
 	def pitch_bend_for_note (
 		self,
 		midi_note: int,
@@ -213,18 +233,7 @@ class Tuning:
 		if self.size == 0:
 			return midi_note, 0.0
 
-		steps_from_root = midi_note - reference_note
-		degree = steps_from_root % self.size
-		octave = steps_from_root // self.size
-
-		# Cent value for this degree (degree 0 = 0.0, degree k = cents[k-1])
-		degree_cents = 0.0 if degree == 0 else self.cents[degree - 1]
-
-		# Total cents from the root
-		total_cents = octave * self.period_cents + degree_cents
-
-		# Equivalent continuous 12-TET note number (100 cents per semitone)
-		continuous = reference_note + total_cents / 100.0
+		continuous = self._continuous_pitch(midi_note, reference_note)
 
 		nearest = int(round(continuous))
 		nearest = max(0, min(127, nearest))
@@ -468,6 +477,10 @@ def apply_tuning_to_pattern (
 			new_cc.append(ev)
 			continue
 
+		if ev.glide is not None:
+			new_cc.append(dataclasses.replace(ev, value=_tuned_glide_bend(ev.value, ev.glide, tuning, bend_range, reference_note)))
+			continue
+
 		ch = ev.channel if ev.channel is not None else pattern.channel
 		active = _active_bend_at(ev.pulse, ch)
 
@@ -540,6 +553,37 @@ def _tune_drones (
 			)
 
 	pattern.cc_events = bends + pattern.cc_events
+
+
+def _tuned_glide_bend (
+	value: int,
+	glide: typing.Tuple[int, int, float],
+	tuning: Tuning,
+	bend_range: float,
+	reference_note: int,
+) -> int:
+
+	"""A glide's bend re-aimed at its target's tuned pitch.
+
+	The glide was laid in 12-TET toward its target, so under 19-TET a
+	portamento from 60 to 62 climbed toward 200 cents and the target then
+	sounded at 126: an overshoot and a snap (#3476).  The bend keeps its
+	share of the way, and the way becomes the tuned distance between the two
+	notes, measured from the nearest note the first of them sounds on - so
+	the glide starts where the first note sounds and arrives where the second
+	does.
+	"""
+
+	source, target, amount = glide
+	start = tuning._continuous_pitch(source, reference_note)
+	end = tuning._continuous_pitch(target, reference_note)
+	sounding = max(0, min(127, int(round(start))))
+	share = (value / 8192.0) / amount if amount else 0.0
+
+	if bend_range <= 0:
+		return 0
+
+	return _norm_to_raw(((start - sounding) + share * (end - start)) / bend_range)
 
 
 def _has_overlapping_notes (pattern: "subsequence.pattern.Pattern") -> bool:

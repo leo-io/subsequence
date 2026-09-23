@@ -33,6 +33,14 @@ def _notes (count: int) -> str:
 	return f"{count} note" if count == 1 else f"{count} notes"
 
 
+def _mark_glide (bends: typing.List["subsequence.pattern.CcEvent"], source: int, target: int, amount: float) -> None:
+
+	"""Tag a glide's bends with the notes it joins and the amount it was laid at, for a tuning to re-aim (#3476)."""
+
+	for bend in bends:
+		bend.glide = (source, target, amount)
+
+
 class PatternMidiMixin:
 
 	"""MIDI control, OSC, and note-correlated pitch bend methods for PatternBuilder.
@@ -1174,7 +1182,9 @@ class PatternMidiMixin:
 			glide_start_pulse = a_pos + int(a_duration * (1.0 - time))
 			glide_end_pulse = a_pos + a_duration
 
+			laid = len(self._pattern.cc_events)
 			self._generate_bend_events(0.0, amount, glide_start_pulse, glide_end_pulse, resolution, shape)
+			_mark_glide(self._pattern.cc_events[laid:], _lowest_pitch(a_pos), _lowest_pitch(b_pos), amount)
 
 			self._pattern.cc_events.append(
 				subsequence.pattern.CcEvent(
@@ -1378,7 +1388,9 @@ class PatternMidiMixin:
 			glide_start_pulse = a_pos + int(a_duration * (1.0 - time))
 			glide_end_pulse = a_pos + a_duration
 
+			laid = len(self._pattern.cc_events)
 			self._generate_bend_events(0.0, amount, glide_start_pulse, glide_end_pulse, resolution, shape)
+			_mark_glide(self._pattern.cc_events[laid:], _lowest_pitch(a_pos), _lowest_pitch(b_pos), amount)
 
 			self._pattern.cc_events.append(
 				subsequence.pattern.CcEvent(
