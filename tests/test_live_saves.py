@@ -188,3 +188,95 @@ def test_a_first_load_that_raises_leaves_nothing_of_its_own_pending (patch_midi:
 		composition.watch(live_file)
 
 	assert _pending_names(composition) == []
+
+
+def _run_as_a_script (composition: subsequence.Composition, live_file: pathlib.Path) -> None:
+
+	"""What `python session.py` does to a file laid out as examples/live_single_file.py is."""
+
+	namespace = {"__name__": "__main__", "__file__": str(live_file), "composition": composition}
+	exec(compile(live_file.read_text(), str(live_file), "exec"), namespace)
+
+	# The layout under test: the file watches itself, so its own run declared its parts.
+	assert composition._live_reloader is not None and composition._live_reloader._skip_initial_exec
+
+
+def _session (*names: str) -> str:
+
+	"""A single-file session: it watches itself once, then declares its parts at the top level."""
+
+	return "if __name__ == '__main__':\n\tcomposition.watch(__file__)\n\n" + "".join(_part(name) for name in names)
+
+
+def test_starting_the_performance_records_what_a_self_watching_file_declared (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""play() is where the record is made - through the same start-up render shares - so it is tested there."""
+
+	live_file = tmp_path / "session.py"
+	live_file.write_text(_session("drums", "bass"))
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+	_run_as_a_script(composition, live_file)
+	assert composition._live_reloader is not None
+	composition._live_reloader.stop()
+
+	assert str(live_file) not in composition._source_declared
+
+	composition.render(bars=1, filename=str(tmp_path / "out.mid"))
+
+	assert composition._source_declared.get(str(live_file)) == {"drums", "bass"}
+
+
+@pytest.mark.asyncio
+async def test_a_self_watching_file_can_delete_a_part_in_its_first_save (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The first save found nothing recorded to compare with, so a part it deleted played on (#3376).
+
+	A name another source owns is not the file's to take out, even here.
+	"""
+
+	live_file = tmp_path / "session.py"
+	live_file.write_text(_session("drums", "bass"))
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+	composition._sequencer._event_loop = asyncio.get_running_loop()
+	_run_as_a_script(composition, live_file)
+	assert composition._live_reloader is not None
+	composition._live_reloader.stop()
+	composition._source_declared["<extra>"] = {"pad"}
+
+	@composition.pattern(channel=2, beats=4)
+	def pad (p: subsequence.PatternBuilder) -> None:
+		pass
+
+	await composition._activate_new_pending_patterns()
+	composition._live_reloader.claim_what_the_script_declared()
+
+	live_file.write_text(_session("drums"))
+	await composition._live_reloader._reload_async()
+
+	assert sorted(composition._running_patterns) == ["drums", "pad"]
+
+
+def test_a_watched_file_that_failed_to_load_claims_none_of_the_script_s_parts (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Only a file that watches itself is the whole script; a two-file watch that failed to load is not.
+
+	Its first load raised, and a script that caught that and played anyway would otherwise have
+	the wrapper's own parts claimed as the watched file's - for its first save to delete.
+	"""
+
+	live_file = tmp_path / "parts.py"
+	live_file.write_text("raise RuntimeError('half way')\n")
+	composition = subsequence.Composition(bpm=120, output_device="Dummy MIDI")
+
+	@composition.pattern(channel=1, beats=4)
+	def wrapper_part (p: subsequence.PatternBuilder) -> None:
+		pass
+
+	with pytest.raises(RuntimeError, match="half way"):
+		composition.watch(live_file)
+
+	assert composition._live_reloader is not None
+	composition._live_reloader.stop()
+	composition._live_reloader.claim_what_the_script_declared()
+
+	assert str(live_file) not in composition._source_declared

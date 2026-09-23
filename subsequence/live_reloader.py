@@ -186,6 +186,31 @@ class LiveReloader:
 
 		self._thread = None
 
+	def claim_what_the_script_declared (self) -> None:
+
+		"""For a file that watches itself, record what the script's own run declared as this file's (#3376).
+
+		Python's run of the script is what declares its parts, so ``start()``
+		skipped the exec that would have recorded them, and the first save had
+		nothing to diff against: a part it deleted played on.  ``play()`` calls
+		this as it starts, before anything typed can run.  In the single-file
+		layout the whole script is the file, so every name declared by then is
+		the file's own - less any another source already owns, such as a
+		``load_patterns()`` label.
+		"""
+
+		if not self._skip_initial_exec:
+			return
+
+		key = str(self._path)
+		declared = self._composition._source_declared
+
+		if key in declared:
+			return
+
+		owned: typing.Set[str] = set().union(*declared.values())
+		declared[key] = set(self._composition._declared_names) - owned
+
 	# ── Internals ──────────────────────────────────────────────────────────
 
 	def _load_initial (self) -> None:

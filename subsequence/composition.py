@@ -7243,6 +7243,12 @@ class Composition:
 				self._sequencer.on_event("bar",  self._display.update)
 				self._sequencer.on_event("beat", self._display.update)
 
+			# A file that watches itself declared its parts through Python's own
+			# run of it, so nothing recorded them as the file's: record them now,
+			# before anything typed can run, so its first save can delete (#3376).
+			if self._live_reloader is not None:
+				self._live_reloader.claim_what_the_script_declared()
+
 			# Neither server belongs in a render: a render writes a file and
 			# ends, and opening a socket for it invites a control surface to
 			# drive something that is not playing (#2995).
