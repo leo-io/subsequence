@@ -341,6 +341,12 @@ def apply_tuning_to_pattern (
 	sounding at each pulse.  Bend-reset-to-zero events are replaced with
 	bend-reset-to-tuning-offset events.
 
+	A drone - a raw ``note_on`` from ``p.drone()`` - is tuned the same way,
+	with its bend at its onset on the part's own channel, and a ``note_off``
+	takes the same nearest note, so ``p.drone_off()`` releases the note the
+	drone sounds, in whichever cycle it comes (#3475).  A drone holds the
+	channel's pitch wheel while it sounds, as any long note does.
+
 	Parameters:
 		pattern: The pattern to transform in place.
 		tuning: The ``Tuning`` object specifying cent offsets.
@@ -360,6 +366,8 @@ def apply_tuning_to_pattern (
 	Returns:
 		Whether the part's notes rotated through the pool.
 	"""
+	_tune_drones(pattern, tuning, bend_range, reference_note)
+
 	if not pattern.steps:
 		return False
 
@@ -497,6 +505,41 @@ def apply_tuning_to_pattern (
 	pattern.cc_events = onset_events + pattern.cc_events
 
 	return allocator is not None
+
+
+def _tune_drones (
+	pattern: "subsequence.pattern.Pattern",
+	tuning: Tuning,
+	bend_range: float,
+	reference_note: int,
+) -> None:
+
+	"""Tune a pattern's raw note events, which the step pass never visits.
+
+	A drone's ``note_on`` sounded its 12-TET pitch beside tuned notes: under
+	19-TET a note 62 became 61 bent +1078 while a drone 62 stayed 62 (#3475).
+	Each ``note_on`` takes the nearest note and a bend at its onset, sent
+	before it, and each ``note_off`` the same nearest note.
+	"""
+
+	bends: typing.List["subsequence.pattern.CcEvent"] = []
+
+	for event in pattern.raw_note_events:
+		nearest, bend_norm = tuning.pitch_bend_for_note(event.pitch, reference_note=reference_note, bend_range=bend_range)
+		event.pitch = nearest
+
+		if event.message_type == "note_on":
+			bends.append(
+				subsequence.pattern.CcEvent(
+					pulse = event.pulse,
+					message_type = "pitchwheel",
+					value = _norm_to_raw(bend_norm),
+					channel = pattern.channel,
+					priority = -1,
+				)
+			)
+
+	pattern.cc_events = bends + pattern.cc_events
 
 
 def _has_overlapping_notes (pattern: "subsequence.pattern.Pattern") -> bool:
