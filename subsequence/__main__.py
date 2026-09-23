@@ -17,7 +17,7 @@ def main () -> None:
 	"""
 
 	logger.info("Subsequence module loaded.")
-	logger.info("To make your first sound, follow the Cookbook: https://subsequence.live/cookbook/00-setup.html")
+	logger.info("To make your first sound, follow the guide: https://subsystem.co/subsequence/guide/install-and-connect/")
 
 
 if __name__ == "__main__":

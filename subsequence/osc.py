@@ -15,10 +15,12 @@ Built-in Receive Handlers
 Built-in Send Events
 ────────────────────
 
-- ``/bar <int>``: On bar change
-- ``/chord <string>``: On chord change
-- ``/section <string>``: On section change
-- ``/bpm <int>``: On tempo change
+Sent at every bar line, whether or not anything changed:
+
+- ``/bar <int>``: The bar number
+- ``/bpm <float>``: The tempo
+- ``/chord <string>``: The chord sounding, while one is
+- ``/section <string>``: The form's section, while a form is running
 """
 
 import asyncio

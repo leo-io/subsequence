@@ -6512,8 +6512,10 @@ class Composition:
 			steps: Step count for step mode. Requires ``step_duration=``.
 			step_duration: Duration of one step in beats. Requires ``steps=``.
 			quantize: Snap the trigger to a beat boundary: ``0`` = immediate (default),
-				``1`` = next beat (quarter note), ``4`` = next bar. Use ``dur.*``
-				constants from ``subsequence.constants.durations``.
+				``1`` = next beat (quarter note), ``4`` = the next multiple of four
+				beats, which is the next bar in 4/4.  ``composition.bar_beats`` is
+				the next bar in any metre.  Use ``dur.*`` constants from
+				``subsequence.constants.durations``.
 			drum_note_map: Optional drum name mapping for this pattern.
 			cc_name_map: Optional mapping of CC names to MIDI CC numbers.
 			nrpn_name_map: Optional mapping of NRPN parameter names to
@@ -6531,13 +6533,14 @@ class Composition:
 				channel=1
 			)
 
-			# Quantized fill (next bar) - channel 10 is the GM drum channel
+			# Quantized fill, on the next bar in any metre - channel 10 is
+			# the GM drum channel
 			import subsequence.constants.durations as dur
 			composition.trigger(
 				lambda p: p.euclidean("snare", pulses=7, velocity=90),
 				channel=10,
 				drum_note_map=gm_drums.GM_DRUM_MAP,
-				quantize=dur.WHOLE
+				quantize=composition.bar_beats
 			)
 
 			# With chord context - the builder receives the chord as a second
