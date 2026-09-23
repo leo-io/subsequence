@@ -5086,18 +5086,8 @@ class Composition:
 
 		# The running-patterns dict is iterated by the display, web UI, and
 		# reschedule loop on the event loop thread — mutate it there when this
-		# call arrives from another thread (e.g. the live TCP server).
-		loop = self._sequencer._event_loop
-
-		try:
-			on_loop = loop is not None and asyncio.get_running_loop() is loop
-		except RuntimeError:
-			on_loop = False
-
-		if loop is not None and loop.is_running() and not on_loop:
-			loop.call_soon_threadsafe(_finalise_removal)
-		else:
-			_finalise_removal()
+		# call arrives from another thread (e.g. a scheduled function's).
+		self._sequencer._on_the_clock(_finalise_removal)
 
 	def mirror (self, name: str, device: int, channel: int, drum_note_map: typing.Optional[typing.Dict[str, int]] = None) -> None:
 

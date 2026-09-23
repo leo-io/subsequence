@@ -1038,6 +1038,16 @@ class Sequencer:
 			logger.info(f"BPM {bpm:.2f} proposed to Ableton Link session")
 			return
 
+		# The clock reads the tempo and the ramp several times within one pulse,
+		# on its own loop.  Changed from another thread in between, the ramp
+		# vanished under it and the clock task died, which stops the music
+		# (#3381) - so the change is made on that loop.
+		self._on_the_clock(self._apply_bpm, bpm)
+
+	def _apply_bpm (self, bpm: float) -> None:
+
+		"""Set the tempo now, ending any ramp: on the clock's loop, or before it runs."""
+
 		self._bpm_transition = None
 		self.current_bpm = bpm
 		self.seconds_per_beat = 60.0 / self.current_bpm
@@ -1048,6 +1058,30 @@ class Sequencer:
 		if self.recording:
 			tempo = mido.bpm2tempo(self.current_bpm)
 			self._record_event(self.pulse_count, mido.MetaMessage('set_tempo', tempo=tempo))
+
+	def _on_the_clock (self, change: typing.Callable[..., typing.Any], *args: typing.Any) -> None:
+
+		"""Make a change to what the clock reads on the clock's own loop (#3381).
+
+		On that loop, or with no loop running - before ``play()``, or after it
+		ends - the change is made at once.  From any other thread (a synchronous
+		``schedule()`` function's executor thread, or one a performer starts) it
+		is handed to the loop, which makes it between pulses, in the order the
+		calls arrived.  Anything the clock reads more than once within a pulse
+		must only ever change here.
+		"""
+
+		loop = self._event_loop
+
+		try:
+			on_loop = loop is not None and asyncio.get_running_loop() is loop
+		except RuntimeError:
+			on_loop = False
+
+		if loop is not None and loop.is_running() and not on_loop:
+			loop.call_soon_threadsafe(change, *args)
+		else:
+			change(*args)
 
 
 	def set_target_bpm (self, target_bpm: float, bars: int, shape: typing.Union[str, subsequence.easing.EasingFn] = "linear") -> None:
@@ -1085,14 +1119,24 @@ class Sequencer:
 
 		total_pulses = bars * subsequence.metre.pulses_per_bar(self.time_signature, self.pulses_per_beat)
 
+		# Resolved here so an unknown shape is heard by the caller; the ramp
+		# itself starts on the clock's loop, as a tempo change does (#3381).
+		easing_fn = subsequence.easing.get_easing(shape)
+
+		self._on_the_clock(self._begin_transition, target_bpm, total_pulses, easing_fn, f"over {bars} bars ({shape!r})")
+
+	def _begin_transition (self, target_bpm: float, total_pulses: int, easing_fn: subsequence.easing.EasingFn, described: str) -> None:
+
+		"""Start a ramp from the tempo as it is now: on the clock's loop, or before it runs."""
+
 		self._bpm_transition = BpmTransition(
 			start_bpm=self.current_bpm,
 			target_bpm=target_bpm,
 			total_pulses=total_pulses,
-			easing_fn=subsequence.easing.get_easing(shape)
+			easing_fn=easing_fn
 		)
 
-		logger.info(f"BPM transition: {self.current_bpm:.2f} → {target_bpm:.2f} over {bars} bars ({shape!r})")
+		logger.info(f"BPM transition: {self.current_bpm:.2f} → {target_bpm:.2f} {described}")
 
 
 	def on_event (self, event_name: str, callback: typing.Callable[..., typing.Any]) -> None:
