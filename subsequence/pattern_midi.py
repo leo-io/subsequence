@@ -1156,12 +1156,6 @@ class PatternMidiMixin:
 			normaliser = bend_range if bend_range is not None else 2.0
 			amount = max(-1.0, min(1.0, interval / normaliser))
 
-			a_duration = _longest_duration(a_pos)
-			glide_start_pulse = a_pos + int(a_duration * (1.0 - time))
-			glide_end_pulse = a_pos + a_duration
-
-			self._generate_bend_events(0.0, amount, glide_start_pulse, glide_end_pulse, resolution, shape)
-
 			# Reset at the destination note's onset.  For the wrap-around pair
 			# that is the NEXT cycle's first onset (total + first), not pulse 0
 			# - a glide spilling past the cycle end was cancelled mid-flight by
@@ -1171,6 +1165,17 @@ class PatternMidiMixin:
 				reset_pulse = total_pulses + sorted_positions[0]
 			else:
 				reset_pulse = b_pos
+
+			# A note that rings on past its destination has only the time
+			# before it to glide in, since the two share one pitch wheel: in the
+			# tail of the whole note the glide ran after the reset and bent the
+			# destination (#3478).
+			a_duration = min(_longest_duration(a_pos), reset_pulse - a_pos)
+			glide_start_pulse = a_pos + int(a_duration * (1.0 - time))
+			glide_end_pulse = a_pos + a_duration
+
+			self._generate_bend_events(0.0, amount, glide_start_pulse, glide_end_pulse, resolution, shape)
+
 			self._pattern.cc_events.append(
 				subsequence.pattern.CcEvent(
 					pulse = reset_pulse,
@@ -1360,18 +1365,21 @@ class PatternMidiMixin:
 			# onset.  (Reading it before the extend block made the bend jump
 			# near the note's start and then hold flat - the opposite of a
 			# slide.)
-			a_duration = _longest_duration(a_pos)
+			# Reset at the destination note's onset.  For the wrap-around pair
+			# the destination is the NEXT cycle's first onset (total_pulses +
+			# first onset): resetting at pulse 0 fired while a spilled glide
+			# was still in flight, so the destination note played fully bent.
+			reset_pulse = b_pos if not is_last else total_pulses + sorted_positions[0]
+
+			# Without extend=, a note that rings on past its target has only the
+			# time before it to slide in, as in portamento() (#3478).
+			a_duration = min(_longest_duration(a_pos), reset_pulse - a_pos)
 
 			glide_start_pulse = a_pos + int(a_duration * (1.0 - time))
 			glide_end_pulse = a_pos + a_duration
 
 			self._generate_bend_events(0.0, amount, glide_start_pulse, glide_end_pulse, resolution, shape)
 
-			# Reset at the destination note's onset.  For the wrap-around pair
-			# the destination is the NEXT cycle's first onset (total_pulses +
-			# first onset): resetting at pulse 0 fired while a spilled glide
-			# was still in flight, so the destination note played fully bent.
-			reset_pulse = b_pos if not is_last else total_pulses + sorted_positions[0]
 			self._pattern.cc_events.append(
 				subsequence.pattern.CcEvent(
 					pulse = reset_pulse,
