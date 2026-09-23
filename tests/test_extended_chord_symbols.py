@@ -122,32 +122,20 @@ def test_a_thirteenth_leaves_the_eleventh_out_over_a_major_third () -> None:
 
 _BASES = ("C", "Cm", "Cdim", "C+", "C7", "Cmaj7", "Cm7", "Cm7b5", "Cdim7", "Csus2", "Csus4")
 
-# Labels the printer writes that the parser cannot read at all — the quality
-# tail sits after the number (C7sus4, Cm9b5) or spells a compound nothing in
-# the suffix table matches (C+maj9).  Tracked as #3014; it raises rather than
-# reading as the wrong chord, which is why it is not this fix.  When one starts
-# parsing, this set shrinks and the sweep says so.
-_NOT_A_NAME_THE_PARSER_READS = frozenset({
-	"C7sus2", "C9sus2", "C11sus2", "C13sus2",
-	"C7sus4", "C9sus4", "C11sus4", "C13sus4",
-	"Cm9b5", "Cm11b5", "Cm13b5",
-	"C+maj7", "C+maj9", "C+maj11", "C+maj13",
-})
-
 
 @pytest.mark.parametrize("base", _BASES)
 @pytest.mark.parametrize("extension", (7, 9, 11, 13))
 def test_every_label_the_printer_emits_reads_back_as_the_same_chord (base: str, extension: int) -> None:
 
-	"""What the library writes, the library reads: the same notes, both ways round."""
+	"""What the library writes, the library reads: the same notes, both ways round.
+
+	Fifteen of these could not be read until #3014 - C7sus4, Cm9b5, C+maj9 -
+	because the quality's tail came after the number.  The wider sweep, with
+	named extensions and slash basses, is tests/test_chord_names_read_back.py.
+	"""
 
 	span = subsequence.progression([base]).extend(extension).spans[0]
 	label = span.label()
-
-	if label in _NOT_A_NAME_THE_PARSER_READS:
-		with pytest.raises(ValueError):
-			subsequence.progressions.parse_element(label, beats = 4)
-		return
 
 	read_back = subsequence.progressions.parse_element(label, beats = 4)
 

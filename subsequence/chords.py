@@ -444,6 +444,12 @@ def parse_chord (name: str) -> Chord:
 
 	root_name, suffix = split_chord_name(name)
 
+	if "/" in suffix:
+		raise ValueError(
+			f"Cannot parse chord name {name!r} - a Chord is its notes, and the bass under it belongs to a "
+			f"progression: progression([{name!r}]) reads it, or add one with .over()"
+		)
+
 	if suffix not in _SUFFIX_TO_QUALITY:
 		known = ", ".join(repr(key) for key in sorted(_SUFFIX_TO_QUALITY) if key)
 		raise ValueError(f"Cannot parse chord name {name!r} - unknown quality {suffix!r}. Known suffixes: {known}")

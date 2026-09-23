@@ -764,12 +764,23 @@ class ChordSpan:
 
 		shape = _TRIAD_SHAPES.get((intervals[1], intervals[2]))
 
+		# A sus on a diminished or augmented triad keeps its altered fifth, a
+		# shape with no name of its own: the chord is named by the triad it came
+		# from, and the sus follows.  Glued on instead, "Cdim" and "7" read as
+		# the diminished seventh, a different chord (#3014).
+		if shape is None and sus:
+			triad = list(self.chord.intervals())
+			shape = {(3, 6): "diminished", (4, 8): "augmented"}.get((triad[1], triad[2]))
+
 		if shape is None:
 			return None
 
 		# 9 implies 7 (and so on up): the highest stacked extension names the chord.
+		# The seventh is read without an added 6th, which sits at 9 and was taken
+		# for a diminished seventh: Cmaj7 with a 6th printed "C76" (#3014).
 		top = max(stacked)
-		seventh = next((i for i in self.decorated_intervals() if i in (9, 10, 11)), None)
+		sevenths = dataclasses.replace(self, extensions = tuple(e for e in self.extensions if e != "6"))
+		seventh = next((i for i in sevenths.decorated_intervals() if i in (9, 10, 11)), None)
 		root_name = subsequence.chords.PC_TO_NOTE_NAME[self.chord.root_pc % 12]
 
 		if shape == "diminished":
@@ -785,10 +796,11 @@ class ChordSpan:
 			tail = f"maj{top}" if seventh == 11 else str(top)
 
 		else:
-			# Suspensions follow the number (C7sus4).  One that arrived as an
-			# extension is printed by the extension loop below, so only a
-			# suspended *quality* spells itself here.
-			tail = str(top) if sus else f"{top}{shape}"
+			# Suspensions follow the number (C7sus4, Cmaj7sus4).  One that
+			# arrived as an extension is printed by the extension loop below,
+			# so only a suspended *quality* spells itself here.  A major seventh
+			# says so: it printed as C7sus4, a different chord (#3014).
+			tail = ("maj" if seventh == 11 else "") + str(top) + ("" if sus else shape)
 
 		return root_name + tail
 
@@ -1216,31 +1228,117 @@ def _dominant_where_the_symbol_says_nothing (base: str) -> str:
 	return base + "7" if quality == "" else base
 
 
+# Named extensions a label ends with, in the order they were added: "C6add9".
+_NAMED_TAILS: typing.Tuple[str, ...] = ("add9", "sus2", "sus4", "6")
+
+# What a stacked extension adds above the seventh when a name fixes the seventh
+# itself (mMaj): the upper intervals as a chart means them.
+_ABOVE_THE_SEVENTH: typing.Dict[int, typing.Tuple[int, ...]] = {7: (), 9: (14,), 11: (14, 17), 13: (14, 17, 21)}
+
+
 def _parse_chord_name (name: str, beats: float) -> ChordSpan:
 
-	"""Parse a chord-name element, splitting a trailing extension onto the span.
+	"""Parse a chord-name element: the chord, its extensions, and a slash bass.
 
 	``"Dm9"`` is D minor decorated with a 9 - the quality table holds bare
-	qualities, and the 9/11/13 ride the span as extensions (decoration lives
-	on spans, never chords).  ``"Dm7"`` stays a plain quality (m7 is in the
-	table); the split only happens when the full name does not parse.
+	qualities, and extensions ride the span (decoration lives on spans, never
+	chords).  ``"Dm7"`` stays a plain quality (m7 is in the table); the name is
+	taken apart only where the whole of it does not parse.
 
-	A bare major root under the extension is read as a dominant, so ``"C9"``
+	Whatever :meth:`ChordSpan.label` writes reads back as the same notes (#3014):
+	a quality tail after the number (``C7sus4``, ``Cm9b5``, ``C+maj7``,
+	``CmMaj9``), named extensions on the end (``Cadd9``, ``Cm6``, ``C6add9``),
+	and a bass after a slash (``C/E``, ``Am7/G``).
+
+	A bare major root under a 9, 11 or 13 is read as a dominant, so ``"C9"``
 	and ``"Cmaj9"`` are the two different chords they are on paper.
 	"""
 
+	body, slash, bass_name = name.partition("/")
+	bass: typing.Optional[int] = None
+
+	if slash:
+		try:
+			bass = subsequence.chords.key_name_to_pc(bass_name.strip())
+		except ValueError:
+			raise ValueError(f"cannot read the bass in {name!r} - after the slash comes a note, as in 'C/E'") from None
+
+	chord, extensions, intervals = _parse_chord_body(body.strip())
+
+	return ChordSpan(chord = chord, beats = beats, extensions = extensions, bass = bass, extension_intervals = intervals)
+
+
+def _parse_chord_body (body: str) -> typing.Tuple[subsequence.chords.Chord, typing.Tuple[typing.Any, ...], typing.Optional[typing.Tuple[int, ...]]]:
+
+	"""A chord name with no slash, as (chord, extensions, extension intervals)."""
+
 	try:
-		return ChordSpan(chord = subsequence.chords.parse_chord(name), beats = beats)
-	except ValueError as original:
-		for extension in ("13", "11", "9"):
-			if name.endswith(extension) and len(name) > len(extension):
-				base = name[:-len(extension)]
-				try:
-					chord = subsequence.chords.parse_chord(_dominant_where_the_symbol_says_nothing(base))
-				except ValueError:
-					continue
-				return ChordSpan(chord = chord, beats = beats, extensions = (int(extension),))
-		raise original
+		return subsequence.chords.parse_chord(body), (), None
+	except ValueError as error:
+		refused = error
+
+	for tail in _NAMED_TAILS:
+		if body.endswith(tail):
+			try:
+				chord, extensions, intervals = _parse_chord_body(body[:-len(tail)])
+			except ValueError:
+				continue
+			return chord, extensions + (tail,), intervals
+
+	stacked = _parse_stacked(body)
+
+	if stacked is not None:
+		return stacked
+
+	raise refused
+
+
+def _parse_stacked (body: str) -> typing.Optional[typing.Tuple[subsequence.chords.Chord, typing.Tuple[typing.Any, ...], typing.Optional[typing.Tuple[int, ...]]]]:
+
+	"""A chord with a stacked 7, 9, 11 or 13 in it, spelled as the printer spells one; None if it is not one.
+
+	A 7 is read only where the name says which seventh: ``+maj7`` and
+	``mMaj7``.  A bare ``+7`` is left unread, with ``+9`` read as it always
+	has been, until what an augmented chord's number means is settled (the
+	``C+9`` question on #3012).
+	"""
+
+	for top in (13, 11, 9, 7):
+
+		number = str(top)
+
+		try:
+
+			# The half-diminished chord's tail follows the number: Cm9b5.
+			if top > 7 and body.endswith(number + "b5") and body[:-len(number) - 2].endswith("m"):
+				return subsequence.chords.parse_chord(body[:-len(number) - 2] + "7b5"), (top,), None
+
+			if not body.endswith(number):
+				continue
+
+			head = body[:-len(number)]
+
+			# A minor chord with a major seventh has no quality of its own.
+			if head.endswith("mMaj"):
+				return subsequence.chords.parse_chord(head[:-len("Maj")]), (top,), (11,) + _ABOVE_THE_SEVENTH[top]
+
+			# An augmented chord deepens in its own colour, to the major seventh.
+			if head.endswith("+maj"):
+				return subsequence.chords.parse_chord(head[:-len("maj")]), (top,), None
+
+			# A seventh named outright - maj, dim - is that seventh chord, which
+			# keeps its seventh under a sus: read as a triad, the sus took the
+			# third that set the seventh's colour, and Cmaj9sus2 lost it.
+			if head.endswith(("maj", "M", "dim")):
+				return subsequence.chords.parse_chord(head + "7"), (top,), None
+
+			if top > 7:
+				return subsequence.chords.parse_chord(_dominant_where_the_symbol_says_nothing(head)), (top,), None
+
+		except ValueError:
+			continue
+
+	return None
 
 
 def _check_slot (slot: int, count: int) -> int:
@@ -1950,6 +2048,10 @@ def progression (
 	preset from the curated table; ``style=`` generates *bars* chords from a
 	chord-graph walk (requires ``key=``).
 
+	A chord name says what a chart says: extensions (``"Cmaj9"``, ``"C7sus4"``,
+	``"Cadd9"``, ``"Cm6"``) and a bass after a slash (``"C/E"``, ``"Am7/G"``).
+	Whatever a progression prints as a chord's label reads back as that chord.
+
 	Parameters:
 		source: The element list, preset name, or an existing Progression
 			(returned unchanged).
@@ -1973,6 +2075,7 @@ def progression (
 		verse = subsequence.progression([1, 6, 3, 7])           # i–VI–III–VII in A minor
 		blues = subsequence.progression(["I7"] * 4 + ["IV7", "IV7", "I7", "I7", "V7", "IV7", "I7", "I7"])
 		walk  = subsequence.progression(style="aeolian_minor", key="A", bars=8, seed=3)
+		chart = subsequence.progression(["Cmaj9", "Am7/G", "Dm9", "G7sus4"])
 		```
 	"""
 
