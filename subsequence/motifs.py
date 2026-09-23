@@ -103,18 +103,16 @@ class Degree:
 	Degree 1 is the tonic; 8 is the tonic an octave up (steps may exceed the
 	scale length and resolve into higher octaves).  ``octave`` shifts whole
 	octaves; ``chroma`` is a chromatic offset in semitones (+1 = sharpened).
+
+	A line can also go below the tonic: 0 is the step just under it and -1
+	the one under that, so ``transpose(steps=-1)`` and ``invert()`` work on
+	a melody that starts on the tonic.  A 0 typed into a melody is still
+	refused, as the slip it usually is: ``motif([0, 1, 2])`` raises.
 	"""
 
 	step: int
 	octave: int = 0
 	chroma: int = 0
-
-	def __post_init__ (self) -> None:
-
-		"""Validate that the degree is 1-based and plausibly a degree."""
-
-		if self.step < 1:
-			raise ValueError(f"Degree steps are 1-based (1 = tonic) — got {self.step}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -626,6 +624,15 @@ class Motif:
 					raise ValueError(
 						f"Degree {element} is implausibly large — scale degrees are 1-based "
 						f"(8 = tonic an octave up). For MIDI note numbers use Motif.notes()."
+					)
+				# A Degree may sit below the tonic (0, -1, ...), which is where
+				# transposing or inverting a line can take it (#3453).  Typed in,
+				# a 0 is the 0-based slip far more often than a meant note, so it
+				# stays an error here; Degree(0) says it on purpose.
+				if element < 1:
+					raise ValueError(
+						f"Degree steps are 1-based (1 = tonic) - got {element}. "
+						f"For the step below the tonic, write Degree(0)."
 					)
 				converted.append(Degree(element))
 			elif isinstance(element, Degree) or element is None:
@@ -1461,7 +1468,9 @@ class Motif:
 		_refuse_captured_drum(origin, "vary()", "varied")
 
 		if isinstance(pitch, Degree):
-			steps = [pitch.step + delta for delta in (-2, -1, 1, 2) if pitch.step + delta >= 1]
+			# Down as well as up from the tonic: a degree may sit below it
+			# (#3453), where a filter at 1 let a varied tonic only rise.
+			steps = [pitch.step + delta for delta in (-2, -1, 1, 2)]
 			return dataclasses.replace(pitch, step = rng.choice(steps))
 		if isinstance(pitch, ChordTone):
 			indices = [pitch.index + delta for delta in (-1, 1) if pitch.index + delta >= 1]
@@ -1593,7 +1602,7 @@ class Motif:
 		if isinstance(pitch, Degree):
 			candidates: typing.List[PitchSpec] = [
 				dataclasses.replace(pitch, step = pitch.step + delta)
-				for delta in (-2, -1, 1, 2) if pitch.step + delta >= 1
+				for delta in (-2, -1, 1, 2)
 			]
 		elif isinstance(pitch, int):
 			candidates = [pitch + delta for delta in (-2, -1, 1, 2)]
@@ -1749,12 +1758,25 @@ class Motif:
 
 		return Motif(events=events, length=self.length, controls=self.controls, fit=self.fit)
 
-	def invert (self, pivot: typing.Optional[int] = None) -> "Motif":
+	def invert (self, pivot: typing.Optional[typing.Union[int, Degree]] = None) -> "Motif":
 
 		"""
 		Mirror pitches around a pivot: MIDI content around a MIDI pivot,
 		degree content around a degree pivot (default: the first note's pitch).
 		Drum motifs raise, captured ones included.
+
+		By default the first note is the pivot, and it stays exactly where it
+		is.  Degrees mirror in scale steps, so a note two steps above the pivot
+		lands two steps below it, an octave higher lands an octave lower, and
+		a line may go below the tonic.  A note on the pivot's own step keeps
+		its accidental; every other accidental flips, sharp to flat, so the
+		mirror keeps to the key: in C major ``[^3b1, ^5, ^1]`` (E♭ G C)
+		becomes E♭ C G.  Inverting twice gives back the motif.
+
+		An int ``pivot`` is a MIDI note for MIDI content and a scale step for
+		degree content; a :class:`Degree` pivot also gives an octave and an
+		accidental.  A motif mixing MIDI notes and degrees raises, since one
+		pivot cannot mirror both.
 		"""
 
 		pitched_events = [e for e in self.events if e.pitch is not None]
@@ -1762,15 +1784,28 @@ class Motif:
 		if not pitched_events:
 			return self
 
+		for event in pitched_events:
+			_refuse_captured_drum(event.origin, "invert()", "mirrored")
+
+		if any(isinstance(e.pitch, int) for e in pitched_events) and any(isinstance(e.pitch, Degree) for e in pitched_events):
+			raise TypeError(
+				"invert() mirrors MIDI notes or scale degrees, and this motif has both - "
+				"one pivot cannot mirror the two, so invert each part before stacking them"
+			)
+
 		first = pitched_events[0].pitch
 
 		if pivot is None:
-			if isinstance(first, int):
+			if isinstance(first, (int, Degree)):
 				pivot = first
-			elif isinstance(first, Degree):
-				pivot = first.step
 			else:
 				raise TypeError(f"invert() cannot derive a pivot from {type(first).__name__} content")
+
+		# The pivot's whole position, octave and accidental included.  Taking
+		# only its step (#3453) moved the first note: [^3+, ^5, ^1] dropped two
+		# octaves, and a flattened first note came back sharpened.
+		axis = pivot if isinstance(pivot, Degree) else Degree(pivot)
+		midi_pivot = pivot if isinstance(pivot, int) else None
 
 		def mirror (pitch: PitchSpec, origin: typing.Optional[str]) -> PitchSpec:
 
@@ -1779,19 +1814,22 @@ class Motif:
 			if pitch is None:
 				return None
 			if isinstance(pitch, int):
-				return 2 * pivot - pitch
+				if midi_pivot is None:
+					raise TypeError("invert() cannot mirror MIDI notes around a scale degree - give a MIDI pivot")
+				return 2 * midi_pivot - pitch
 			if isinstance(pitch, Degree):
-				mirrored = 2 * pivot - pitch.step
-				if mirrored < 1:
-					raise ValueError(
-						f"invert() around degree {pivot} sends degree {pitch.step} below the tonic — "
-						f"raise the pivot or use Degree octaves"
-					)
-				# Reflection around the pivot (read at octave 0) is an isometry, so a
-				# note's register flips too: a degree an octave above the pivot lands an
-				# octave below it.  Negating octave needs no scale length and leaves
-				# octave-0 content unchanged.
-				return dataclasses.replace(pitch, step=mirrored, octave=-pitch.octave, chroma=-pitch.chroma)
+				# Reflecting steps and octaves separately needs no scale length:
+				# (2ps - s) + L(2po - o) is the mirror of s + Lo for any L.  A note
+				# on the pivot's own step keeps its accidental and every other one
+				# flips (Simon's call, #3453), which fixes the pivot and keeps
+				# the mirror in the key.
+				on_axis = (pitch.step, pitch.octave) == (axis.step, axis.octave)
+				return dataclasses.replace(
+					pitch,
+					step = 2 * axis.step - pitch.step,
+					octave = 2 * axis.octave - pitch.octave,
+					chroma = pitch.chroma if on_axis else -pitch.chroma,
+				)
 			raise TypeError(f"invert() cannot mirror {type(pitch).__name__} content")
 
 		events = tuple(dataclasses.replace(e, pitch=mirror(e.pitch, e.origin)) for e in self.events)
@@ -2402,7 +2440,7 @@ class Phrase:
 
 		return self._lift("transpose", steps=steps, semitones=semitones)
 
-	def invert (self, pivot: typing.Optional[int] = None) -> "Phrase":
+	def invert (self, pivot: typing.Optional[typing.Union[int, Degree]] = None) -> "Phrase":
 
 		"""Mirror pitches in every segment around one pivot (see :meth:`Motif.invert`)."""
 
@@ -2410,10 +2448,10 @@ class Phrase:
 			for segment in self.segments:
 				for event in segment.events:
 					if event.pitch is not None:
-						if isinstance(event.pitch, int):
+						# The first note's whole pitch, octave and accidental
+						# included, so it stays where it is (#3453).
+						if isinstance(event.pitch, (int, Degree)):
 							pivot = event.pitch
-						elif isinstance(event.pitch, Degree):
-							pivot = event.pitch.step
 						break
 				if pivot is not None:
 					break

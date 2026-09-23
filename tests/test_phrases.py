@@ -123,14 +123,20 @@ def test_vary_drums_raise_and_no_seed_warns () -> None:
 		CALL.vary(notes=1)
 
 
-def test_vary_degree_floor () -> None:
+def test_vary_moves_the_tonic_down_as_well_as_up () -> None:
 
-	"""Varied degrees never drop below 1."""
+	"""A varied tonic can step below it, not only above (#3453).
+
+	This test said the opposite until a degree could sit below the tonic: a
+	floor at 1 let a varied tonic only rise.
+	"""
 
 	low = subsequence.motif([1, 1, 1, 1])
+	varied = [step for seed in range(20) for step in steps_of(low.vary(notes=4, position="anywhere", seed=seed)) if step is not None]
 
-	for seed in range(20):
-		assert all(step >= 1 for step in steps_of(low.vary(notes=4, position="anywhere", seed=seed)) if step)
+	assert len(varied) == 80
+	assert any(step < 1 for step in varied)
+	assert any(step > 1 for step in varied)
 
 
 # ---------------------------------------------------------------------------

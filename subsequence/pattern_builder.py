@@ -1155,7 +1155,8 @@ class PatternBuilder(
 		The tonic anchors at its nearest instance to ``root`` (ties resolve
 		upward); the degree then builds from the anchored tonic, so a written
 		melody keeps its contour.  Steps beyond the scale length carry into
-		higher octaves (8 = tonic an octave up in seven-note scales).
+		higher octaves (8 = tonic an octave up in seven-note scales), and
+		steps of 0 and below into lower ones (0 = the step under the tonic).
 		"""
 
 		if self.key is None:

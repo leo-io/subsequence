@@ -73,12 +73,23 @@ def test_degrees_rejects_pasted_midi () -> None:
 		subsequence.motif([60, 62, 64])
 
 
-def test_degree_steps_are_one_based () -> None:
+def test_a_typed_degree_zero_is_refused () -> None:
 
-	"""Degree 0 does not exist; musicians count from one."""
+	"""A 0 typed into a melody is refused: musicians count from one, and it is nearly always a slip.
+
+	``Degree(0)`` itself is valid since #3453, as the step below the tonic,
+	where transposing or inverting a line can take it.  So the guard lives
+	where ints are typed in.
+	"""
 
 	with pytest.raises(ValueError, match="1-based"):
-		Degree(0)
+		M.degrees([0])
+
+	with pytest.raises(ValueError, match="1-based"):
+		subsequence.motif([1, 0, 3])
+
+	with pytest.raises(ValueError, match="1-based"):
+		subsequence.motif([-1])
 
 
 def test_lowercase_factory_is_degrees () -> None:
