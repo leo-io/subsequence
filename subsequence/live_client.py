@@ -1,9 +1,11 @@
 """Interactive REPL client for live coding a running Subsequence composition.
 
-Usage::
+Usage:
 
-    python -m subsequence.live_client
-    python -m subsequence.live_client --port 5555
+```shell
+python -m subsequence.live_client
+python -m subsequence.live_client --port 5555
+```
 
 The client connects to a live server started by ``composition.live()`` and
 provides an interactive Python prompt. Multi-line blocks are supported - type

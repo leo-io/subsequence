@@ -299,9 +299,9 @@ def quantize_pitch (pitch: int, scale_pcs: typing.Sequence[int]) -> int:
 
 	Example:
 		```python
-		# Snap C# (61) to C (60) in C major
+		# Snap C# (61) in C major: C and D are as near, and a tie goes up
 		scale = scale_pitch_classes(0, "ionian")  # [0, 2, 4, 5, 7, 9, 11]
-		quantize_pitch(61, scale)  # → 60
+		quantize_pitch(61, scale)  # → 62
 		```
 	"""
 
@@ -379,7 +379,7 @@ def register_scale (
 
 		subsequence.register_scale("raga_bhairav", [0, 1, 4, 5, 7, 8, 11])
 
-		@comp.pattern(channel=0, length=4)
+		@comp.pattern(channel=1, beats=4)
 		def melody (p):
 			p.note(60, beat=0)
 			p.snap_to_scale("C", "raga_bhairav")

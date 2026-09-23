@@ -241,7 +241,7 @@ class EasedValue:
 			iss_lat.update(new_lat)
 
 		# Pattern (rebuilds every bar).  16-bar cycle matches the schedule.
-		@composition.pattern(channel=0, length=4)
+		@composition.pattern(channel=1, beats=4)
 		def drums (p):
 			progress = (p.cycle % 16) / 16   # 0 → 1 over one fetch cycle
 			velocity = int(100 * iss_lat.get(progress))

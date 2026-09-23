@@ -14,15 +14,19 @@ composition.display(grid=True) # status line + pattern grid
 composition.play()
 ```
 
-The status line updates every beat and looks like::
+The status line updates every beat and looks like:
 
-	125.00 BPM  Key: E  Bar: 17.1  [chorus 1/8]  Chord: Em7
+```text
+125.00 BPM  Key: E  Bar: 17.1  [chorus 1/8]  Chord: Em7
+```
 
-The grid (when enabled) updates every bar and looks like::
+The grid (when enabled) updates every bar and looks like:
 
-	kick_2          |█ · · · █ · · · █ · · · █ · · ·|
-	snare_1         |· · · · ▓ · · · · · · · ▓ · · ·|
-	bass            |▓ · · ▓ · · ▓ · ▓ · · · ▓ · · ·|
+```text
+kick_2          |█ · · · █ · · · █ · · · █ · · ·|
+snare_1         |· · · · ▓ · · · · · · · ▓ · · ·|
+bass            |▓ · · ▓ · · ▓ · ▓ · · · ▓ · · ·|
+```
 """
 
 import logging

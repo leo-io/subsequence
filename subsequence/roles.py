@@ -11,7 +11,7 @@ and the chord-snapping ``fit`` dial):
 import subsequence
 
 comp.phrase_part(channel=2, part="bass", **subsequence.roles.BASS)
-comp.phrase_part(channel=4, part="lead", **subsequence.roles.LEAD, root=78)   # override root
+comp.phrase_part(channel=4, part="lead", **dict(subsequence.roles.LEAD, root=78))   # override root
 
 @comp.pattern(channel=3, bars=2)
 def pad (p):

@@ -2,9 +2,11 @@
 Ableton Link clock adapter for Subsequence.
 
 Wraps ``aalink.Link`` and adapts its asyncio-native API to Subsequence's
-24 PPQN pulse model.  Requires the optional ``link`` extra::
+24 PPQN pulse model.  Requires the optional ``link`` extra:
 
-    pip install subsequence[link]
+```shell
+pip install subsequence[link]
+```
 
 Usage::
 

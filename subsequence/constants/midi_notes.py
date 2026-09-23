@@ -7,7 +7,7 @@ Notes are named ``<Pitch><Octave>`` for naturals and ``<Pitch>S<Octave>`` for sh
 
     import subsequence.constants.midi_notes as notes
 
-    p.note(notes.A4, velocity=100)       # 69
+    p.note(notes.A4, beat=0, velocity=100)   # 69
     p.arpeggio(chord.tones(notes.E2))    # 40
     root = notes.C3                      # 48
 

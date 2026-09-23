@@ -8,7 +8,7 @@ Usage::
 
     import subsequence.constants.instruments.gm_instruments as gm
 
-    @composition.pattern(channel=1, length=4)
+    @composition.pattern(channel=1, beats=4)
     def strings (p):
         p.program_change(gm.VIOLIN)
         p.note(60, beat=0)

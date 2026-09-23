@@ -26,7 +26,7 @@ Typical workflow
     composition.osc(send_port=wing.WING_PORT, send_host=ip)
 
     # 3. In your patterns, use standard p.osc() / p.osc_ramp() with WING addresses
-    @composition.pattern(channel=0, length=4)
+    @composition.pattern(channel=1, beats=4)
     def mixer (p):
         p.osc_ramp("/ch/1/fdr", 0.0, 0.75, shape="ease_in")   # fade up channel 1
 
@@ -36,37 +36,41 @@ Typical workflow
 
 CLI usage
 ---------
-::
+```shell
+# Discover - prints the device info
+python -m subsequence.helpers.wing
 
-    # Discover - prints the device info
-    python -m subsequence.helpers.wing
-
-    # Query a node - pretty-prints its structure / value
-    python -m subsequence.helpers.wing /ch/1
-    python -m subsequence.helpers.wing /ch/1/fdr
-    python -m subsequence.helpers.wing /
+# Query a node - pretty-prints its structure / value
+python -m subsequence.helpers.wing /ch/1
+python -m subsequence.helpers.wing /ch/1/fdr
+python -m subsequence.helpers.wing /
+```
 
 Address conventions
 -------------------
-Addresses use the WING's internal node tree.  Key top-level nodes::
+Addresses use the WING's internal node tree.  Key top-level nodes:
 
-    /ch/1..40     Input channels
-    /aux/1..8     Aux inputs
-    /bus/1..16    Mix buses
-    /main/lr      Main L/R bus
-    /main/m       Mono / centre bus
-    /mtx/1..8     Matrix outputs
-    /fx/1..8      FX returns
-    /dca/1..8     DCA groups
-    /mgrp/1..8    Mute groups
+```text
+/ch/1..40     Input channels
+/aux/1..8     Aux inputs
+/bus/1..16    Mix buses
+/main/lr      Main L/R bus
+/main/m       Mono / centre bus
+/mtx/1..8     Matrix outputs
+/fx/1..8      FX returns
+/dca/1..8     DCA groups
+/mgrp/1..8    Mute groups
+```
 
-Useful leaf addresses per channel (e.g. ``/ch/1/…``)::
+Useful leaf addresses per channel (e.g. ``/ch/1/…``):
 
-    fdr           Fader level, 0.0 (−∞) .. 1.0 (≈+10 dB)
-    pan           Pan, 0.0 (full L) .. 1.0 (full R), 0.5 = centre
-    mute          Mute, 0 = unmuted, 1 = muted
-    name          Channel name (string)
-    col           Colour index (int)
+```text
+fdr           Fader level, 0.0 (−∞) .. 1.0 (≈+10 dB)
+pan           Pan, 0.0 (full L) .. 1.0 (full R), 0.5 = centre
+mute          Mute, 0 = unmuted, 1 = muted
+name          Channel name (string)
+col           Colour index (int)
+```
 """
 
 import logging
@@ -383,15 +387,17 @@ def print_node (
 def _main () -> None:
 	"""Command-line interface.
 
-	Usage::
+	Usage:
 
-		# Auto-discover WING on the LAN
-		python -m subsequence.helpers.wing
+	```shell
+	# Auto-discover WING on the LAN
+	python -m subsequence.helpers.wing
 
-		# Query a specific address (requires --host or auto-discovery)
-		python -m subsequence.helpers.wing /ch/1
-		python -m subsequence.helpers.wing /ch/1/fdr
-		python -m subsequence.helpers.wing --host 192.168.0.116 /ch/1
+	# Query a specific address (requires --host or auto-discovery)
+	python -m subsequence.helpers.wing /ch/1
+	python -m subsequence.helpers.wing /ch/1/fdr
+	python -m subsequence.helpers.wing --host 192.168.0.116 /ch/1
+	```
 	"""
 	args = sys.argv[1:]
 

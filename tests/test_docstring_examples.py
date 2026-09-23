@@ -1,18 +1,19 @@
 """Every example in a docstring is checked against the API it demonstrates.
 
-The package documents itself with 147 fenced code blocks and no doctests, so
-until now nothing read them (#2326).  An example that names a method which has
-been renamed, or passes a keyword that has been dropped, is worse than no
-example: it is confidently wrong, and it is what the generated reference
-publishes.
+The package documents itself with fenced code blocks, RST literal blocks and no
+doctests, so until #2326 nothing read them, and until #3486 nothing read the
+literal ones.  An example that names a method which has been renamed, or passes
+a keyword that has been dropped, is worse than no example: it is confidently
+wrong, and it is what the generated reference publishes.
 
 **This checks rather than runs, and that is a decision rather than a shortcut.**
 Most of these examples are fragments by design — ``p.arpeggio(chord, root=60)``
 inside a pattern function — and executing them means fabricating a ``p`` and a
-``chord``, which is done here for the ones that can take it.  Some cannot be run
-at all: an example that builds a ``Composition`` opens MIDI hardware, and one
-that calls ``play()`` never returns.  The static pass covers all of them; the
-executed pass covers what it safely can.
+``chord``, which is done here for the ones that can take it, with a keyed
+``Composition`` for the ones that declare patterns on one (building one opens
+nothing since #2995).  Some cannot be run at all: one that calls ``play()`` never
+returns, and one that reaches the network has no business in a test.  The
+static pass covers all of them; the executed pass covers what it safely can.
 """
 
 import ast
@@ -37,7 +38,10 @@ import subsequence.pattern
 import subsequence.pattern_builder
 
 
-_FENCE = re.compile(r"```(?:python)?\n(.*?)```", re.S)
+# The language is captured so that only Python is read: a pattern that skipped
+# a labelled opening fence matched from its closing fence to the next opening
+# one, and read the prose between them as code.
+_FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
 
 # What a bare name conventionally is in these examples.  Only names that are
 # used consistently across the package appear here; anything else is left
@@ -53,7 +57,7 @@ _RECEIVERS: typing.Dict[str, type] = {
 
 class Example (typing.NamedTuple):
 
-	"""One fenced block, and enough about it to name in a failure."""
+	"""One example block, fenced or literal, and enough about it to name in a failure."""
 
 	where: str
 	source: str
@@ -65,9 +69,55 @@ class Example (typing.NamedTuple):
 		return self.where
 
 
+def _python_fences (docstring: str) -> typing.List[str]:
+
+	"""The fenced blocks marked as Python, or not marked at all."""
+
+	return [body for language, body in _FENCE.findall(docstring) if language in ("", "python")]
+
+
+def _literal_blocks (docstring: str) -> typing.List[str]:
+
+	"""Every RST literal block - the indented block after a line ending ``::`` - outside the fences.
+
+	Nothing read the package's 81 until #3486, when four of them named a
+	parameter that does not exist and one left out a required one.  A literal
+	block that is not Python - a shell command, sample output - takes a
+	labelled fence instead, so every one found here is held to parsing.
+	"""
+
+	lines = _FENCE.sub("", docstring).splitlines()
+	blocks = []
+	index = 0
+
+	while index < len(lines):
+
+		line = lines[index]
+		index += 1
+
+		if not line.rstrip().endswith("::") or line.lstrip().startswith(".."):
+			continue
+
+		margin = len(line) - len(line.lstrip())
+
+		while index < len(lines) and not lines[index].strip():
+			index += 1
+
+		body = []
+
+		while index < len(lines) and (not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > margin):
+			body.append(lines[index])
+			index += 1
+
+		if "".join(body).strip():
+			blocks.append(textwrap.dedent("\n".join(body)).strip("\n") + "\n")
+
+	return blocks
+
+
 def _examples () -> typing.List[Example]:
 
-	"""Every fenced code block in every docstring under ``subsequence/``."""
+	"""Every Python code block in every docstring under ``subsequence/``: fenced, and literal."""
 
 	found = []
 
@@ -89,9 +139,12 @@ def _examples () -> typing.List[Example]:
 
 			owner = getattr(node, "name", "<module>")
 
-			for index, body in enumerate(_FENCE.findall(docstring)):
+			for index, body in enumerate(_python_fences(docstring)):
 				suffix = f"[{index}]" if index else ""
 				found.append(Example(f"{path.name}::{owner}{suffix}", textwrap.dedent(body)))
+
+			for index, body in enumerate(_literal_blocks(docstring)):
+				found.append(Example(f"{path.name}::{owner}::literal[{index}]", body))
 
 	return found
 
@@ -109,6 +162,15 @@ def test_the_package_still_documents_itself_with_examples () -> None:
 	"""
 
 	assert len(EXAMPLES) > 100, f"only {len(EXAMPLES)} examples found — has the fence format changed?"
+
+
+def test_the_literal_blocks_are_read_too () -> None:
+
+	"""A floor on the RST literal blocks, which nothing read before #3486."""
+
+	literal = [example for example in EXAMPLES if "::literal[" in example.where]
+
+	assert len(literal) > 60, f"only {len(literal)} literal blocks found - has the '::' reading changed?"
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=str)
@@ -149,6 +211,22 @@ def test_an_example_calls_methods_that_exist (example: Example) -> None:
 			f"{example.where}: {receiver.id}.{call.func.attr}() is not on {owner.__name__}"
 		)
 
+		# A bundle splatted in with ** passes its keys as keywords too.  roles.py's
+		# own example passed root twice, by name and inside **roles.LEAD (#3486).
+		named = {keyword.arg for keyword in call.keywords if keyword.arg is not None}
+		bundled: typing.Set[str] = set()
+
+		for keyword in call.keywords:
+			bundle = _package_value(keyword.value) if keyword.arg is None else None
+			if isinstance(bundle, dict):
+				bundled.update(bundle)
+
+		twice = sorted(named & bundled)
+
+		assert not twice, (
+			f"{example.where}: {owner.__name__}.{call.func.attr}() is given {', '.join(twice)} by name and in a ** bundle"
+		)
+
 		try:
 			parameters = inspect.signature(method).parameters
 		except (ValueError, TypeError):
@@ -157,21 +235,47 @@ def test_an_example_calls_methods_that_exist (example: Example) -> None:
 		if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
 			continue
 
-		for keyword in call.keywords:
+		for name in sorted(named | bundled):
 
-			assert keyword.arg is None or keyword.arg in parameters, (
-				f"{example.where}: {owner.__name__}.{call.func.attr}() takes no {keyword.arg}="
+			assert name in parameters, (
+				f"{example.where}: {owner.__name__}.{call.func.attr}() takes no {name}="
 			)
+
+
+def _package_value (node: ast.expr) -> typing.Any:
+
+	"""What ``subsequence.x.y`` names, if the expression is one; otherwise None."""
+
+	parts = []
+
+	while isinstance(node, ast.Attribute):
+		parts.append(node.attr)
+		node = node.value
+
+	if not isinstance(node, ast.Name) or node.id != "subsequence":
+		return None
+
+	value: typing.Any = subsequence
+
+	for part in reversed(parts):
+		value = getattr(value, part, None)
+		if value is None:
+			return None
+
+	return value
 
 
 # ── running the ones that can be run ────────────────────────────────────────
 
-# An example naming any of these builds or starts something: a Composition opens
-# MIDI hardware, and play() never returns.  Measured, not guessed — an earlier
-# sweep of these examples reached the real ports on this machine.
+# An example naming any of these starts something that never returns, writes a
+# file, or reaches beyond this process: play() never returns, a server listens,
+# link() joins the room's Link session, and the WING helper broadcasts on the
+# LAN.  An earlier sweep of these examples reached the real ports on this
+# machine.  Building a Composition was on this list until #2995 made it open
+# nothing; the examples that declare patterns on one now run (#3486).
 _UNSAFE = (
-	"Composition(", "@composition", ".play(", ".render(", ".live(", ".watch(",
-	".web_ui(", ".osc(", "midi_input", "midi_output", "input(", "while True",
+	".play(", ".render(", ".live(", ".watch(", ".web_ui(", ".osc(", ".link(",
+	"helpers.wing", "midi_input", "midi_output", "input(", "while True",
 )
 
 # Examples that resolve every name and still cannot run here, with the reason.
@@ -179,6 +283,13 @@ _UNSAFE = (
 _NEEDS_MORE_THAN_A_NAMESPACE = {
 	"definitions.py::Definitions": "reads a project.yaml that only exists in a real project",
 	"definitions.py::load_definitions": "reads a project.yaml that only exists in a real project",
+	"definitions.py::<module>": "reads a project.yaml that only exists in a real project",
+	"composition.py::tuning": "reads a .scl file that only exists beside a real piece",
+	"pattern_builder.py::apply_tuning": "reads a .scl file that only exists beside a real piece",
+	"composition.py::tweak::literal[0]": "tweaks a pattern named bass that it does not declare",
+	"form_state.py::jump_to::literal[0]": "jumps a form that it does not declare",
+	"composition.py::form_freeze::literal[0]": "{...} stands for a form, and is not one",
+	"gm_cc.py::<module>::literal[0]": "... stands for a value, and is not one",
 }
 
 
@@ -216,9 +327,9 @@ def _free_names (source: str) -> typing.Set[str]:
 	return free
 
 
-def _namespace () -> typing.Dict[str, typing.Any]:
+def _namespace (with_composition: bool = True) -> typing.Dict[str, typing.Any]:
 
-	"""What these examples assume around them: the package, a ``p``, a ``chord``.
+	"""What these examples assume around them: the package, a ``p``, a ``chord``, a ``composition``.
 
 	This is the fabrication the module docstring warns about — the fragments
 	are written for a pattern function, so one is supplied.  The drum map holds
@@ -233,7 +344,7 @@ def _namespace () -> typing.Dict[str, typing.Any]:
 		scale = "major",
 		drum_note_map = {
 			"kick": 36, "kick_1": 36, "snare": 38, "snare_1": 38, "snare_2": 39,
-			"hi_hat_closed": 42, "hh": 42, "clap": 39, "rim": 37,
+			"hi_hat_closed": 42, "hh": 42, "clap": 39, "hand_clap": 39, "rim": 37,
 		},
 		rng = random.Random(1),
 	)
@@ -242,6 +353,11 @@ def _namespace () -> typing.Dict[str, typing.Any]:
 	namespace.update({name: getattr(subsequence, name) for name in subsequence.__all__})
 	namespace["p"] = builder
 	namespace["chord"] = subsequence.chords.parse_chord("Cmaj7")
+
+	# Built only where a test asks for it, under the fake MIDI backend: the list
+	# of runnable examples is worked out at collection, before any fixture runs.
+	if with_composition:
+		namespace["composition"] = namespace["comp"] = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
 
 	return namespace
 
@@ -253,7 +369,16 @@ def _resolvable (example: Example) -> bool:
 	if any(marker in example.source for marker in _UNSAFE):
 		return False
 
-	return not (_free_names(example.source) - set(_namespace()) - set(dir(builtins)))
+	# One that does not parse is reported by the parse test, by name.  Raising
+	# here, at collection, took the whole file down with it instead.
+	try:
+		free = _free_names(example.source)
+	except SyntaxError:
+		return False
+
+	names = set(_namespace(with_composition=False)) | {"composition", "comp"}
+
+	return not (free - names - set(dir(builtins)))
 
 
 RUNNABLE = [
@@ -271,7 +396,7 @@ def test_enough_examples_can_actually_be_run () -> None:
 	about a different property.
 	"""
 
-	assert len(RUNNABLE) > 60, f"only {len(RUNNABLE)} examples are runnable — has the context changed?"
+	assert len(RUNNABLE) > 100, f"only {len(RUNNABLE)} examples are runnable - has the context changed?"
 
 
 @pytest.mark.parametrize("example", RUNNABLE, ids=str)
@@ -324,3 +449,56 @@ def test_an_excused_example_still_needs_its_excuse (where: str, reason: str, pat
 	with pytest.raises(Exception):
 		with contextlib.redirect_stdout(io.StringIO()):
 			exec(compile(example.source, example.where, "exec"), _namespace())	# noqa: S102
+
+
+# ── the checks themselves (#3486) ───────────────────────────────────────────
+#
+# The package holds nothing these checks object to, so without inputs of their
+# own a break in any of them would fail nothing.
+
+def test_a_labelled_fence_is_not_read_as_python () -> None:
+
+	"""A shell fence is not an example, and the prose after it is not code."""
+
+	docstring = "Install it:\n\n```shell\npip install thing\n```\n\nThen:\n\n```python\np.note(60, beat=0)\n```\n"
+
+	assert _python_fences(docstring) == ["p.note(60, beat=0)\n"]
+
+
+def test_a_literal_block_is_read_and_its_prose_is_not () -> None:
+
+	"""The indented block after ``::`` is an example; the paragraph after it is not."""
+
+	docstring = "Example::\n\n    p.note(60, beat=0)\n    p.note(64, beat=1)\n\nThat plays two notes.\n"
+
+	assert _literal_blocks(docstring) == ["p.note(60, beat=0)\np.note(64, beat=1)\n"]
+
+
+def test_a_keyword_given_by_name_and_in_a_bundle_is_caught () -> None:
+
+	"""roles.py's own example did this: ``**roles.LEAD`` holds ``root`` already."""
+
+	example = Example("synthetic", 'comp.phrase_part(channel=4, part="lead", **subsequence.roles.LEAD, root=78)\n')
+
+	with pytest.raises(AssertionError, match="by name and in a"):
+		test_an_example_calls_methods_that_exist(example)
+
+
+def test_an_example_that_reaches_the_network_is_never_run () -> None:
+
+	"""Pinned here, never by running one: the WING helper broadcasts on the LAN, and link() joins a session."""
+
+	assert not _resolvable(Example("synthetic", "import subsequence.helpers.wing as wing\nwing.discover()\n"))
+	assert not _resolvable(Example("synthetic", "composition.link()\n"))
+
+
+def test_an_example_that_does_not_parse_is_left_to_the_parse_test () -> None:
+
+	"""Deciding whether it can run must not raise at collection, where it took the whole file down."""
+
+	try:
+		runnable = _resolvable(Example("synthetic", "pip install subsequence[link]\n"))
+	except SyntaxError as error:
+		pytest.fail(f"deciding whether a shell line can run raised {error!r}")
+
+	assert not runnable

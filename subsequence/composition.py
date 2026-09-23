@@ -4158,9 +4158,11 @@ class Composition:
 		Playback starts on the next bar boundary aligned to the Link quantum,
 		so downbeats stay in sync across all participants.
 
-		Requires the ``link`` optional extra::
+		Requires the ``link`` optional extra:
 
-		    pip install subsequence[link]
+		```shell
+		pip install subsequence[link]
+		```
 
 		Parameters:
 			quantum: Beat cycle length in quarter notes.  Defaults to one bar
