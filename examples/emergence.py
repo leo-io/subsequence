@@ -6,7 +6,7 @@ the graph's probabilistic edges mean sections sometimes repeat, and a
 rare "fracture" section can erupt from swarm or fury - four bars of
 controlled rhythmic chaos where even the kick pattern mutates.
 
-Six Perlin noise fields wander independently at prime-ish speeds.
+Five Perlin noise fields wander independently at prime-ish speeds.
 Because p.cycle increments forever, each pass through the form starts
 at a different point in every noise field.  No two bars are ever the
 same.  Cellular automata evolve each bar.  Ghost fills breathe with
@@ -72,7 +72,7 @@ def drums (p):
 	section = p.section.name
 	t = p.section.progress  # 0.0 -> ~1.0 within this section
 
-	# ── Six Perlin fields - the wandering soul of the piece ───────
+	# ── Five Perlin fields - the wandering soul of the piece ──────
 	# Each has a different speed (prime-ish multipliers) so they
 	# never synchronise.  p.cycle increments every bar across all
 	# sections, so each pass through the form samples a fresh region
@@ -81,7 +81,6 @@ def drums (p):
 	hat_feel     = subsequence.sequence_utils.perlin_1d(p.cycle * 0.05, seed=2)
 	tom_swell    = subsequence.sequence_utils.perlin_1d(p.cycle * 0.04, seed=3)
 	kick_morph   = subsequence.sequence_utils.perlin_1d(p.cycle * 0.09, seed=4)
-	space        = subsequence.sequence_utils.perlin_1d(p.cycle * 0.06, seed=5)
 	chaos_spark  = subsequence.sequence_utils.perlin_1d(p.cycle * 0.13, seed=6)
 
 	def ease (value: float, shape: str = "linear") -> float:
@@ -406,8 +405,10 @@ def drums (p):
 	# ── Lightning ─────────────────────────────────────────────────
 	# When the chaos_spark Perlin peaks above 0.92, a rare burst
 	# of maximum density fires on top of whatever section is
-	# playing.  Occurs roughly once every 70-80 bars - a flash
-	# of transcendence.  Void is exempt (silence is sacred).
+	# playing, for one to three bars.  It comes round every 115-170
+	# bars or so, three and a half to five minutes apart at this
+	# tempo - a flash of transcendence.  Void is exempt (silence
+	# is sacred).
 	if chaos_spark > 0.92 and section != "void":
 		p.ghost_fill("kick_1", density=0.32, velocity=(34, 55), bias="uniform", no_overlap=True)
 		p.ghost_fill("snare_1", density=0.22, velocity=(28, 48), bias="offbeat", no_overlap=True)
