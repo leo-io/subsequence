@@ -47,6 +47,18 @@ NOTE_NAME_TO_PC: typing.Dict[str, int] = {
 	"B": 11,
 }
 
+# The spellings that fall on a natural: real names - Cb major has seven flats, E#
+# is the third of C# major - but each a second name for a note the table above
+# already holds.  They are read wherever a note name is read, and kept out of
+# NOTE_NAME_TO_PC, which the catalogue publishes as a control surface's list of
+# roots (#3488).
+_OTHER_SPELLINGS: typing.Dict[str, int] = {
+	"Cb": 11,
+	"Fb": 4,
+	"E#": 5,
+	"B#": 0,
+}
+
 PC_TO_NOTE_NAME: typing.List[str] = [
 	"C",
 	"C#",
@@ -67,6 +79,9 @@ def key_name_to_pc (key_name: str) -> int:
 
 	"""Validate a key name and return its pitch class (0–11).
 
+	Every natural, sharp and flat is read, the spellings that fall on a natural
+	(``Cb``, ``Fb``, ``E#``, ``B#``) among them.
+
 	Parameters:
 		key_name: Note name (e.g. ``"C"``, ``"F#"``, ``"Bb"``).
 
@@ -84,12 +99,15 @@ def key_name_to_pc (key_name: str) -> int:
 		```
 	"""
 
-	if key_name not in NOTE_NAME_TO_PC:
-		raise ValueError(
-			f"Unknown key name: {key_name!r}. Expected e.g. 'C', 'F#', 'Bb'."
-		)
+	if key_name in NOTE_NAME_TO_PC:
+		return NOTE_NAME_TO_PC[key_name]
 
-	return NOTE_NAME_TO_PC[key_name]
+	if key_name in _OTHER_SPELLINGS:
+		return _OTHER_SPELLINGS[key_name]
+
+	raise ValueError(
+		f"Unknown key name: {key_name!r}. Expected e.g. 'C', 'F#', 'Bb'."
+	)
 
 
 CHORD_INTERVALS: typing.Dict[str, typing.List[int]] = {
@@ -415,7 +433,7 @@ def split_chord_name (name: str) -> typing.Tuple[str, str]:
 	split = 2 if (len(stripped) > 1 and stripped[1] in "#b") else 1
 	root_name = stripped[:split]
 
-	if root_name not in NOTE_NAME_TO_PC:
+	if root_name not in NOTE_NAME_TO_PC and root_name not in _OTHER_SPELLINGS:
 		raise ValueError(f"Cannot parse chord name {name!r} - unknown root {root_name!r}")
 
 	return root_name, stripped[split:]
@@ -454,4 +472,4 @@ def parse_chord (name: str) -> Chord:
 		known = ", ".join(repr(key) for key in sorted(_SUFFIX_TO_QUALITY) if key)
 		raise ValueError(f"Cannot parse chord name {name!r} - unknown quality {suffix!r}. Known suffixes: {known}")
 
-	return Chord(root_pc=NOTE_NAME_TO_PC[root_name], quality=_SUFFIX_TO_QUALITY[suffix])
+	return Chord(root_pc=key_name_to_pc(root_name), quality=_SUFFIX_TO_QUALITY[suffix])
