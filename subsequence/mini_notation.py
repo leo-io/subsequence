@@ -115,8 +115,17 @@ def _parse_recursive (tokens: list, start_time: float, duration: float) -> typin
 			events.extend(_parse_recursive(token, current_time, step_duration))
 			
 		elif isinstance(token, str):
+			# A '?' with no step before it is a probability with nothing to apply
+			# to.  It used to become a symbol of its own - '?0.5' took a step, and
+			# with pitch= it played a note (#3405).
+			if token.startswith("?"):
+				raise MiniNotationError(
+					f"{token!r} has no step before its '?': a probability goes straight after "
+					"a step, with no space between (kick?0.6), and a [group] cannot take one"
+				)
+
 			# Parse optional probability suffix: "kick?0.6" → symbol="kick", probability=0.6
-			if "?" in token and token[0] != "?":
+			if "?" in token:
 				symbol, prob_str = token.rsplit("?", 1)
 				try:
 					probability = float(prob_str)
@@ -125,6 +134,9 @@ def _parse_recursive (tokens: list, start_time: float, duration: float) -> typin
 
 				if not 0.0 <= probability <= 1.0:
 					raise MiniNotationError(f"Probability in {token!r} must be between 0.0 and 1.0")
+
+				if "?" in symbol:
+					raise MiniNotationError(f"{token!r} has more than one '?': a step takes one probability")
 			else:
 				symbol = token
 				probability = 1.0

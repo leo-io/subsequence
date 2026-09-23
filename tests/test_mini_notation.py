@@ -155,6 +155,28 @@ def test_probability_suffix_out_of_range_raises () -> None:
 		subsequence.mini_notation.parse("kick?1.5", total_duration=1.0)
 
 
+@pytest.mark.parametrize("text", ["[x x]?0.5", "x ?0.5", "x ?", "[x x]?", "x??0.5"])
+def test_a_question_mark_with_no_step_of_its_own_raises (text: str) -> None:
+
+	"""A '?' with nothing before it became a symbol that took a step and could play a note (#3405).
+
+	Tidal's group spelling ([x x]?0.5) and a stray space both reach it; neither is something this
+	notation can mean.
+	"""
+
+	with pytest.raises(subsequence.mini_notation.MiniNotationError, match="'\\?'"):
+		subsequence.mini_notation.parse(text)
+
+
+def test_a_probability_straight_after_its_step_still_parses () -> None:
+
+	"""The control: the spelling the notation does mean is untouched."""
+
+	events = subsequence.mini_notation.parse("x?0.5 y")
+
+	assert [(event.symbol, event.probability) for event in events] == [("x", 0.5), ("y", 1.0)]
+
+
 def test_invalid_total_duration () -> None:
 
 	"""Test that zero or negative total_duration raises ValueError."""
