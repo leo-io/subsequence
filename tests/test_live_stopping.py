@@ -134,7 +134,13 @@ async def test_a_client_that_connects_as_the_server_stops_is_closed_too (composi
 	try:
 		stop = asyncio.ensure_future(server.stop())
 		await asyncio.sleep(0.05)
-		assert not stop.done(), "stop() finished before the held connection was released, so this tests nothing"
+
+		# Before 3.12.1 wait_closed() does not wait for connections, so stop()
+		# is already done and only the client's closing below is left to
+		# check - which the handler's is_serving() check still decides (#3451).
+		if sys.version_info >= (3, 12, 1):
+			assert not stop.done(), "stop() finished before the held connection was released, so this tests nothing"
+
 		stopping.set()
 
 		assert await _finishes(stop), "stop() was still waiting for a client that connected as it began"
