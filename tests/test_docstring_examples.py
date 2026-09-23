@@ -20,6 +20,7 @@ import builtins
 import contextlib
 import inspect
 import io
+import logging
 import pathlib
 import random
 import re
@@ -231,7 +232,7 @@ def _namespace () -> typing.Dict[str, typing.Any]:
 		key = "C",
 		scale = "major",
 		drum_note_map = {
-			"kick": 36, "snare": 38, "snare_1": 38, "snare_2": 39,
+			"kick": 36, "kick_1": 36, "snare": 38, "snare_1": 38, "snare_2": 39,
 			"hi_hat_closed": 42, "hh": 42, "clap": 39, "rim": 37,
 		},
 		rng = random.Random(1),
@@ -274,7 +275,7 @@ def test_enough_examples_can_actually_be_run () -> None:
 
 
 @pytest.mark.parametrize("example", RUNNABLE, ids=str)
-def test_a_runnable_example_runs (example: Example, patch_midi: None) -> None:
+def test_a_runnable_example_runs (example: Example, patch_midi: None, caplog: pytest.LogCaptureFixture) -> None:
 
 	"""The example does what it says: no exception, against a real builder.
 
@@ -287,15 +288,24 @@ def test_a_runnable_example_runs (example: Example, patch_midi: None) -> None:
 	with no ALSA at all.  The fake backend covers the whole class — anything
 	that reaches a device — and the name list is left to cover what a fake
 	backend cannot, which is the calls that never return.
+
+	A voice the drum map lacks is dropped with a warning rather than raising,
+	so that warning fails the example too.  The map lacked ``kick_1`` and seven
+	examples ran their kick as a silent rest (#3471); a name missing from the
+	map can only be caught by the warning, never by the list.
 	"""
 
 	namespace = _namespace()
 
 	try:
-		with contextlib.redirect_stdout(io.StringIO()):
+		with contextlib.redirect_stdout(io.StringIO()), caplog.at_level(logging.WARNING, logger="subsequence"):
 			exec(compile(example.source, example.where, "exec"), namespace)	# noqa: S102
 	except Exception as exc:
 		pytest.fail(f"{example.where}: {type(exc).__name__}: {exc}\n\n{example.source}")
+
+	dropped = [record.getMessage() for record in caplog.records if record.getMessage().startswith("Drum name '")]
+
+	assert not dropped, f"{example.where} names a voice the runner's drum map lacks: {dropped}"
 
 
 @pytest.mark.parametrize("where,reason", sorted(_NEEDS_MORE_THAN_A_NAMESPACE.items()))
