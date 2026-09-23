@@ -197,6 +197,26 @@ def _parallel_mode (scale: str) -> str:
 	return "ionian" if third == 3 else "aeolian"
 
 
+def _is_natural_minor (scale: str) -> bool:
+
+	"""Whether *scale* is natural minor under any of its names (``minor``, ``aeolian``).
+
+	Decided by its notes rather than its name, the lesson of #3008.
+	"""
+
+	return subsequence.intervals.scale_pitch_classes(0, scale) == subsequence.intervals.scale_pitch_classes(0, "aeolian")
+
+
+# The qualities a lowercase numeral is written with - minor and diminished,
+# with or without a seventh - which in minor take the raised sixth or seventh
+# (decision 8 of #2991, the textbook and music21 rule).
+_RAISED_IN_MINOR = frozenset(("minor", "minor_7th", "diminished", "diminished_7th", "half_diminished_7th"))
+
+# The qualities with no seventh of their own, which an extension gives one.
+# A numeral that names its seventh (V7, iiø7, Imaj7) keeps it (#3026).
+_TRIAD_QUALITIES = frozenset(("major", "minor", "diminished", "augmented"))
+
+
 @dataclasses.dataclass(frozen=True)
 class RomanChord:
 
@@ -213,7 +233,10 @@ class RomanChord:
 			prefixed degree reads against the **major** scale, the universal
 			roman convention - ``bVII`` is always the whole step below the
 			tonic (Bb in C major, G in A minor); unprefixed degrees read the
-			current scale (``VII`` in A minor is already G).
+			current scale (``VII`` in A minor is already G).  In natural
+			minor a minor or diminished numeral on the sixth or seventh takes
+			the raised note, the textbook rule: ``vii°`` is G#dim and ``vi``
+			F#m in A minor, while ``VI`` and ``VII`` stay F and G (#3026).
 		quality: Explicit quality name, or ``None`` to infer diatonically
 			from the key and scale (the bare-int path).
 		of: Secondary-function target degree (``V/x`` - one level only).
@@ -299,6 +322,18 @@ class RomanChord:
 
 			root_pc = pcs[self.degree - 1] % 12
 
+			# In natural minor the case decides the sixth and seventh: a minor
+			# or diminished numeral on either takes the raised note, a major
+			# one the natural - vii° is G#dim and vi F#m in A minor, VI and VII
+			# F and G (decision 8 of #2991, #3026).
+			if (
+				self.degree in (6, 7)
+				and self.quality in _RAISED_IN_MINOR
+				and not self.borrowed
+				and _is_natural_minor(mode)
+			):
+				root_pc = (root_pc + 1) % 12
+
 		if self.quality is not None and not self.borrowed:
 			return subsequence.chords.Chord(root_pc=root_pc, quality=self.quality)
 
@@ -324,18 +359,66 @@ class RomanChord:
 
 		return subsequence.chords.Chord(root_pc=root_pc, quality=qualities[self.degree - 1])
 
+	def _extension_key (
+		self,
+		key_pc: int,
+		scale: str,
+	) -> typing.Optional[typing.Tuple[typing.List[int], int, int]]:
+
+		"""The scale this numeral's extensions stack their thirds in, its place there, and its root.
+
+		``None`` when the numeral is altered and keeps its own colour.  A
+		numeral belongs to its key when its triad is the key's own on its
+		root's degree - judged by the chord it resolves to, not by how it is
+		spelled, so a generated ``bVII`` in A minor is the key's own ``G``.  A
+		secondary numeral's key is the major scale it points to, and a
+		borrowed one's the parallel mode it borrows from.  In natural minor
+		every numeral on a degree of the key belongs to it: Simon's call is
+		that ``V`` and ``IV`` take the key's seventh, as a textbook has it -
+		E7 and D7 in A minor (decision 9 of #2991, #3026).  A root decision 8
+		raises is off the key and keeps its colour, which for ``vi`` and
+		``vii°`` is the textbook seventh anyway: F#m7 and G#dim7.
+		"""
+
+		if self.of is not None:
+			target = RomanChord(degree=self.of).resolve(key_pc, scale)
+			return dataclasses.replace(self, of=None)._extension_key(target.root_pc, "ionian")
+
+		chord = self.resolve(key_pc, scale)
+		mode = _parallel_mode(scale) if self.borrowed else scale
+		pcs = [pc % 12 for pc in subsequence.intervals.scale_pitch_classes(key_pc, mode)]
+		natural_minor = _is_natural_minor(mode)
+
+		if chord.root_pc not in pcs:
+			return None
+
+		index = pcs.index(chord.root_pc)
+
+		if self.quality is None or natural_minor:
+			return pcs, index, chord.root_pc
+
+		_, qualities = subsequence.intervals.SCALE_MODE_MAP[mode]
+
+		if qualities is None or index >= len(qualities) or chord.quality != qualities[index]:
+			return None
+
+		return pcs, index, chord.root_pc
+
 	def diatonic_extension_intervals (
 		self,
 		key_pc: int,
 		scale: str,
 		extensions: typing.Tuple[typing.Any, ...],
-	) -> typing.Tuple[int, ...]:
+	) -> typing.Optional[typing.Tuple[int, ...]]:
 
-		"""Stack diatonic thirds above the triad for numeric extensions.
+		"""Stack diatonic thirds above the triad for numeric extensions, or ``None`` for its own colour.
 
-		Only meaningful for inferred-quality degrees (the bare-int path):
 		``extend(7)`` on V in C major yields F natural (a dominant seventh),
-		where the colour rule on a concrete G chord would yield F#.
+		where the colour rule on a concrete G chord would yield F#.  That holds
+		for a bare degree and for a numeral that is its key's own (see
+		:meth:`_extension_key`): ``V`` extends to G7, ``ii`` to Dm7, ``vii°``
+		to Bm7b5 in C major, and ``V`` to E7 in A minor.  An altered numeral,
+		and one that names its own seventh, keeps its colour - ``None`` here.
 
 		A 9/11/13 implies every seventh-family tone below it - ``extend(9)``
 		stacks the diatonic seventh AND the ninth, so a degree yields the
@@ -343,17 +426,15 @@ class RomanChord:
 		``add9``).
 		"""
 
-		mode = "minor" if self.borrowed and scale != "minor" else ("ionian" if self.borrowed else scale)
-		pcs = subsequence.intervals.scale_pitch_classes(key_pc, mode)
+		if self.quality is not None and self.quality not in _TRIAD_QUALITIES:
+			return None
 
-		if self.degree > len(pcs):
-			raise ValueError(
-				f"scale degree {self.degree} is out of range for {mode!r} "
-				f"({len(pcs)} degrees)"
-			)
+		key = self._extension_key(key_pc, scale)
 
-		root_pc = (pcs[self.degree - 1] + self.accidental) % 12
+		if key is None:
+			return None
 
+		pcs, index, root_pc = key
 		intervals: typing.List[int] = []
 
 		for extension in extensions:
@@ -369,7 +450,7 @@ class RomanChord:
 
 			# Stack every odd scale step from the seventh up to the extension.
 			for steps in range(6, top + 1, 2):
-				pc = pcs[(self.degree - 1 + steps) % len(pcs)]
+				pc = pcs[(index + steps) % len(pcs)]
 				octave = 0 if steps == 6 else 12	# 9ths/11ths/13ths live above the octave
 				intervals.append(((pc - root_pc) % 12) + octave)
 
@@ -606,8 +687,10 @@ class ChordSpan:
 		extension_intervals = self.extension_intervals
 
 		if isinstance(chord, RomanChord):
-			if chord.quality is None and any(isinstance(e, int) for e in self.extensions):
-				extension_intervals = chord.diatonic_extension_intervals(key_pc, scale, self.extensions)
+			if any(isinstance(e, int) for e in self.extensions):
+				diatonic = chord.diatonic_extension_intervals(key_pc, scale, self.extensions)
+				if diatonic is not None:
+					extension_intervals = diatonic
 			chord = chord.resolve(key_pc, scale)
 
 		bass: typing.Optional[typing.Union[int, str]] = self.bass
@@ -744,9 +827,10 @@ class ChordSpan:
 		gets a minor seventh, a major third a major seventh, a diminished triad
 		a diminished seventh - so ``extend(9)`` on a plain C gives Cmaj9.  The
 		chord *symbol* ``"C9"`` is a dominant, as a chart means it; write
-		``"Cmaj9"`` for the major seventh.  Diatonic degrees extended with
-		``extend(...)`` carry pre-computed scale-true intervals instead, so V
-		gets its dominant seventh.
+		``"Cmaj9"`` for the major seventh.  A degree, or a numeral that is its
+		key's own, extended with ``extend(...)`` carries pre-computed
+		scale-true intervals instead, so ``V`` gets its dominant seventh - E7
+		in A minor as G7 in C - and so does a secondary ``V/V`` (#3026).
 
 		Everything below an extension sounds with it: an 11th carries the 9, a
 		13th carries the 9 and the 11.  Two jazz rules then shape it, on both
@@ -1001,7 +1085,9 @@ def parse_roman (text: str) -> typing.Tuple[RomanChord, int]:
 	``aug`` augmented; ``maj7`` forces the major seventh; figured-bass
 	suffixes give sevenths and inversions (``7``/``65``/``43``/``42``;
 	``6``/``64`` for triads); ``b``/``#`` prefixes shift the degree; one
-	level of ``/x`` secondary function (``V7/IV``).
+	level of ``/x`` secondary function (``V7/IV``).  In natural minor the
+	case also decides the sixth and seventh, raised when lowercase - see
+	:class:`RomanChord`.
 
 	Raises ``ValueError`` for anything it can't read.
 	"""
@@ -1489,6 +1575,12 @@ class Progression:
 	def extend (self, *extensions: typing.Any, only: typing.Optional[typing.List[int]] = None) -> "Progression":
 
 		"""Add chord extensions (``7``/``9``/``11``/``13``/``"sus4"``/...) to every span.
+
+		A degree, or a numeral that is its key's own, takes its seventh from
+		the key - ``V`` becomes G7 in C and E7 in A minor, ``ii`` Dm7 - and a
+		secondary ``V/V`` takes the seventh of the key it points to, D7 in C.
+		Any other chord deepens in its own colour: ``II`` in C, or ``bVII``,
+		gets a major seventh.
 
 		``only=`` restricts the spice to the given 1-based chord slots.
 		"""
