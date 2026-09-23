@@ -353,7 +353,7 @@ class RomanChord:
 		if self.degree > len(qualities):
 			raise ValueError(
 				f"cannot infer a chord quality for degree {self.degree} under "
-				f"{mode!r} ({len(qualities)} degrees) — write the quality "
+				f"{mode!r} ({len(qualities)} degrees) - write the quality "
 				"explicitly (e.g. 'bVII' rather than a bare accidental degree)"
 			)
 
@@ -512,7 +512,7 @@ def resolve_constraint (spec: typing.Any, key_pc: int, scale: str, what: str) ->
 	parsed = parse_element(spec).chord
 
 	if isinstance(parsed, PitchSet):
-		raise ValueError(f"{what}: generation needs rooted chords — a PitchSet cannot constrain the walk")
+		raise ValueError(f"{what}: generation needs rooted chords - a PitchSet cannot constrain the walk")
 	if isinstance(parsed, RomanChord):
 		return parsed.resolve(key_pc, scale)
 
@@ -539,7 +539,7 @@ def cadence_pins (
 
 	if end is not None:
 		raise ValueError(
-			f"cadence={name!r} already fixes the final bar — it conflicts with end={end!r} "
+			f"cadence={name!r} already fixes the final bar - it conflicts with end={end!r} "
 			"(drop end=, or spell the tail yourself with pins=)"
 		)
 
@@ -654,10 +654,10 @@ class ChordSpan:
 				or (isinstance(extension, str) and extension in _EXTENSION_NAMES)
 			):
 				known = ", ".join(["7", "9", "11", "13"] + sorted(_EXTENSION_NAMES))
-				raise ValueError(f"unknown extension {extension!r} — expected one of: {known}")
+				raise ValueError(f"unknown extension {extension!r} - expected one of: {known}")
 
 		if self.spread is not None and self.spread not in _SPREAD_STYLES:
-			raise ValueError(f"unknown spread {self.spread!r} — expected one of: " + ", ".join(sorted(_SPREAD_STYLES)))
+			raise ValueError(f"unknown spread {self.spread!r} - expected one of: " + ", ".join(sorted(_SPREAD_STYLES)))
 
 	@property
 	def is_concrete (self) -> bool:
@@ -841,7 +841,7 @@ class ChordSpan:
 		"""
 
 		if isinstance(self.chord, RomanChord):
-			raise ValueError("cannot voice a key-relative span — resolve(key=...) it first")
+			raise ValueError("cannot voice a key-relative span - resolve(key=...) it first")
 
 		intervals = list(self.chord.intervals())
 
@@ -909,7 +909,7 @@ class ChordSpan:
 		"""
 
 		if isinstance(self.chord, RomanChord):
-			raise ValueError("cannot voice a key-relative span — resolve(key=...) it first")
+			raise ValueError("cannot voice a key-relative span - resolve(key=...) it first")
 
 		if isinstance(self.chord, PitchSet):
 			return self.chord.tones(root, inversion=self.inversion, count=count)
@@ -964,7 +964,7 @@ class DecoratedChord:
 		"""Wrap a concrete, decorated span."""
 
 		if not span.is_concrete:
-			raise ValueError("DecoratedChord needs a concrete span — resolve(key=...) first")
+			raise ValueError("DecoratedChord needs a concrete span - resolve(key=...) first")
 
 		self._span = span
 
@@ -1096,13 +1096,13 @@ def parse_roman (text: str) -> typing.Tuple[RomanChord, int]:
 	match = _ROMAN_RE.match(stripped)
 
 	if not match:
-		raise ValueError(f"Cannot parse roman numeral {text!r} — expected e.g. 'V7', 'bVII', 'ii65', 'V/V'")
+		raise ValueError(f"Cannot parse roman numeral {text!r} - expected e.g. 'V7', 'bVII', 'ii65', 'V/V'")
 
 	numeral = match.group("numeral")
 	lowered = numeral.lower()
 
 	if lowered not in _ROMAN_VALUES or numeral not in (lowered, numeral.upper()):
-		raise ValueError(f"Cannot parse roman numeral {text!r} — {numeral!r} is not a degree numeral (I–VII)")
+		raise ValueError(f"Cannot parse roman numeral {text!r} - {numeral!r} is not a degree numeral (I–VII)")
 
 	degree = _ROMAN_VALUES[lowered]
 	is_upper = numeral == numeral.upper()
@@ -1120,7 +1120,7 @@ def parse_roman (text: str) -> typing.Tuple[RomanChord, int]:
 		quality = "augmented"
 	elif has_maj7:
 		if not is_upper:
-			raise ValueError(f"Cannot parse roman numeral {text!r} — maj7 needs an uppercase numeral")
+			raise ValueError(f"Cannot parse roman numeral {text!r} - maj7 needs an uppercase numeral")
 		quality = "major_7th"
 	elif has_seventh:
 		quality = "dominant_7th" if is_upper else "minor_7th"
@@ -1132,13 +1132,13 @@ def parse_roman (text: str) -> typing.Tuple[RomanChord, int]:
 
 	if of_text is not None:
 		if "/" in of_text:
-			raise ValueError(f"Cannot parse roman numeral {text!r} — only one level of secondary function (/x) is supported")
+			raise ValueError(f"Cannot parse roman numeral {text!r} - only one level of secondary function (/x) is supported")
 		if of_text.lower() in _ROMAN_VALUES:
 			of = _ROMAN_VALUES[of_text.lower()]
 		elif of_text.isdigit():
 			of = int(of_text)
 		else:
-			raise ValueError(f"Cannot parse roman numeral {text!r} — secondary target {of_text!r} is not a degree")
+			raise ValueError(f"Cannot parse roman numeral {text!r} - secondary target {of_text!r} is not a degree")
 
 	roman = RomanChord(
 		degree = degree,
@@ -1189,7 +1189,7 @@ def parse_element (element: typing.Any, beats: float = DEFAULT_SPAN_BEATS) -> Ch
 		return ChordSpan(chord=roman, beats=beats, inversion=inversion)
 
 	raise TypeError(
-		f"cannot parse progression element {element!r} — expected an int degree, "
+		f"cannot parse progression element {element!r} - expected an int degree, "
 		"a chord name or roman string, a Chord, a PitchSet, or an (element, beats) tuple"
 	)
 
@@ -1328,7 +1328,7 @@ class Progression:
 		if not self.is_concrete:
 			relative = ", ".join(span.label() for span in self.spans if not span.is_concrete)
 			raise ValueError(
-				f"cannot {action} on a key-relative progression (contains {relative}) — "
+				f"cannot {action} on a key-relative progression (contains {relative}) - "
 				"call .resolve(key=...) first, or bind it where a key is known"
 			)
 
@@ -1473,7 +1473,7 @@ class Progression:
 		if rng is None:
 			if seed is None:
 				warnings.warn(
-					"Progression.generate without seed= is nondeterministic — "
+					"Progression.generate without seed= is nondeterministic - "
 					"pass seed= so the value survives live reload",
 					stacklevel = 2,
 				)
@@ -1566,7 +1566,7 @@ class Progression:
 		"""Parallel merge is a type error for governing values - by design."""
 
 		raise TypeError(
-			"Progressions cannot be merged with & — there is one current chord. "
+			"Progressions cannot be merged with & - there is one current chord. "
 			"Sequence them with +, or give a pattern its own part-level progression."
 		)
 
@@ -1602,7 +1602,7 @@ class Progression:
 		values = [spec] if isinstance(spec, int) else list(spec)
 
 		if not values:
-			raise ValueError("inversions list is empty — pass at least one inversion")
+			raise ValueError("inversions list is empty - pass at least one inversion")
 
 		spans = tuple(
 			dataclasses.replace(span, inversion = int(values[index % len(values)]))
@@ -1674,7 +1674,7 @@ class Progression:
 
 			if not isinstance(chord, RomanChord):
 				raise ValueError(
-					f"slot {index + 1} holds a concrete chord ({spans[index].label()}) — "
+					f"slot {index + 1} holds a concrete chord ({spans[index].label()}) - "
 					"borrow() needs key-relative content (an int degree or roman)"
 				)
 
@@ -1685,7 +1685,7 @@ class Progression:
 					else "a secondary numeral resolves against its own target's key"
 				)
 				logger.warning(
-					"borrow(): slot %d (%s) cannot be borrowed — %s. Leaving it as it is.",
+					"borrow(): slot %d (%s) cannot be borrowed - %s. Leaving it as it is.",
 					index + 1, spans[index].label(), reason,
 				)
 				continue
@@ -1754,7 +1754,7 @@ class Progression:
 		values = [float(beats)] if isinstance(beats, (int, float)) else [float(b) for b in beats]
 
 		if not values:
-			raise ValueError("with_rhythm list is empty — pass at least one length")
+			raise ValueError("with_rhythm list is empty - pass at least one length")
 
 		spans = tuple(
 			dataclasses.replace(span, beats = float(values[index % len(values)]))
@@ -1829,11 +1829,11 @@ class Progression:
 
 		for span in self.spans:
 			if isinstance(span.chord, PitchSet):
-				raise ValueError("elaborate needs rooted chords — a PitchSet has no root to approach by fifths")
+				raise ValueError("elaborate needs rooted chords - a PitchSet has no root to approach by fifths")
 
 		if depth >= 3 and seed is None:
 			warnings.warn(
-				"elaborate(depth>=3) makes tritone-substitution choices — pass seed= so the "
+				"elaborate(depth>=3) makes tritone-substitution choices - pass seed= so the "
 				"result survives live reload",
 				stacklevel = 2,
 			)
@@ -1879,7 +1879,7 @@ class Progression:
 
 		key_pc = None if key is None else (key if isinstance(key, int) else subsequence.chords.key_name_to_pc(key))
 
-		lines = [f"Progression — {len(self.spans)} chords over {self.length:g} beats"]
+		lines = [f"Progression - {len(self.spans)} chords over {self.length:g} beats"]
 		cursor = 0.0
 
 		for span in self.spans:
@@ -1916,7 +1916,7 @@ def _span_lengths (beats: typing.Union[float, typing.List[float]], count: int) -
 	values = [float(b) for b in beats]
 
 	if not values:
-		raise ValueError("beats list is empty — pass at least one length")
+		raise ValueError("beats list is empty - pass at least one length")
 
 	return [values[index % len(values)] for index in range(count)]
 
@@ -2022,7 +2022,7 @@ def progression (
 	if passed:
 		raise ValueError(
 			f"{', '.join(sorted(passed))} only apply when generating with style=. "
-			"A concrete progression takes these as methods instead — e.g. "
+			"A concrete progression takes these as methods instead - e.g. "
 			".cadence('strong') for the close, and the key binds at "
 			"composition.harmony() / resolve() time."
 		)
@@ -2036,7 +2036,7 @@ def progression (
 		known = ", ".join(sorted(_PRESETS))
 		raise ValueError(
 			f"Unknown progression preset {source!r}. Known presets: {known}. "
-			"Or pass a list — progression([1, 6, 3, 7]) / progression(['Am', 'F', 'C', 'G'])."
+			"Or pass a list - progression([1, 6, 3, 7]) / progression(['Am', 'F', 'C', 'G'])."
 		)
 
 	if source is None:
@@ -2045,7 +2045,7 @@ def progression (
 	elements = list(source)
 
 	if not elements:
-		raise ValueError("progression list is empty — pass at least one chord")
+		raise ValueError("progression list is empty - pass at least one chord")
 
 	lengths = _span_lengths(beats, len(elements))
 
@@ -2061,7 +2061,7 @@ def _chord_source (source: ProgressionSource, key: typing.Optional[str], rng: ra
 
 	if isinstance(source, str):
 		if not key:
-			raise ValueError(f"progression style {source!r} needs a key — pass key= or set the Composition key")
+			raise ValueError(f"progression style {source!r} needs a key - pass key= or set the Composition key")
 		state = subsequence.harmonic_state.HarmonicState(key_name=key, graph_style=source, rng=rng)
 		yield state.current_chord
 		while True:
@@ -2080,7 +2080,7 @@ def _chord_source (source: ProgressionSource, key: typing.Optional[str], rng: ra
 	else:
 		spans = [parse_element(item) for item in source]
 		if not spans:
-			raise ValueError("progression list is empty — pass at least one chord")
+			raise ValueError("progression list is empty - pass at least one chord")
 		chords = []
 		for span in spans:
 			if not span.is_concrete:
@@ -2099,7 +2099,7 @@ def _require_key (what: typing.Any, key: typing.Optional[str]) -> str:
 	if not key:
 		raise ValueError(
 			"this progression contains key-relative content (degrees, romans, or a "
-			"'tonic' pedal bass) — pass key= or set the Composition key"
+			"'tonic' pedal bass) - pass key= or set the Composition key"
 		)
 
 	return key
@@ -2122,12 +2122,12 @@ def _resolve_length (spec: HarmonicRhythmSpec, index: int, rng: random.Random) -
 		# A (low, high) tuple means a random range everywhere else in the API (e.g.
 		# velocity); here it would silently cycle.  Reject it so the intent is explicit.
 		raise ValueError(
-			f"harmonic_rhythm tuple {spec!r} is ambiguous — use between{spec!r} for a random "
+			f"harmonic_rhythm tuple {spec!r} is ambiguous - use between{spec!r} for a random "
 			f"range, or a list {list(spec)!r} for a repeating sequence of lengths"
 		)
 	if isinstance(spec, list):
 		if not spec:
-			raise ValueError("harmonic_rhythm sequence is empty — pass at least one length")
+			raise ValueError("harmonic_rhythm sequence is empty - pass at least one length")
 		return float(spec[index % len(spec)])
 	if isinstance(spec, bool):
 		raise TypeError(f"harmonic_rhythm must be a number, a list of lengths, or between(...), got bool: {spec!r}")
@@ -2185,7 +2185,7 @@ def realize (
 		chord = next(stream)
 		duration = _resolve_length(harmonic_rhythm, index, rng)
 		if duration <= 0:
-			raise ValueError(f"harmonic_rhythm produced a non-positive length ({duration:g}) — lengths are in beats and must be > 0")
+			raise ValueError(f"harmonic_rhythm produced a non-positive length ({duration:g}) - lengths are in beats and must be > 0")
 		duration = min(duration, length - cursor)
 		if isinstance(chord, DecoratedChord):
 			spans.append(dataclasses.replace(chord.span, beats=duration))

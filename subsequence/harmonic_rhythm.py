@@ -35,7 +35,7 @@ class HarmonicRhythm:
 		"""Validate the bounds at construction so a typo surfaces at the call site."""
 
 		if self.low <= 0:
-			raise ValueError(f"harmonic rhythm low ({self.low:g}) must be positive — lengths are in beats")
+			raise ValueError(f"harmonic rhythm low ({self.low:g}) must be positive - lengths are in beats")
 		if self.high < self.low:
 			raise ValueError(f"harmonic rhythm high ({self.high:g}) must be at least low ({self.low:g})")
 		if self.step is not None and self.step <= 0:

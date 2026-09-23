@@ -1169,7 +1169,7 @@ class Sequencer:
 			# device is never promoted into its place and a part written for
 			# the drum machine does not arrive at the lead synth (#2997).
 			logger.warning(
-				"Output device '%s' did not open — it keeps device 0 and stays silent, "
+				"Output device '%s' did not open - it keeps device 0 and stays silent, "
 				"so every other device keeps its own number.",
 				self.output_device_name,
 			)
@@ -1394,7 +1394,7 @@ class Sequencer:
 		# length the clock can schedule exactly.
 		if lookahead_pulses > length_pulses:
 			raise ValueError(
-				f"A reschedule_lookahead of {lookahead_beats:g} beats cannot exceed the {length_beats:g} beats it repeats over — "
+				f"A reschedule_lookahead of {lookahead_beats:g} beats cannot exceed the {length_beats:g} beats it repeats over - "
 				f"set reschedule_lookahead= to {length_beats:g} or less"
 			)
 
@@ -1569,7 +1569,7 @@ class Sequencer:
 							# name absent from *every* destination.
 							if i != 0 and note.origin is not None and target.drum_note_map is not None:
 								logger.debug(
-									"Mirror device %d channel %d has no voice for drum '%s' — dropped for this destination",
+									"Mirror device %d channel %d has no voice for drum '%s' - dropped for this destination",
 									target.device, target.channel, note.origin,
 								)
 							continue
@@ -1649,7 +1649,7 @@ class Sequencer:
 					if note_value is None:
 						if i != 0 and note_ev.origin is not None and target.drum_note_map is not None:
 							logger.debug(
-								"Mirror device %d channel %d has no voice for drum '%s' — dropped for this destination",
+								"Mirror device %d channel %d has no voice for drum '%s' - dropped for this destination",
 								target.device, target.channel, note_ev.origin,
 							)
 						continue
@@ -2030,15 +2030,15 @@ class Sequencer:
 			return
 
 		if self.render_mode:
-			logger.info("Render mode has no wall clock to hold — pause() ignored")
+			logger.info("Render mode has no wall clock to hold - pause() ignored")
 			return
 
 		if self.clock_follow:
-			logger.info("Transport is controlled by external clock — pause() ignored")
+			logger.info("Transport is controlled by external clock - pause() ignored")
 			return
 
 		if self._link_clock is not None:
-			logger.info("Transport belongs to the Ableton Link session — pause() ignored")
+			logger.info("Transport belongs to the Ableton Link session - pause() ignored")
 			return
 
 		self._paused = True
@@ -2059,11 +2059,11 @@ class Sequencer:
 		"""
 
 		if self.clock_follow:
-			logger.info("Transport is controlled by external clock — resume() ignored")
+			logger.info("Transport is controlled by external clock - resume() ignored")
 			return
 
 		if self._link_clock is not None:
-			logger.info("Transport belongs to the Ableton Link session — resume() ignored")
+			logger.info("Transport belongs to the Ableton Link session - resume() ignored")
 			return
 
 		self._paused = False
@@ -2734,7 +2734,7 @@ class Sequencer:
 				# session's tempo, which is what a 42 ms stall used to cause —
 				# so the position moves to where Link actually is.
 				logger.warning(
-					"Ableton Link: %d pulses behind (%.2f beats) — moving to the session's "
+					"Ableton Link: %d pulses behind (%.2f beats) - moving to the session's "
 					"position instead of playing the backlog.",
 					missed, missed / self.pulses_per_beat,
 				)
@@ -2952,7 +2952,7 @@ class Sequencer:
 				except Exception:
 
 					logger.exception(
-						"Failed to dispatch %s event at pulse %d (device=%s, channel=%s) — skipping",
+						"Failed to dispatch %s event at pulse %d (device=%s, channel=%s) - skipping",
 						event.message_type, event.pulse, event.device, event.channel
 					)
 

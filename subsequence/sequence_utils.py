@@ -45,7 +45,7 @@ def generate_euclidean_sequence (steps: int, pulses: int) -> typing.List[int]:
 	"""
 
 	if pulses < 0:
-		raise ValueError(f"Pulses must be zero or positive — got {pulses}")
+		raise ValueError(f"Pulses must be zero or positive - got {pulses}")
 
 	if pulses == 0:
 		return [0] * steps
@@ -94,7 +94,7 @@ def generate_bresenham_sequence (steps: int, pulses: int) -> typing.List[int]:
 	"""
 
 	if pulses < 0:
-		raise ValueError(f"Pulses must be zero or positive — got {pulses}")
+		raise ValueError(f"Pulses must be zero or positive - got {pulses}")
 
 	sequence = [0] * steps
 	error = 0
@@ -174,7 +174,7 @@ def generate_van_der_corput_sequence (n: int, base: int = 2) -> typing.List[floa
 
 	# base 1 never shrinks k (infinite loop) and base 0 divides by zero.
 	if base < 2:
-		raise ValueError(f"van der Corput base must be at least 2 — got {base}")
+		raise ValueError(f"van der Corput base must be at least 2 - got {base}")
 
 	sequence = []
 	
@@ -1292,7 +1292,7 @@ def fold (sequence: typing.Sequence[int], low: int, high: int, mode: str = "wrap
 	"""
 
 	if high <= low:
-		raise ValueError(f"fold() needs a range to fold into — high ({high}) must be above low ({low})")
+		raise ValueError(f"fold() needs a range to fold into - high ({high}) must be above low ({low})")
 
 	if mode not in ("wrap", "reflect"):
 		raise ValueError(f'Unknown fold mode {mode!r}. Available modes: "reflect", "wrap"')
@@ -1672,7 +1672,7 @@ def pink_noise (steps: int, sources: int = 16, seed: int = 0) -> typing.List[flo
 		return []
 
 	if sources <= 0:
-		raise ValueError(f"pink_noise() needs at least one random source to sum — got sources={sources}")
+		raise ValueError(f"pink_noise() needs at least one random source to sum - got sources={sources}")
 
 	rng = random.Random(seed)
 
@@ -2017,22 +2017,22 @@ def _parse_life_rule (rule: str) -> typing.Tuple[typing.Set[int], typing.Set[int
 	parts = rule.split("/")
 
 	if len(parts) != 2:
-		raise ValueError(f"Invalid Life rule: {rule!r} — expected 'B.../S...' format")
+		raise ValueError(f"Invalid Life rule: {rule!r} - expected 'B.../S...' format")
 
 	birth_part, survival_part = parts
 
 	if not birth_part.startswith("B") or not survival_part.startswith("S"):
-		raise ValueError(f"Invalid Life rule: {rule!r} — expected 'B.../S...' format")
+		raise ValueError(f"Invalid Life rule: {rule!r} - expected 'B.../S...' format")
 
 	try:
 		birth_set: typing.Set[int] = {int(c) for c in birth_part[1:]}
 		survival_set: typing.Set[int] = {int(c) for c in survival_part[1:]}
 	except ValueError:
-		raise ValueError(f"Invalid Life rule: {rule!r} — neighbour counts must be digits 0–8")
+		raise ValueError(f"Invalid Life rule: {rule!r} - neighbour counts must be digits 0–8")
 
 	for n in birth_set | survival_set:
 		if n > 8:
-			raise ValueError(f"Invalid Life rule: {rule!r} — neighbour count {n} exceeds maximum of 8")
+			raise ValueError(f"Invalid Life rule: {rule!r} - neighbour count {n} exceeds maximum of 8")
 
 	return birth_set, survival_set
 
@@ -2438,7 +2438,7 @@ def recaman (count: int, start: int = 0, skip: int = 0) -> typing.List[int]:
 	"""
 
 	if skip < 0:
-		raise ValueError(f"recaman() skip is how many values to discard from the front — it cannot be negative, got {skip}")
+		raise ValueError(f"recaman() skip is how many values to discard from the front - it cannot be negative, got {skip}")
 
 	if count <= 0:
 		return []
@@ -2510,10 +2510,10 @@ def fibonacci (
 	"""
 
 	if modulus is not None and modulus < 1:
-		raise ValueError(f"fibonacci() modulus is the size of the space to fold into — it must be at least 1, got {modulus}")
+		raise ValueError(f"fibonacci() modulus is the size of the space to fold into - it must be at least 1, got {modulus}")
 
 	if count is None and modulus is None:
-		raise ValueError("fibonacci() needs a count or a modulus — without a modulus the sequence never repeats, so there is no natural length")
+		raise ValueError("fibonacci() needs a count or a modulus - without a modulus the sequence never repeats, so there is no natural length")
 
 	if count is not None and count <= 0:
 		return []
@@ -3267,7 +3267,7 @@ def build_metric_weights (time_signature: typing.Tuple[int, int] = (4, 4), grid:
 	"""
 
 	if grid < 1:
-		raise ValueError(f"grid must be at least 1 — got {grid}")
+		raise ValueError(f"grid must be at least 1 - got {grid}")
 
 	beats, _ = subsequence.metre.check(time_signature)
 	grouped = subsequence.metre.accent_groups(time_signature) is not None
@@ -3444,7 +3444,7 @@ def constrained_walk (
 		if length in pins and pins[length] != end:
 			raise ValueError(
 				f"end={_constraint_label(end)} conflicts with pins[{length}]="
-				f"{_constraint_label(pins[length])} — they name the same position"
+				f"{_constraint_label(pins[length])} - they name the same position"
 			)
 		pins[length] = end
 
@@ -3457,14 +3457,14 @@ def constrained_walk (
 	for position, node in pins.items():
 		if node in avoid_set:
 			raise ValueError(
-				f"pins[{position}]={_constraint_label(node)} is also in avoid — "
+				f"pins[{position}]={_constraint_label(node)} is also in avoid - "
 				"a chord cannot be both required and forbidden"
 			)
 
 	if 1 in pins and pins[1] != start:
 		raise ValueError(
 			f"pins[1]={_constraint_label(pins[1])} conflicts with the walk's start "
-			f"({_constraint_label(start)}) — position 1 is where the walk begins"
+			f"({_constraint_label(start)}) - position 1 is where the walk begins"
 		)
 
 	all_nodes = graph.nodes()
@@ -3473,7 +3473,7 @@ def constrained_walk (
 		if node not in all_nodes and node != start:
 			raise ValueError(
 				f"pins[{position}]={_constraint_label(node)} is not in this graph's "
-				"vocabulary — it can never sound"
+				"vocabulary - it can never sound"
 			)
 
 	if length == 1:
@@ -3498,7 +3498,7 @@ def constrained_walk (
 		}
 		if not ok[position]:
 			raise ValueError(
-				f"no chord can satisfy the constraints at position {position} — "
+				f"no chord can satisfy the constraints at position {position} - "
 				"there is no way through to the pins after it"
 			)
 
@@ -3597,7 +3597,7 @@ def csim (a: typing.Sequence[float], b: typing.Sequence[float]) -> float:
 	"""
 
 	if len(a) != len(b):
-		raise ValueError(f"csim() compares equal-length lines — got {len(a)} and {len(b)}")
+		raise ValueError(f"csim() compares equal-length lines - got {len(a)} and {len(b)}")
 
 	count = len(a)
 
@@ -3667,7 +3667,7 @@ def sieve (
 
 	for modulus, _residue in classes:
 		if modulus < 1:
-			raise ValueError(f"sieve modulus must be at least 1 — got {modulus}")
+			raise ValueError(f"sieve modulus must be at least 1 - got {modulus}")
 
 	hits = {
 		x
@@ -3745,7 +3745,7 @@ def residual_class (modulus: int, residue: int) -> Sieve:
 	"""
 
 	if modulus < 1:
-		raise ValueError(f"residual-class modulus must be at least 1 — got {modulus}")
+		raise ValueError(f"residual-class modulus must be at least 1 - got {modulus}")
 
 	reduced = residue % modulus
 
@@ -3786,7 +3786,7 @@ def rhythmic_evenness (onsets: typing.Sequence[int], grid: int, normalize: bool 
 	"""
 
 	if grid < 1:
-		raise ValueError(f"grid must be at least 1 — got {grid}")
+		raise ValueError(f"grid must be at least 1 - got {grid}")
 
 	reduced = sorted({o % grid for o in onsets})
 	k = len(reduced)
@@ -3835,7 +3835,7 @@ def offbeatness (onsets: typing.Sequence[int], grid: int) -> int:
 	"""
 
 	if grid < 1:
-		raise ValueError(f"grid must be at least 1 — got {grid}")
+		raise ValueError(f"grid must be at least 1 - got {grid}")
 
 	reduced = {o % grid for o in onsets}
 
@@ -3881,12 +3881,12 @@ def syncopation (
 	"""
 
 	if grid < 1:
-		raise ValueError(f"grid must be at least 1 — got {grid}")
+		raise ValueError(f"grid must be at least 1 - got {grid}")
 
 	table = list(weights) if weights is not None else build_metric_weights(time_signature, grid)
 
 	if len(table) != grid:
-		raise ValueError(f"weights must have one value per grid step ({grid}) — got {len(table)}")
+		raise ValueError(f"weights must have one value per grid step ({grid}) - got {len(table)}")
 
 	reduced = sorted({o % grid for o in onsets})
 

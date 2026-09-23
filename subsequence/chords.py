@@ -379,7 +379,7 @@ def register_chord_quality (
 			)
 		if not suffix or suffix[0] in "ABCDEFG#b0123456789":
 			raise ValueError(
-				f"Suffix {suffix!r} would be ambiguous in a chord name — "
+				f"Suffix {suffix!r} would be ambiguous in a chord name - "
 				"it must not be empty or start with a note letter, accidental, or digit"
 			)
 
@@ -410,13 +410,13 @@ def split_chord_name (name: str) -> typing.Tuple[str, str]:
 	stripped = name.strip()
 
 	if not stripped or stripped[0] not in "ABCDEFG":
-		raise ValueError(f"Cannot parse chord name {name!r} — expected a root like 'C', 'F#', 'Bb' then a quality, e.g. 'Cm7'")
+		raise ValueError(f"Cannot parse chord name {name!r} - expected a root like 'C', 'F#', 'Bb' then a quality, e.g. 'Cm7'")
 
 	split = 2 if (len(stripped) > 1 and stripped[1] in "#b") else 1
 	root_name = stripped[:split]
 
 	if root_name not in NOTE_NAME_TO_PC:
-		raise ValueError(f"Cannot parse chord name {name!r} — unknown root {root_name!r}")
+		raise ValueError(f"Cannot parse chord name {name!r} - unknown root {root_name!r}")
 
 	return root_name, stripped[split:]
 
@@ -446,6 +446,6 @@ def parse_chord (name: str) -> Chord:
 
 	if suffix not in _SUFFIX_TO_QUALITY:
 		known = ", ".join(repr(key) for key in sorted(_SUFFIX_TO_QUALITY) if key)
-		raise ValueError(f"Cannot parse chord name {name!r} — unknown quality {suffix!r}. Known suffixes: {known}")
+		raise ValueError(f"Cannot parse chord name {name!r} - unknown quality {suffix!r}. Known suffixes: {known}")
 
 	return Chord(root_pc=NOTE_NAME_TO_PC[root_name], quality=_SUFFIX_TO_QUALITY[suffix])

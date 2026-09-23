@@ -413,10 +413,10 @@ class PatternBuilder(
 		if steps is not None:
 
 			if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
-				raise ValueError(f"steps= must be a whole number of steps, 1 or more — got {steps!r}")
+				raise ValueError(f"steps= must be a whole number of steps, 1 or more - got {steps!r}")
 
 			if self._step_beats is None:
-				raise ValueError("This pattern has no step size to count in — give set_length() a length in beats")
+				raise ValueError("This pattern has no step size to count in - give set_length() a length in beats")
 
 			length = steps * self._step_beats
 
@@ -440,7 +440,7 @@ class PatternBuilder(
 		if self._repeating and length_pulses < subsequence.constants.pulses.beats_to_pulses(lookahead):
 			raise ValueError(
 				f"A length of {length:g} beats is shorter than this pattern's "
-				f"reschedule_lookahead of {lookahead:g} beats, which would silence it — "
+				f"reschedule_lookahead of {lookahead:g} beats, which would silence it - "
 				f"keep it at least that long, or declare a shorter lookahead"
 			)
 
@@ -562,7 +562,7 @@ class PatternBuilder(
 		else:
 			scope  = f"the drum_note_map for {where}"
 			reason = "this device has no such voice"
-		logger.warning(f"Drum name '{name}' is not in {scope} — the note is dropped ({reason}). Check the spelling, or add it to a map.")
+		logger.warning(f"Drum name '{name}' is not in {scope} - the note is dropped ({reason}). Check the spelling, or add it to a map.")
 
 	def _resolve_pitch_lenient (self, pitch: subsequence.declarations.Pitch) -> typing.Optional[int]:
 
@@ -941,7 +941,7 @@ class PatternBuilder(
 		events = getattr(m, "events", None)
 
 		if events is None or not hasattr(m, "length"):
-			raise TypeError(f"motif() places Motif-like values (.events/.length) — got {type(m).__name__}")
+			raise TypeError(f"motif() places Motif-like values (.events/.length) - got {type(m).__name__}")
 
 		# The dial is each note's own (#3458): generate() gives the notes it
 		# makes 0.7 and a written note has none, so a written note beside a
@@ -1015,7 +1015,7 @@ class PatternBuilder(
 
 		if pitch is None:
 			raise ValueError(
-				"This motif is a rhythm skeleton (pitches stripped) — "
+				"This motif is a rhythm skeleton (pitches stripped) - "
 				"re-pitch it with .pitched() before placing"
 			)
 
@@ -1051,7 +1051,7 @@ class PatternBuilder(
 
 			if self.harmony is None:
 				raise ValueError(
-					"an Approach at a chord tone needs the harmonic clock — "
+					"an Approach at a chord tone needs the harmonic clock - "
 					"call composition.harmony(...) (a style or a bound progression)"
 				)
 
@@ -1061,7 +1061,7 @@ class PatternBuilder(
 				chord = self.harmony.chord_at(event_beat)
 			if chord is None:
 				raise ValueError(
-					f"No chord is known around beat {event_beat:g} of this cycle — "
+					f"No chord is known around beat {event_beat:g} of this cycle - "
 					"the harmony window does not cover it"
 				)
 
@@ -1081,7 +1081,7 @@ class PatternBuilder(
 
 		if not 0 <= pitch <= 127:
 			raise ValueError(
-				f"Approach resolves to MIDI {pitch}, outside 0–127 — adjust root= or the target's octave"
+				f"Approach resolves to MIDI {pitch}, outside 0–127 - adjust root= or the target's octave"
 			)
 
 		return pitch
@@ -1136,7 +1136,7 @@ class PatternBuilder(
 
 		if self.harmony is None:
 			raise ValueError(
-				"ChordTone pitches resolve against the harmonic clock — "
+				"ChordTone pitches resolve against the harmonic clock - "
 				"call composition.harmony(...) (a style or a bound progression)"
 			)
 
@@ -1144,7 +1144,7 @@ class PatternBuilder(
 
 		if chord is None:
 			raise ValueError(
-				f"No chord is known at beat {event_beat:g} of this cycle — "
+				f"No chord is known at beat {event_beat:g} of this cycle - "
 				"the harmony window does not cover it"
 			)
 
@@ -1153,7 +1153,7 @@ class PatternBuilder(
 
 		if not 0 <= midi <= 127:
 			raise ValueError(
-				f"Chord tone {tone.index} resolves to MIDI {midi}, outside 0–127 — "
+				f"Chord tone {tone.index} resolves to MIDI {midi}, outside 0–127 - "
 				"adjust root= or the tone's octaves"
 			)
 
@@ -1172,7 +1172,7 @@ class PatternBuilder(
 		"""
 
 		if self.key is None:
-			raise ValueError("Scale degrees resolve against a key — set Composition(key=...)")
+			raise ValueError("Scale degrees resolve against a key - set Composition(key=...)")
 
 		mode = self.scale or "ionian"
 		pcs = subsequence.intervals.scale_pitch_classes(subsequence.chords.key_name_to_pc(self.key), mode)
@@ -1188,7 +1188,7 @@ class PatternBuilder(
 
 		if not 0 <= midi <= 127:
 			raise ValueError(
-				f"Degree {degree.step} resolves to MIDI {midi}, outside 0–127 — "
+				f"Degree {degree.step} resolves to MIDI {midi}, outside 0–127 - "
 				f"adjust root= or the degree's octaves"
 			)
 
@@ -1290,7 +1290,7 @@ class PatternBuilder(
 		length = getattr(value, "length", None)
 
 		if length is None or not hasattr(value, "slice"):
-			raise TypeError(f"phrase() places Phrase-like values (.length/.slice) — got {type(value).__name__}")
+			raise TypeError(f"phrase() places Phrase-like values (.length/.slice) - got {type(value).__name__}")
 		if length <= 0:
 			raise ValueError("cannot place an empty phrase")
 
@@ -1298,10 +1298,10 @@ class PatternBuilder(
 			position = (self.cycle * float(self._pattern.length) + offset) % length
 		elif align == "section":
 			if self.section is None:
-				raise ValueError('phrase(align="section") needs a form — call composition.form(...)')
+				raise ValueError('phrase(align="section") needs a form - call composition.form(...)')
 			position = (self.section.bar * self.bar_beats + offset) % length
 		else:
-			raise ValueError(f'align must be "pattern" or "section" — got {align!r}')
+			raise ValueError(f'align must be "pattern" or "section" - got {align!r}')
 
 		window_beats = float(self._pattern.length)
 		placed = 0.0
@@ -1858,7 +1858,7 @@ class PatternBuilder(
 		"""
 
 		if beat < 0:
-			raise ValueError("arpeggio beat must be >= 0 — use a positive start within the pattern")
+			raise ValueError("arpeggio beat must be >= 0 - use a positive start within the pattern")
 
 		if spacing <= 0:
 			raise ValueError("Spacing must be positive")
@@ -1934,7 +1934,7 @@ class PatternBuilder(
 			return
 		self._pattern._warned_positioned_articulation = True
 		logger.warning(
-			"%s(beat=%g, …) was called with sustain= or detached= set — those size the ring "
+			"%s(beat=%g, …) was called with sustain= or detached= set - those size the ring "
 			"from the pattern length, not from beat, so the chord can sustain past its slot.  "
 			"For a positioned chord (e.g. over a progression) set duration= explicitly instead.",
 			method, beat,
@@ -2001,7 +2001,7 @@ class PatternBuilder(
 
 		if root is None:
 			raise ValueError(
-				f"{method}(<chord>, …) needs a root — e.g. {method}(chord, root=48); "
+				f"{method}(<chord>, …) needs a root - e.g. {method}(chord, root=48); "
 				"pass a root MIDI note, or hand a list of pitches instead"
 			)
 
@@ -2026,12 +2026,12 @@ class PatternBuilder(
 
 		if replacement is not None and replacement in allowed:
 			raise ValueError(
-				f"{method} direction '{direction}' was retired because it never sorted — "
+				f"{method} direction '{direction}' was retired because it never sorted - "
 				f"'{replacement}' plays exactly what it played, and 'low_to_high' is what "
 				"its documentation described"
 			)
 
-		raise ValueError(f"{method} direction must be one of {', '.join(allowed)} — got '{direction}'")
+		raise ValueError(f"{method} direction must be one of {', '.join(allowed)} - got '{direction}'")
 
 
 	def _refuse_voicing_arguments (self, method: str, root: typing.Optional[int], inversion: int, count: typing.Optional[int] = None) -> None:
@@ -2044,7 +2044,7 @@ class PatternBuilder(
 
 		if root is not None or count is not None or inversion != 0:
 			raise ValueError(
-				f"{method} root=, count=, and inversion= only apply to the chord form — "
+				f"{method} root=, count=, and inversion= only apply to the chord form - "
 				f"{method}(chord, root=48); with a plain pitch list, drop them"
 			)
 
@@ -2111,7 +2111,7 @@ class PatternBuilder(
 
 		set_count = (1 if sustain else 0) + (1 if legato is not None else 0) + (1 if detached is not None else 0)
 		if set_count > 1:
-			raise ValueError("sustain=, legato=, and detached= are mutually exclusive — use one or the other")
+			raise ValueError("sustain=, legato=, and detached= are mutually exclusive - use one or the other")
 
 		if beat != 0.0 and (sustain or detached is not None):
 			self._warn_positioned_articulation("chord", beat)
@@ -2219,7 +2219,7 @@ class PatternBuilder(
 
 		set_count = (1 if sustain else 0) + (1 if legato is not None else 0) + (1 if detached is not None else 0)
 		if set_count > 1:
-			raise ValueError("sustain=, legato=, and detached= are mutually exclusive — use one or the other")
+			raise ValueError("sustain=, legato=, and detached= are mutually exclusive - use one or the other")
 
 		if beat != 0.0 and (sustain or detached is not None):
 			self._warn_positioned_articulation("strum", beat)
@@ -2245,7 +2245,7 @@ class PatternBuilder(
 		elif detached is not None:
 			duration = float(self._pattern.length) - detached - (len(pitches) - 1) * spacing
 			if duration <= 0:
-				raise ValueError(f"detached ({detached}) plus the strum stagger exceeds the pattern length ({self._pattern.length:g} beats) — reduce detached, spacing, or count")
+				raise ValueError(f"detached ({detached}) plus the strum stagger exceeds the pattern length ({self._pattern.length:g} beats) - reduce detached, spacing, or count")
 
 		placed_before = self._note_ids() if legato is not None else set()
 
@@ -3362,7 +3362,7 @@ class PatternBuilder(
 			low, high = within
 
 			if low > high:
-				raise ValueError(f"transpose(within=) needs (low, high) — got ({low}, {high}), which is empty")
+				raise ValueError(f"transpose(within=) needs (low, high) - got ({low}, {high}), which is empty")
 
 		emptied: typing.List[int] = []
 
@@ -3426,7 +3426,7 @@ class PatternBuilder(
 		"""
 
 		if n < 1:
-			raise ValueError(f"every() cycle length must be at least 1 cycle — got {n} (every(1, ...) applies the change every cycle)")
+			raise ValueError(f"every() cycle length must be at least 1 cycle - got {n} (every(1, ...) applies the change every cycle)")
 
 		if self.cycle % n == 0:
 			fn(self)
@@ -3463,6 +3463,6 @@ class PatternBuilder(
 		"""
 
 		if length < 1:
-			raise ValueError(f"bar_cycle() cycle length must be at least 1 bar — got {length}")
+			raise ValueError(f"bar_cycle() cycle length must be at least 1 bar - got {length}")
 
 		return BarCycle(bar=self.bar % length, length=length)

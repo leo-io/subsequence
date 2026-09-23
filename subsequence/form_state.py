@@ -171,7 +171,7 @@ class FormState:
 
 		if loop:
 			if at_end not in ("stop", "loop"):
-				raise ValueError(f"loop=True conflicts with at_end={at_end!r} — pass one or the other")
+				raise ValueError(f"loop=True conflicts with at_end={at_end!r} - pass one or the other")
 			at_end = "loop"
 
 		self._at_end: str = at_end
@@ -209,7 +209,7 @@ class FormState:
 			# Graph mode: build a WeightedGraph from the dict.
 			if at_end != "stop":
 				raise ValueError(
-					f"at_end={at_end!r} applies to sequence forms — a graph form ends "
+					f"at_end={at_end!r} applies to sequence forms - a graph form ends "
 					"via its terminal sections (give a section None transitions)"
 				)
 
@@ -260,7 +260,7 @@ class FormState:
 			# Generator/iterator mode: use directly.
 			if at_end == "loop":
 				raise ValueError(
-					'at_end="loop" cannot replay a generator form — pass a list '
+					'at_end="loop" cannot replay a generator form - pass a list '
 					'(or Form) if the form should cycle'
 				)
 
@@ -394,7 +394,7 @@ class FormState:
 
 		if self._section_bars is None:
 			raise ValueError(
-				f"{what}() needs a navigable form (a graph dict, a list, or a Form value) — "
+				f"{what}() needs a navigable form (a graph dict, a list, or a Form value) - "
 				"a generator form cannot be navigated"
 			)
 

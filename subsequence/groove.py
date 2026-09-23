@@ -192,7 +192,7 @@ class Groove:
 			grid = clip_length / note_count
 
 		if grid <= 0:
-			raise ValueError(f"grid must be positive — got {grid}")
+			raise ValueError(f"grid must be positive - got {grid}")
 
 		slot_count = max(1, int(round(clip_length / grid)))
 

@@ -320,7 +320,7 @@ class KeystrokeListener:
 			# A broken listener must not crash the composition — but dying
 			# silently left "why did my hotkeys stop working?" unanswerable
 			# (the finally below marks the listener inactive).
-			logger.warning("Keystroke listener stopped after an unexpected error — hotkeys are now inactive", exc_info=True)
+			logger.warning("Keystroke listener stopped after an unexpected error - hotkeys are now inactive", exc_info=True)
 
 		finally:
 			# Always restore terminal, even after exceptions - and quietly: a

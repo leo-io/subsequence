@@ -103,7 +103,7 @@ class _TimetagProtocol (asyncio.DatagramProtocol):
 					self._warned_about_horizon = True
 					logger.warning(
 						"An OSC message is timed %.0f seconds ahead, past the %.0f-second "
-						"limit — playing it now. Check the sending machine's clock.",
+						"limit - playing it now. Check the sending machine's clock.",
 						ahead, MAX_TIMETAG_AHEAD_SECONDS,
 					)
 				ahead = 0.0

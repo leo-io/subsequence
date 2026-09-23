@@ -327,7 +327,7 @@ def load_definitions (path: typing.Union[str, pathlib.Path]) -> Definitions:
 				raise ValueError(
 					f"definitions file {p}: section {section!r}: name "
 					f"{name!r} must match [a-z][a-z0-9_]* (lowercase "
-					f"letters, digits, underscores — no dots)"
+					f"letters, digits, underscores - no dots)"
 				)
 
 			# bool is an int subclass — reject it first so ``x: true`` fails

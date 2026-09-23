@@ -502,7 +502,7 @@ class _HarmonyHorizon:
 		if not self._warned_beyond:
 			self._warned_beyond = True
 			logger.warning(
-				"chord_at(%.2f) is beyond the harmony window — clamping to the last known chord. "
+				"chord_at(%.2f) is beyond the harmony window - clamping to the last known chord. "
 				"In live graph mode only [current, next] is committed; bind a progression for a data future.",
 				beat,
 			)
@@ -762,7 +762,7 @@ async def schedule_harmonic_clock (
 		if abs(remaining - round(remaining)) > 1e-9:
 			logger.warning(
 				f"cadence request {name!r}: bar {target_bar} does not land on a chord "
-				f"boundary ({cb:g}-beat cycles) — the arrival sounds at the boundary before it"
+				f"boundary ({cb:g}-beat cycles) - the arrival sounds at the boundary before it"
 			)
 
 		tail = list(formula[-steps:])
@@ -770,7 +770,7 @@ async def schedule_harmonic_clock (
 		if steps < len(formula):
 			logger.warning(
 				f"cadence request {name!r} at bar {target_bar}: only {steps} chord change(s) "
-				f"before the arrival — approaching with the formula's tail alone"
+				f"before the arrival - approaching with the formula's tail alone"
 			)
 
 		length = steps + 1		# walk position 1 is the chord sounding now
@@ -796,7 +796,7 @@ async def schedule_harmonic_clock (
 		except ValueError as error:
 			logger.warning(
 				f"cadence request {name!r} at bar {target_bar} is not walkable from "
-				f"{saved_current.name()} ({error}) — the arrival lands by fiat"
+				f"{saved_current.name()} ({error}) - the arrival lands by fiat"
 			)
 			state["cadence_queue"] = [None] * (steps - len(tail)) + tail
 			state["cadence_target"] = (target_bar, name)
@@ -986,7 +986,7 @@ async def schedule_harmonic_clock (
 			for expired_bar in [b for b in cadence_requests if (b - 1) * bar_beats < beat - 1e-9]:
 				expired_name = cadence_requests.pop(expired_bar)
 				logger.warning(
-					f"cadence request {expired_name!r} at bar {expired_bar} expired unserved — "
+					f"cadence request {expired_name!r} at bar {expired_bar} expired unserved - "
 					"the bar passed while harmony was data-bound, or the request arrived too late"
 				)
 
@@ -1086,7 +1086,7 @@ async def schedule_harmonic_clock (
 					if not state["held_once"]:
 						state["held_once"] = True
 						logger.info(
-							"No chords for this part of the form and no harmony() to generate them — "
+							"No chords for this part of the form and no harmony() to generate them - "
 							"holding the last chord until a section that has some."
 						)
 
@@ -1484,7 +1484,7 @@ async def run_until_stopped (sequencer: subsequence.sequencer.Sequencer) -> None
 				signal.signal(sig, lambda s, f: _request_stop())
 		except ValueError:
 			logger.debug(
-				"No handler installed for %s on this thread — stop(), the bar limit and "
+				"No handler installed for %s on this thread - stop(), the bar limit and "
 				"the time cap still end the run.",
 				sig.name,
 			)
@@ -1726,7 +1726,7 @@ class Composition:
 		"""
 
 		if latency_ms < 0:
-			raise ValueError(f"latency_ms must be non-negative — got {latency_ms}")
+			raise ValueError(f"latency_ms must be non-negative - got {latency_ms}")
 
 		self.output_device = output_device
 		self.bpm = bpm
@@ -1894,7 +1894,7 @@ class Composition:
 		idx = self._output_device_names.get(device)
 		if idx is None:
 			logger.warning(
-				f"Unknown output device name '{device}' — routing to device 0. "
+				f"Unknown output device name '{device}' - routing to device 0. "
 				f"Available names: {list(self._output_device_names.keys())}"
 			)
 			return 0
@@ -1917,7 +1917,7 @@ class Composition:
 		idx = self._input_device_names.get(device)
 		if idx is None:
 			logger.warning(
-				f"Unknown input device name '{device}' — mapping will be ignored. "
+				f"Unknown input device name '{device}' - mapping will be ignored. "
 				f"Available names: {list(self._input_device_names.keys())}"
 			)
 			return -1
@@ -2102,30 +2102,30 @@ class Composition:
 			try:
 				items = list(entry)
 			except TypeError:
-				raise ValueError(f"Mirror entry must be a (device, channel[, drum_note_map]) tuple — got {entry!r}")
+				raise ValueError(f"Mirror entry must be a (device, channel[, drum_note_map]) tuple - got {entry!r}")
 
 			if len(items) not in (2, 3):
-				raise ValueError(f"Mirror entry must have 2 or 3 elements (device, channel[, drum_note_map]) — got {entry!r}")
+				raise ValueError(f"Mirror entry must have 2 or 3 elements (device, channel[, drum_note_map]) - got {entry!r}")
 
 			device = items[0]
 			channel = items[1]
 			drum_map = items[2] if len(items) == 3 else None
 
 			if not isinstance(device, int) or isinstance(device, bool):
-				raise ValueError(f"Mirror device must be an integer index — got {type(device).__name__} ({device!r})")
+				raise ValueError(f"Mirror device must be an integer index - got {type(device).__name__} ({device!r})")
 
 			if not isinstance(channel, int) or isinstance(channel, bool):
-				raise ValueError(f"Mirror channel must be an integer — got {type(channel).__name__} ({channel!r})")
+				raise ValueError(f"Mirror channel must be an integer - got {type(channel).__name__} ({channel!r})")
 
 			if drum_map is not None and not isinstance(drum_map, dict):
-				raise ValueError(f"Mirror drum_note_map must be a dict or None — got {type(drum_map).__name__} ({drum_map!r})")
+				raise ValueError(f"Mirror drum_note_map must be a dict or None - got {type(drum_map).__name__} ({drum_map!r})")
 
 			resolved_channel = self._resolve_channel(channel)
 
 			if primary is not None and (device, resolved_channel) == primary:
 				logger.warning(
 					f"Mirror destination {(device, resolved_channel)} matches the pattern's primary destination "
-					f"— every event will double-fire on this (device, channel).  This is almost "
+					f"- every event will double-fire on this (device, channel).  This is almost "
 					f"certainly unintended."
 				)
 
@@ -2239,7 +2239,7 @@ class Composition:
 
 		if key is None:
 			logger.warning(
-				"section_chords(%r) is key-relative but no key resolves for this section — "
+				"section_chords(%r) is key-relative but no key resolves for this section - "
 				"skipping (the chords fall through to the live/bound source)",
 				info.name,
 			)
@@ -2259,7 +2259,7 @@ class Composition:
 			# harmony for the rest of playback).  Skip the section; the _run
 			# pre-flight catches the common case far earlier.
 			logger.warning(
-				"section_chords(%r) cannot resolve against %s %s (%s) — skipping; "
+				"section_chords(%r) cannot resolve against %s %s (%s) - skipping; "
 				"the chords fall through to the live/bound source",
 				info.name, key, scale or "ionian", error,
 			)
@@ -2297,7 +2297,7 @@ class Composition:
 		"""Return the active HarmonicState, raising ValueError if none is configured."""
 		if self._harmonic_state is None:
 			raise ValueError(
-				"harmony() must be called before this action — "
+				"harmony() must be called before this action - "
 				"no harmonic state has been configured."
 			)
 		return self._harmonic_state
@@ -2318,7 +2318,7 @@ class Composition:
 		if not value.is_concrete:
 			if self.key is None:
 				raise ValueError(
-					f"{what} contains key-relative chords (degrees/romans) — "
+					f"{what} contains key-relative chords (degrees/romans) - "
 					"set key= on the Composition so they can resolve"
 				)
 			value = value.resolve(self.key, self.scale or "ionian")
@@ -2859,7 +2859,7 @@ class Composition:
 		if 1 in resolved_pins and resolved_pins[1] != hs.current_chord:
 			raise ValueError(
 				f"pins[1]={resolved_pins[1].name()} conflicts with the engine's current chord "
-				f"({hs.current_chord.name()}) — bar 1 of a freeze continues the journey; "
+				f"({hs.current_chord.name()}) - bar 1 of a freeze continues the journey; "
 				"pin a later bar, or use pin_chord() for playback fiat"
 			)
 
@@ -3032,7 +3032,7 @@ class Composition:
 				probe_key, probe_scale = self._effective_key_scale(probe_info)
 				if probe_key is None:
 					raise ValueError(
-						"pin_chord with a key-relative spec (degree/roman) needs a key — set key= on "
+						"pin_chord with a key-relative spec (degree/roman) needs a key - set key= on "
 						"the Composition, a form key, or a Section.key for that bar (the pin re-keys "
 						"to the section's effective key)"
 					)
@@ -3087,7 +3087,7 @@ class Composition:
 
 		if key is None:
 			logger.warning(
-				"pin_chord(%d, ...) is key-relative but no key resolves for that bar — ignoring the pin",
+				"pin_chord(%d, ...) is key-relative but no key resolves for that bar - ignoring the pin",
 				bar,
 			)
 			return None
@@ -3100,7 +3100,7 @@ class Composition:
 			# escape killed the harmonic clock for the rest of the piece, and
 			# silenced the pinned bar and the one before it (#2998).
 			logger.warning(
-				"pin_chord(%d, ...) does not resolve in %s %s — ignoring the pin: %s",
+				"pin_chord(%d, ...) does not resolve in %s %s - ignoring the pin: %s",
 				bar, key, scale or "ionian", error,
 			)
 			return None
@@ -3138,7 +3138,7 @@ class Composition:
 		spec = subsequence.cadences.cadence_formula(cadence)
 
 		if bar is None or not isinstance(bar, int) or isinstance(bar, bool) or bar < 1:
-			raise ValueError(f"request_cadence needs bar= — the 1-based bar the cadence arrives at (got {bar!r})")
+			raise ValueError(f"request_cadence needs bar= - the 1-based bar the cadence arrives at (got {bar!r})")
 
 		self._cadence_requests[bar] = spec.name
 		self._harmony_horizon.invalidate_future()
@@ -3197,7 +3197,7 @@ class Composition:
 
 		if not hasattr(value, "length") or not hasattr(value, "slice"):
 			raise TypeError(
-				f"section_motifs() binds Motif/Phrase values (.length/.slice) — got {type(value).__name__}"
+				f"section_motifs() binds Motif/Phrase values (.length/.slice) - got {type(value).__name__}"
 			)
 
 		if (
@@ -3608,7 +3608,7 @@ class Composition:
 
 		if value is not None and already_dealt:
 			logger.warning(
-				"seed set after %s — those have already dealt their streams and will not "
+				"seed set after %s - those have already dealt their streams and will not "
 				"follow it. Pass seed= to Composition(...) for a piece that renders the "
 				"same twice.",
 				", ".join(already_dealt),
@@ -4089,7 +4089,7 @@ class Composition:
 		"""
 
 		if latency_ms < 0:
-			raise ValueError(f"latency_ms must be non-negative — got {latency_ms}")
+			raise ValueError(f"latency_ms must be non-negative - got {latency_ms}")
 
 		idx = 1 + len(self._additional_outputs)  # device 0 is always the primary
 		self._additional_outputs.append(_AdditionalOutput(device=device, alias=name, latency_ms=latency_ms))
@@ -4112,7 +4112,7 @@ class Composition:
 		if max_ms > _LATENCY_WARN_THRESHOLD_MS:
 			logger.warning(
 				"Device latency compensation: '%s' is the slowest at %.0fms, so faster "
-				"devices are delayed up to %.0fms to stay aligned — live-input feel may suffer.",
+				"devices are delayed up to %.0fms to stay aligned - live-input feel may suffer.",
 				slow_name, max_ms, max_ms,
 			)
 
@@ -4298,7 +4298,7 @@ class Composition:
 		"""
 
 		if self._note_input is not None:
-			raise RuntimeError("only one note_input source is supported — named multi-source is not yet available")
+			raise RuntimeError("only one note_input source is supported - named multi-source is not yet available")
 
 		resolved_channel = self._resolve_channel(channel) if channel is not None else None
 
@@ -4352,7 +4352,7 @@ class Composition:
 			try:
 				target_cc = int(output[3:])
 			except ValueError:
-				raise ValueError(f"cc_forward(): invalid preset '{output}' — expected 'cc:N' where N is 0–127")
+				raise ValueError(f"cc_forward(): invalid preset '{output}' - expected 'cc:N' where N is 0–127")
 			if not 0 <= target_cc <= 127:
 				raise ValueError(f"cc_forward(): CC number {target_cc} out of range 0–127")
 			def _cc_remap (value: int, channel: int) -> typing.Any:
@@ -4685,7 +4685,7 @@ class Composition:
 			if current_loop is loop:
 				raise RuntimeError(
 					"load_patterns() cannot be called from inside the composition's "
-					"event loop thread — it would deadlock waiting for the "
+					"event loop thread - it would deadlock waiting for the "
 					"scheduled coroutine to run on the very thread that's blocked. "
 					"From a worker thread, call it normally.  From an async "
 					"coroutine already on the loop, "
@@ -5198,7 +5198,7 @@ class Composition:
 		if prefix == (pattern.device, pattern.channel):
 			logger.warning(
 				f"Mirror destination {prefix} matches '{name}'s primary destination "
-				f"— every event will double-fire on this (device, channel).  This is almost "
+				f"- every event will double-fire on this (device, channel).  This is almost "
 				f"certainly unintended."
 			)
 
@@ -5510,19 +5510,19 @@ class Composition:
 
 		if fs is None or fs._graph is None or fs._section_bars is None:
 			raise ValueError(
-				"form_freeze() freezes a graph form's walk — call form() with a dict first "
+				"form_freeze() freezes a graph form's walk - call form() with a dict first "
 				"(a list form is already a frozen sequence)"
 			)
 
 		if fs._current is None:
-			raise ValueError("the form has already finished — nothing left to freeze")
+			raise ValueError("the form has already finished - nothing left to freeze")
 
 		if sections is not None and sections < 1:
 			raise ValueError("sections must be at least 1")
 
 		if sections is None and not fs._terminal_sections:
 			raise ValueError(
-				"this graph has no terminal section, so the walk would never end — "
+				"this graph has no terminal section, so the walk would never end - "
 				"pass sections=n to bound it"
 			)
 
@@ -5539,7 +5539,7 @@ class Composition:
 				break
 			if sections is None and len(walked) >= 10000:
 				raise ValueError(
-					"form_freeze() walked 10000 sections without reaching a terminal — "
+					"form_freeze() walked 10000 sections without reaching a terminal - "
 					"the terminals look unreachable; pass sections=n to bound the walk"
 				)
 
@@ -5684,11 +5684,11 @@ class Composition:
 		"""
 
 		if fill is None and mute is None:
-			raise ValueError("transition() needs fill= and/or mute= — it declares what happens at the boundary")
+			raise ValueError("transition() needs fill= and/or mute= - it declares what happens at the boundary")
 
 		if fill is not None:
 			if channel is None:
-				raise ValueError("transition(fill=) needs channel= — the fill must land somewhere")
+				raise ValueError("transition(fill=) needs channel= - the fill must land somewhere")
 			if not hasattr(fill, "events") or not hasattr(fill, "length"):
 				raise TypeError(f"fill must be a Motif-like value with .events/.length, got {type(fill).__name__}")
 
@@ -5773,7 +5773,7 @@ class Composition:
 			builder._finish_build()
 			self._apply_composition_tuning(pattern, builder, drum_map, part = None)
 		except Exception:
-			logger.exception("transition fill failed to build — the boundary plays without it")
+			logger.exception("transition fill failed to build - the boundary plays without it")
 			return
 
 		self._schedule_one_shot(pattern, start_pulse)
@@ -6037,7 +6037,7 @@ class Composition:
 				logger.warning(
 					f"Duplicate pattern name '{fn.__name__}': both copies will be "
 					f"scheduled, they share one seeded stream, and only one is "
-					f"reachable by name — rename one of them."
+					f"reachable by name - rename one of them."
 				)
 
 			self._pending_patterns.append(pending)
@@ -6664,7 +6664,7 @@ class Composition:
 				self._apply_composition_tuning(pattern, builder, drum_note_map, part = None)
 
 			except Exception:
-				logger.exception("Error in trigger builder — pattern will be silent")
+				logger.exception("Error in trigger builder - pattern will be silent")
 				return
 
 			self._schedule_one_shot(pattern, start_pulse)
@@ -6916,7 +6916,7 @@ class Composition:
 					self._output_device_names[out.alias] = idx
 
 				logger.warning(
-					"Could not open additional output device '%s' — it keeps device %d and stays silent, "
+					"Could not open additional output device '%s' - it keeps device %d and stays silent, "
 					"so every other device keeps its own number.",
 					out.device, idx,
 				)
@@ -6935,7 +6935,7 @@ class Composition:
 		# Say so instead (#2994, decision 5 of #2991).
 		if self._has_run:
 			raise RuntimeError(
-				"this Composition has already played or rendered — a Composition runs once. "
+				"this Composition has already played or rendered - a Composition runs once. "
 				"Build a new one per take: put the setup in a function and call it again "
 				"(the render() docstring shows one)."
 			)
@@ -6998,7 +6998,7 @@ class Composition:
 		# filter so the callback thread can buffer matching note events.
 		if self._note_input is not None:
 			if self._input_device is None and not self._additional_inputs:
-				raise RuntimeError("note_input() requires a MIDI input — call composition.midi_input(device) first")
+				raise RuntimeError("note_input() requires a MIDI input - call composition.midi_input(device) first")
 			raw_dev = self._note_input.get('input_device')
 			if isinstance(raw_dev, str):
 				raw_dev = self._resolve_input_device_id(raw_dev)
@@ -7113,7 +7113,7 @@ class Composition:
 		# (3/16, 1/8), where no pattern is at risk.
 		if max_pattern_lookahead > bar_beats:
 			logger.warning(
-				"A pattern's reschedule_lookahead (%.2g beats) exceeds the bar length (%.2g) — "
+				"A pattern's reschedule_lookahead (%.2g beats) exceeds the bar length (%.2g) - "
 				"the harmony/form clocks fire at most one bar ahead, so that pattern may "
 				"rebuild before the window covers its cycle start.",
 				max_pattern_lookahead, bar_beats,
@@ -7132,7 +7132,7 @@ class Composition:
 			if shortest < clock_lookahead - 1e-9:
 				raise ValueError(
 					f"{label}: shortest chord span ({shortest:g} beats) is below the clock "
-					f"lookahead ({clock_lookahead:g} beats — the largest pattern lookahead). "
+					f"lookahead ({clock_lookahead:g} beats - the largest pattern lookahead). "
 					"Lengthen the span, lower the pattern lookaheads, or place fast harmony "
 					"at the part level with p.progression()."
 				)
@@ -7168,7 +7168,7 @@ class Composition:
 				if ctx_key is None:
 					raise ValueError(
 						f"section_chords({section_name!r}) is key-relative (degrees/romans) but no key "
-						"resolves for it — set key= on the Composition, a form key (form(key=...)), or "
+						"resolves for it - set key= on the Composition, a form key (form(key=...)), or "
 						f"a Section.key on every {section_name!r} section."
 					)
 				try:
@@ -7185,7 +7185,7 @@ class Composition:
 		if energy_gated and not self._energy_map and not self._form_has_payload:
 			logger.warning(
 				f"min_energy is set on {', '.join(energy_gated)} but no energy source is "
-				"configured — p.energy is always 0.5 (call composition.energy() or bind a "
+				"configured - p.energy is always 0.5 (call composition.energy() or bind a "
 				"Form whose Sections carry energy)"
 			)
 

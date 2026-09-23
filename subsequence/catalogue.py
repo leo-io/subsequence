@@ -769,7 +769,7 @@ def describe_generator (name: str) -> typing.Dict[str, typing.Any]:
 
 		if name in TRANSFORMS:
 			raise ValueError(
-				f"{name!r} is a transform, not a generator — "
+				f"{name!r} is a transform, not a generator - "
 				f"use subsequence.describe_transform({name!r})."
 			)
 
@@ -810,7 +810,7 @@ def describe_transform (name: str) -> typing.Dict[str, typing.Any]:
 
 		if name in GENERATORS:
 			raise ValueError(
-				f"{name!r} is a generator, not a transform — "
+				f"{name!r} is a generator, not a transform - "
 				f"use subsequence.describe_generator({name!r})."
 			)
 

@@ -27,13 +27,13 @@ def check (time_signature: typing.Any) -> typing.Tuple[int, int]:
 	try:
 		beats, unit = time_signature
 	except (TypeError, ValueError):
-		raise ValueError(f"A time signature is (beats, unit), such as (4, 4) or (6, 8) — got {time_signature!r}") from None
+		raise ValueError(f"A time signature is (beats, unit), such as (4, 4) or (6, 8) - got {time_signature!r}") from None
 
 	if isinstance(beats, bool) or not isinstance(beats, int) or beats < 1:
-		raise ValueError(f"A time signature's beat count must be a whole number, at least 1 — got {beats!r}")
+		raise ValueError(f"A time signature's beat count must be a whole number, at least 1 - got {beats!r}")
 
 	if isinstance(unit, bool) or not isinstance(unit, int) or unit not in UNITS:
-		raise ValueError(f"A time signature's unit must be 1, 2, 4, 8, 16 or 32 — got {unit!r}")
+		raise ValueError(f"A time signature's unit must be 1, 2, 4, 8, 16 or 32 - got {unit!r}")
 
 	return beats, unit
 

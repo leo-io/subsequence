@@ -78,7 +78,7 @@ def _coerce_section (element: typing.Any) -> Section:
 		return Section(name = name, bars = bars)
 
 	raise TypeError(
-		f"Form elements are Sections or (name, bars) tuples — got {element!r}"
+		f"Form elements are Sections or (name, bars) tuples - got {element!r}"
 	)
 
 
@@ -220,7 +220,7 @@ class Form:
 
 		"""A readable one-section-per-line summary."""
 
-		lines = [f"Form — {len(self.sections)} sections over {self.bars} bars"]
+		lines = [f"Form - {len(self.sections)} sections over {self.bars} bars"]
 
 		if self.key is not None or self.scale is not None:
 			lines.append(f"  (form key={self.key or '–'} scale={self.scale or '–'})")

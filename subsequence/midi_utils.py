@@ -138,7 +138,7 @@ class MidiDeviceRegistry:
 		"""
 
 		if latency_ms < 0:
-			raise ValueError(f"latency_ms must be non-negative — got {latency_ms}")
+			raise ValueError(f"latency_ms must be non-negative - got {latency_ms}")
 		idx = self.index_of(device)
 		if idx < 0:
 			raise ValueError(f"Unknown output device: {device!r}")
@@ -342,7 +342,7 @@ def _choose_device_interactively (
 	# isatty() rather than waiting for EOF: a run whose stdin is an open but
 	# silent pipe never raises EOFError, it just blocks forever.
 	if not sys.stdin.isatty():
-		raise DeviceSelectionError(f"{reason}, and there is no terminal to choose from — {hint}")
+		raise DeviceSelectionError(f"{reason}, and there is no terminal to choose from - {hint}")
 
 	print(f"\n{reason}:\n")
 
@@ -360,7 +360,7 @@ def _choose_device_interactively (
 			pass
 		except EOFError:
 			# stdin claimed to be a TTY but gave nothing — retrying would spin.
-			raise DeviceSelectionError(f"{reason}, and the prompt could not be read — {hint}") from None
+			raise DeviceSelectionError(f"{reason}, and the prompt could not be read - {hint}") from None
 
 		print(f"Enter a number between 1 and {len(indices)}.")
 

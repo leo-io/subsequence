@@ -145,7 +145,7 @@ class PatternAlgorithmicMixin:
 
 		if rng is not None:
 			if seed is not None:
-				warnings.warn("seed= and rng= were both given — rng= wins; pass only one", stacklevel=3)
+				warnings.warn("seed= and rng= were both given - rng= wins; pass only one", stacklevel=3)
 			return rng
 
 		if seed is not None:
@@ -317,7 +317,7 @@ class PatternAlgorithmicMixin:
 			return self._pattern.length / length, length
 
 		if spacing <= 0:
-			raise ValueError(f"{verb}() spacing is the time between {noun} in beats — it must be positive, got {spacing}")
+			raise ValueError(f"{verb}() spacing is the time between {noun} in beats - it must be positive, got {spacing}")
 
 		return spacing, int(self._pattern.length / spacing)
 
@@ -904,12 +904,12 @@ class PatternAlgorithmicMixin:
 			else:
 				grid_seed = rng.randint(2, 2_147_483_646)
 		else:
-			raise ValueError(f"cellular_2d(): initial_state must be \"center\", \"random\", or a grid — got {initial_state!r}")
+			raise ValueError(f"cellular_2d(): initial_state must be \"center\", \"random\", or a grid - got {initial_state!r}")
 
 		if seed is not None and initial_state != "random":
 			warnings.warn(
 				f"cellular_2d(): seed= only affects initial_state=\"random\" and is ignored for "
-				f"initial_state={initial_state!r} — pass initial_state=\"random\" to seed the grid",
+				f"initial_state={initial_state!r} - pass initial_state=\"random\" to seed the grid",
 				UserWarning,
 				stacklevel = 2,
 			)
@@ -1017,7 +1017,7 @@ class PatternAlgorithmicMixin:
 			start = next(iter(transitions))
 
 		if spacing <= 0:
-			raise ValueError(f"markov() spacing is the time between notes in beats — it must be positive, got {spacing}")
+			raise ValueError(f"markov() spacing is the time between notes in beats - it must be positive, got {spacing}")
 
 		n_steps = int(self._pattern.length / spacing)
 
@@ -1094,7 +1094,7 @@ class PatternAlgorithmicMixin:
 		state.configure_defaults(self.key, self.scale)
 
 		if spacing <= 0:
-			raise ValueError(f"melody() spacing is the time between notes in beats — it must be positive, got {spacing}")
+			raise ValueError(f"melody() spacing is the time between notes in beats - it must be positive, got {spacing}")
 
 		n_steps = int(self._pattern.length / spacing)
 		beat = 0.0
@@ -1478,7 +1478,7 @@ class PatternAlgorithmicMixin:
 		# A bool is an int to Python, so guard it explicitly — p.golden(True) would
 		# otherwise place pitch 1 rather than telling the caller what went wrong.
 		if isinstance(pitches, bool):
-			raise TypeError(f"golden() pitches must be a note number, drum name, or list of them — got {pitches!r}")
+			raise TypeError(f"golden() pitches must be a note number, drum name, or list of them - got {pitches!r}")
 
 		pool: typing.List[typing.Union[int, str]] = [pitches] if isinstance(pitches, (int, str)) else list(pitches)
 
@@ -1807,7 +1807,7 @@ class PatternAlgorithmicMixin:
 			raise ValueError("pitches list cannot be empty")
 
 		if spacing <= 0:
-			raise ValueError(f"lorenz() spacing is the time between notes in beats — it must be positive, got {spacing}")
+			raise ValueError(f"lorenz() spacing is the time between notes in beats - it must be positive, got {spacing}")
 
 		# One trajectory, carried on bar by bar: this cycle plays the stretch after
 		# the last one's (#3472).
@@ -2006,7 +2006,7 @@ class PatternAlgorithmicMixin:
 			raise ValueError("pitches list cannot be empty")
 
 		if spacing <= 0:
-			raise ValueError(f"self_avoiding_walk() spacing is the time between notes in beats — it must be positive, got {spacing}")
+			raise ValueError(f"self_avoiding_walk() spacing is the time between notes in beats - it must be positive, got {spacing}")
 
 		n_steps = int(self._pattern.length / spacing)
 		indices = subsequence.sequence_utils.self_avoiding_walk(

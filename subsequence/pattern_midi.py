@@ -793,7 +793,7 @@ class PatternMidiMixin:
 
 		if invalid:
 			raise ValueError(
-				f"sysex data bytes must be 0-127 (7-bit MIDI data) — got {invalid[:4]}. "
+				f"sysex data bytes must be 0-127 (7-bit MIDI data) - got {invalid[:4]}. "
 				"Mask computed values (checksums, packed parameters) with & 0x7F first."
 			)
 
@@ -1115,7 +1115,7 @@ class PatternMidiMixin:
 		if bend_range is not None and bend_range <= 0:
 			raise ValueError(
 				f"bend_range must be a positive number of semitones (your instrument's "
-				f"pitch-wheel range) — got {bend_range}. Pass None to disable range checking."
+				f"pitch-wheel range) - got {bend_range}. Pass None to disable range checking."
 			)
 
 		self._check_glide(shape, resolution)
@@ -1265,12 +1265,12 @@ class PatternMidiMixin:
 			raise ValueError("slide() requires either 'notes' or 'steps'")
 
 		if notes is not None and steps is not None:
-			raise ValueError("slide() takes notes= or steps=, not both — they name the same slide targets two different ways")
+			raise ValueError("slide() takes notes= or steps=, not both - they name the same slide targets two different ways")
 
 		if bend_range is not None and bend_range <= 0:
 			raise ValueError(
 				f"bend_range must be a positive number of semitones (your instrument's "
-				f"pitch-wheel range) — got {bend_range}. Pass None to disable range checking."
+				f"pitch-wheel range) - got {bend_range}. Pass None to disable range checking."
 			)
 
 		self._check_glide(shape, resolution)

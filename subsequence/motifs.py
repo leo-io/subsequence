@@ -142,7 +142,7 @@ class ChordTone:
 		if isinstance(index_or_name, str):
 			if index_or_name not in _CHORD_TONE_NAMES:
 				raise ValueError(
-					f"Unknown chord tone name '{index_or_name}' — "
+					f"Unknown chord tone name '{index_or_name}' - "
 					f"use one of {sorted(_CHORD_TONE_NAMES)} or a 1-based index"
 				)
 			index = _CHORD_TONE_NAMES[index_or_name]
@@ -150,7 +150,7 @@ class ChordTone:
 			index = index_or_name
 
 		if index < 1:
-			raise ValueError(f"Chord tone indices are 1-based (1 = root) — got {index}")
+			raise ValueError(f"Chord tone indices are 1-based (1 = root) - got {index}")
 
 		object.__setattr__(self, "index", index)
 		object.__setattr__(self, "octave", octave)
@@ -282,7 +282,7 @@ def _refuse_captured_drum (origin: typing.Optional[str], verb: str, moved: str) 
 
 	if origin is not None:
 		raise TypeError(
-			f"{verb} moves pitches — '{origin}' was captured from a drum name "
+			f"{verb} moves pitches - '{origin}' was captured from a drum name "
 			f"(a {moved} drum is a different instrument)"
 		)
 
@@ -482,9 +482,9 @@ class MotifEvent:
 		"""Validate ranges that are wrong at any placement."""
 
 		if self.duration <= 0:
-			raise ValueError(f"Event duration must be positive — got {self.duration}")
+			raise ValueError(f"Event duration must be positive - got {self.duration}")
 		if not 0.0 <= self.probability <= 1.0:
-			raise ValueError(f"Event probability must be 0.0–1.0 — got {self.probability}")
+			raise ValueError(f"Event probability must be 0.0–1.0 - got {self.probability}")
 		if self.fit is not None and not 0.0 <= self.fit <= 1.0:
 			raise ValueError(f"A note's fit is 0.0 to 1.0 - got {self.fit}")
 
@@ -534,14 +534,14 @@ class ControlEvent:
 		if (self.end is None) != (self.span == 0.0):
 			raise ValueError("A ramp needs both end= and span= (a discrete write has neither)")
 		if self.span < 0:
-			raise ValueError(f"Ramp span must be non-negative — got {self.span}")
+			raise ValueError(f"Ramp span must be non-negative - got {self.span}")
 		if not 0.0 <= self.shape_from <= self.shape_to <= 1.0:
 			raise ValueError(
-				f"A partial ramp runs forwards inside 0–1 — got "
+				f"A partial ramp runs forwards inside 0–1 - got "
 				f"shape_from={self.shape_from}, shape_to={self.shape_to}"
 			)
 		if not 0.0 <= self.probability <= 1.0:
-			raise ValueError(f"Event probability must be 0.0–1.0 — got {self.probability}")
+			raise ValueError(f"Event probability must be 0.0–1.0 - got {self.probability}")
 
 	def _sort_key (self) -> tuple:
 
@@ -626,7 +626,7 @@ def _expand (name: str, value: typing.Any, n: int) -> list:
 	result = list(value)
 
 	if len(result) != n:
-		raise ValueError(f"{name} has {len(result)} values for {n} events — parallel lists must match")
+		raise ValueError(f"{name} has {len(result)} values for {n} events - parallel lists must match")
 
 	return result
 
@@ -678,7 +678,7 @@ class Motif:
 		"""Validate, and normalise both streams to canonical order."""
 
 		if self.length < 0:
-			raise ValueError(f"Motif length must be non-negative — got {self.length}")
+			raise ValueError(f"Motif length must be non-negative - got {self.length}")
 
 		# A note may ring past the end — that is a tie over the barline — and an
 		# event *on* the end is the boundary itself, which a discrete control
@@ -689,7 +689,7 @@ class Motif:
 		if starts and max(starts) > self.length + 1e-9:
 			raise ValueError(
 				f"Motif length is {self.length} beats, but it holds an event at beat {max(starts)}, "
-				"which is past the end and never sounds — give length= the whole figure, or move the event"
+				"which is past the end and never sounds - give length= the whole figure, or move the event"
 			)
 
 		object.__setattr__(self, "events", tuple(sorted(self.events, key=MotifEvent._sort_key)))
@@ -757,7 +757,7 @@ class Motif:
 		onsets = list(beats) if beats is not None else [float(i) for i in range(n)]
 
 		if len(onsets) != n:
-			raise ValueError(f"beats has {len(onsets)} onsets for {n} elements — parallel lists must match")
+			raise ValueError(f"beats has {len(onsets)} onsets for {n} elements - parallel lists must match")
 
 		velocity_list = _expand("velocities", velocities, n)
 		duration_list = _expand("durations", durations, n)
@@ -811,7 +811,7 @@ class Motif:
 			if isinstance(element, int):
 				if element > _MAX_PLAUSIBLE_DEGREE:
 					raise ValueError(
-						f"Degree {element} is implausibly large — scale degrees are 1-based "
+						f"Degree {element} is implausibly large - scale degrees are 1-based "
 						f"(8 = tonic an octave up). For MIDI note numbers use Motif.notes()."
 					)
 				# A Degree may sit below the tonic (0, -1, ...), which is where
@@ -827,7 +827,7 @@ class Motif:
 			elif isinstance(element, Degree) or element is None:
 				converted.append(element)
 			else:
-				raise TypeError(f"Motif.degrees takes ints, Degree, or None — got {type(element).__name__}")
+				raise TypeError(f"Motif.degrees takes ints, Degree, or None - got {type(element).__name__}")
 
 		return cls._from_sequence(converted, beats, velocities, durations, probabilities, length)
 
@@ -847,7 +847,7 @@ class Motif:
 		for element in notes:
 			# bool is a subclass of int, but True/False are never MIDI notes.
 			if isinstance(element, bool) or not (isinstance(element, int) or element is None):
-				raise TypeError(f"Motif.notes takes MIDI ints or None — got {type(element).__name__}")
+				raise TypeError(f"Motif.notes takes MIDI ints or None - got {type(element).__name__}")
 
 		return cls._from_sequence(list(notes), beats, velocities, durations, probabilities, length)
 
@@ -909,7 +909,7 @@ class Motif:
 
 		# bool is a subclass of int, but True/False are never MIDI notes.
 		if isinstance(pitch, bool):
-			raise TypeError(f"Motif.euclidean takes a MIDI int or drum name for pitch — got {pitch!r}")
+			raise TypeError(f"Motif.euclidean takes a MIDI int or drum name for pitch - got {pitch!r}")
 
 		# The kernel returns one 0/1 flag per grid step; onsets are the 1s.
 		# It validates pulses first, so pulses > steps still raises clearly.
@@ -1002,7 +1002,7 @@ class Motif:
 		"""Shared core for discrete control writes."""
 
 		if len(values) != len(beats):
-			raise ValueError(f"values has {len(values)} entries for {len(beats)} beats — parallel lists must match")
+			raise ValueError(f"values has {len(values)} entries for {len(beats)} beats - parallel lists must match")
 
 		probability_list = _expand("probabilities", probabilities, len(values))
 
@@ -1135,7 +1135,7 @@ class Motif:
 		"""Closed sequential concat: glue *other* after this motif into ONE longer motif."""
 
 		if not isinstance(other, Motif):
-			raise TypeError(f"then() takes a Motif — got {type(other).__name__}")
+			raise TypeError(f"then() takes a Motif - got {type(other).__name__}")
 
 		return Motif(
 			events = self.events + tuple(dataclasses.replace(e, beat=e.beat + self.length) for e in other.events),
@@ -1259,12 +1259,12 @@ class Motif:
 
 		if cadence is not None:
 			if end_on is not None:
-				raise ValueError("cadence= already names the close degree — it conflicts with end_on=")
+				raise ValueError("cadence= already names the close degree - it conflicts with end_on=")
 			cadence_close = subsequence.cadences.cadence_formula(cadence).close_degree
 			end_on = cadence_close
 
 		if not onsets:
-			raise ValueError("generate() needs at least one onset — the rhythm comes first")
+			raise ValueError("generate() needs at least one onset - the rhythm comes first")
 		if sorted(onsets) != onsets:
 			raise ValueError("rhythm onsets must ascend")
 
@@ -1276,7 +1276,7 @@ class Motif:
 		if rng is None:
 			if seed is None:
 				warnings.warn(
-					"generate() without seed= is nondeterministic — pass seed= so the "
+					"generate() without seed= is nondeterministic - pass seed= so the "
 					"value survives live reload",
 					stacklevel = 2,
 				)
@@ -1387,13 +1387,13 @@ class Motif:
 		if absolute_pool is not None and end_on is not None:
 			raise ValueError(
 				"cadence=/end_on= name scale degrees, but this motif uses an "
-				"explicit MIDI pool — pin the exact closing note instead: "
+				"explicit MIDI pool - pin the exact closing note instead: "
 				"pins={-1: <midi note>}"
 			)
 
 		if end_on is not None:
 			if -1 in combined or len(onsets) in combined:
-				raise ValueError("end_on conflicts with a pin on the last note — they name the same position")
+				raise ValueError("end_on conflicts with a pin on the last note - they name the same position")
 			combined[-1] = end_on
 
 		for pin_position, pin_spec in combined.items():
@@ -1408,7 +1408,7 @@ class Motif:
 				if not isinstance(pin_spec, int) or isinstance(pin_spec, bool):
 					raise ValueError(
 						f"pin {pin_spec!r} is a scale degree, but this motif uses an "
-						"explicit MIDI pool — pin the exact MIDI note instead "
+						"explicit MIDI pool - pin the exact MIDI note instead "
 						"(e.g. pins={-1: 52})"
 					)
 				resolved_pins[index] = int(pin_spec)
@@ -1428,7 +1428,7 @@ class Motif:
 
 		if contour is not None and contour not in envelopes:
 			known = ", ".join(sorted(envelopes))
-			raise ValueError(f"unknown contour {contour!r} — expected one of: {known}")
+			raise ValueError(f"unknown contour {contour!r} - expected one of: {known}")
 
 		chosen_pitches: typing.List[int] = []
 
@@ -1493,7 +1493,7 @@ class Motif:
 		elif isinstance(other, Motif):
 			merged = other
 		else:
-			raise TypeError(f"stack() takes a Motif or Phrase — got {type(other).__name__}")
+			raise TypeError(f"stack() takes a Motif or Phrase - got {type(other).__name__}")
 
 		return Motif(
 			events = self.events + merged.events,
@@ -1578,7 +1578,7 @@ class Motif:
 		if not isinstance(count, int):
 			return NotImplemented
 		if count < 0:
-			raise ValueError(f"Repetition count must be non-negative — got {count}")
+			raise ValueError(f"Repetition count must be non-negative - got {count}")
 		if count == 0:
 			return Motif.empty()
 		if count == 1:
@@ -1644,7 +1644,7 @@ class Motif:
 		"""Scale time by *factor* (2.0 = half-time feel): beats, durations, spans, and length."""
 
 		if factor <= 0:
-			raise ValueError(f"Stretch factor must be positive — got {factor}")
+			raise ValueError(f"Stretch factor must be positive - got {factor}")
 
 		events = tuple(
 			dataclasses.replace(e, beat=e.beat * factor, duration=e.duration * factor)
@@ -1672,7 +1672,7 @@ class Motif:
 		"""
 
 		if grid <= 0:
-			raise ValueError(f"Quantize grid must be positive — got {grid}")
+			raise ValueError(f"Quantize grid must be positive - got {grid}")
 
 		events = tuple(
 			dataclasses.replace(e, beat=_folded_onset(math.floor(e.beat / grid + 0.5) * grid, self.length))
@@ -1736,7 +1736,7 @@ class Motif:
 			return pitch + rng.choice((-2, -1, 1, 2))
 
 		raise TypeError(
-			f"vary() moves pitches — {type(pitch).__name__} content cannot vary "
+			f"vary() moves pitches - {type(pitch).__name__} content cannot vary "
 			"(a varied drum is a different instrument)"
 		)
 
@@ -1779,12 +1779,12 @@ class Motif:
 		if notes < 0:
 			raise ValueError(f"notes must be at least 0, got {notes}")
 		if position not in ("end", "start", "anywhere"):
-			raise ValueError(f'position must be "end", "start", or "anywhere" — got {position!r}')
+			raise ValueError(f'position must be "end", "start", or "anywhere" - got {position!r}')
 
 		if rng is None:
 			if seed is None:
 				warnings.warn(
-					"vary() without seed= is nondeterministic — pass seed= so the "
+					"vary() without seed= is nondeterministic - pass seed= so the "
 					"value survives live reload",
 					stacklevel = 2,
 				)
@@ -1829,7 +1829,7 @@ class Motif:
 		if isinstance(pitch, int):
 			return float(pitch)
 
-		raise TypeError(f"keep_contour needs rankable pitches — {type(pitch).__name__} content has no height")
+		raise TypeError(f"keep_contour needs rankable pitches - {type(pitch).__name__} content has no height")
 
 	def _contour_safe_nudge (
 		self,
@@ -1911,7 +1911,7 @@ class Motif:
 
 		if not isinstance(last.pitch, Degree):
 			raise TypeError(
-				f"answer() re-aims scale degrees — the tail is {type(last.pitch).__name__} "
+				f"answer() re-aims scale degrees - the tail is {type(last.pitch).__name__} "
 				"content (build the call with motif([...]) for degree content)"
 			)
 
@@ -1995,7 +1995,7 @@ class Motif:
 				if isinstance(pitch, Degree):
 					return dataclasses.replace(pitch, step=pitch.step + steps)
 				raise TypeError(
-					f"transpose(steps=) moves scale degrees — {type(pitch).__name__} content "
+					f"transpose(steps=) moves scale degrees - {type(pitch).__name__} content "
 					f"has no degrees (use semitones= for MIDI ints)"
 				)
 
@@ -2223,7 +2223,7 @@ def _tile_source (motif: Motif, bars: int, unit_count: int, beats_per_bar: float
 
 	if bars % unit_count != 0:
 		raise ValueError(
-			f"bars={bars} does not divide evenly across {unit_count} plan units — "
+			f"bars={bars} does not divide evenly across {unit_count} plan units - "
 			"each unit must fill a whole number of bars"
 		)
 
@@ -2237,7 +2237,7 @@ def _tile_source (motif: Motif, bars: int, unit_count: int, beats_per_bar: float
 	if abs(tiling - round(tiling)) > 1e-9 or round(tiling) < 1:
 		raise ValueError(
 			f"the motif is {motif.length:g} beats but each of the {unit_count} plan units "
-			f"spans {unit_beats:g} beats ({bars} bars / {unit_count} units) — units must be "
+			f"spans {unit_beats:g} beats ({bars} bars / {unit_count} units) - units must be "
 			"a whole tiling of the motif (adjust bars, the plan, or the motif's length)"
 		)
 
@@ -2279,7 +2279,7 @@ class Phrase:
 
 		for segment in segments:
 			if not isinstance(segment, Motif):
-				raise TypeError(f"Phrase segments must be Motifs — got {type(segment).__name__}")
+				raise TypeError(f"Phrase segments must be Motifs - got {type(segment).__name__}")
 
 		object.__setattr__(self, "segments", segments)
 		object.__setattr__(self, "recipe", recipe)
@@ -2338,13 +2338,13 @@ class Phrase:
 
 		if plan is None:
 			raise ValueError(
-				'develop() needs a plan= — a list of unit labels (plan=["a", "a", "a", "b"]) '
+				'develop() needs a plan= - a list of unit labels (plan=["a", "a", "a", "b"]) '
 				'or a recipe name (plan="call_response")'
 			)
 
 		if seed is None:
 			warnings.warn(
-				"develop() without seed= is nondeterministic — pass seed= so the "
+				"develop() without seed= is nondeterministic - pass seed= so the "
 				"value survives live reload",
 				stacklevel = 2,
 			)
@@ -2357,7 +2357,7 @@ class Phrase:
 				hint = ""
 				if plan.isalpha() and plan == plan.lower() and len(set(plan)) < len(plan):
 					spelled = ", ".join(repr(c) for c in plan)
-					hint = f" A letter string is not a plan — a sequence of labels is a list: plan=[{spelled}]."
+					hint = f" A letter string is not a plan - a sequence of labels is a list: plan=[{spelled}]."
 				raise ValueError(f"Unknown phrase recipe {plan!r}. Known recipes: {known}.{hint}")
 			unit_count = _PHRASE_RECIPES[plan][0]
 		else:
@@ -2428,7 +2428,7 @@ class Phrase:
 		if self.recipe is None:
 			raise ValueError(
 				"this phrase carries no recipe (it was written by hand, or transformed "
-				"since generation) — reroll() regenerates from a recipe; edit segments "
+				"since generation) - reroll() regenerates from a recipe; edit segments "
 				"with replace(), or rebuild with Phrase.develop()"
 			)
 
@@ -2445,7 +2445,7 @@ class Phrase:
 
 		if seed is None:
 			warnings.warn(
-				"reroll() without seed= is nondeterministic — pass seed= so the "
+				"reroll() without seed= is nondeterministic - pass seed= so the "
 				"value survives live reload",
 				stacklevel = 2,
 			)
@@ -2522,7 +2522,7 @@ class Phrase:
 		if not isinstance(count, int):
 			return NotImplemented
 		if count < 0:
-			raise ValueError(f"Repetition count must be non-negative — got {count}")
+			raise ValueError(f"Repetition count must be non-negative - got {count}")
 
 		return Phrase(self.segments * count)
 
@@ -2606,7 +2606,7 @@ class Phrase:
 		"""Replace the segment at a 1-based position (musicians count from one)."""
 
 		if not 1 <= position <= len(self.segments):
-			raise IndexError(f"Phrase has {len(self.segments)} segments — position {position} is out of range (1-based)")
+			raise IndexError(f"Phrase has {len(self.segments)} segments - position {position} is out of range (1-based)")
 
 		segments = list(self.segments)
 		segments[position - 1] = motif
@@ -2798,7 +2798,7 @@ def sentence (
 
 	if seed is None:
 		warnings.warn(
-			"sentence() without seed= is nondeterministic — pass seed= so the "
+			"sentence() without seed= is nondeterministic - pass seed= so the "
 			"value survives live reload",
 			stacklevel = 2,
 		)
