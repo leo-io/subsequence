@@ -230,16 +230,19 @@ def test_generate_contour_shapes_the_line () -> None:
 
 def test_generate_scale_constrains_candidates () -> None:
 
-	"""scale="minor_pentatonic" admits only pentatonic degrees (minor-family spelling)."""
+	"""scale="minor_pentatonic" admits only pentatonic degrees, counted in the pentatonic itself.
+
+	They were spelled against minor, the nearer family, until #3460 made a
+	named scale the one its degrees count in (Simon's call on #3423).
+	"""
 
 	line = M.generate(rhythm=list(range(16)), length=16, scale="minor_pentatonic", seed=4)
 
-	minor = subsequence.intervals.scale_pitch_classes(0, "minor")
-	pentatonic = set(subsequence.intervals.scale_pitch_classes(0, "minor_pentatonic"))
+	pentatonic = subsequence.intervals.scale_pitch_classes(0, "minor_pentatonic")
 
-	for event in line.events:
-		offset = (minor[(event.pitch.step - 1) % 7] + event.pitch.chroma) % 12
-		assert offset in pentatonic
+	assert {event.pitch.step for event in line.events} <= {1, 2, 3, 4, 5}
+	assert all(event.pitch.chroma == 0 for event in line.events)
+	assert len({pentatonic[event.pitch.step - 1] for event in line.events}) > 2		# a real line through the scale
 
 
 def test_generate_max_pitches_caps_the_pool () -> None:

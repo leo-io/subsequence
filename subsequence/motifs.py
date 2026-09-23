@@ -287,6 +287,23 @@ def _refuse_captured_drum (origin: typing.Optional[str], verb: str, moved: str) 
 		)
 
 
+def _is_a_named_scale (intervals: typing.Sequence[int]) -> bool:
+
+	"""Whether *intervals* are exactly the pitch classes of one of the built-in scales.
+
+	Built in only: a scale registered anywhere in the process would otherwise
+	change what a list means everywhere, and a registered triad or fifth would
+	turn that mask into a scale of its own (#3460).
+	"""
+
+	wanted = set(intervals)
+
+	return any(
+		set(subsequence.intervals.scale_pitch_classes(0, name)) == wanted
+		for name in subsequence.intervals.SCALE_MODE_MAP if name in subsequence.intervals._BUILTIN_SCALE_NAMES
+	)
+
+
 def _folded_onset (beat: float, length: float) -> float:
 
 	"""*beat*, or 0 if it would place on the motif's length: that is the next downbeat (#3455).
@@ -1169,12 +1186,16 @@ class Motif:
 
 		The result emits **scale degrees** (resolved at placement against the
 		composition key/scale), so a generated hook transposes, varies, and
-		develops like a hand-written one.  ``scale=`` constrains *candidate
-		choice only*: a name or interval list masks which pitches the walk
-		may use, spelled relative to its best-fit reference (major or minor) -
-		bind it in a composition whose scale matches that family and
-		resolution is exact.  An explicit MIDI pitch pool (a list of note
-		numbers) switches to absolute output (the sieve/atonal path).
+		develops like a hand-written one.  ``scale=`` sets which pitches the
+		walk may use.  A scale name is also the scale its degrees count in, so
+		the line is exact in a composition using that scale, and under any
+		other scale its degrees map step for step, as a typed motif's do: a
+		``"minor_pentatonic"`` line sounds its own notes in a minor
+		pentatonic piece, and minor-scale degrees in a plain minor one.  An
+		interval list is a mask over major or minor instead (``[0, 4, 7]``
+		plays C E G in C major), unless it is exactly one of the built-in
+		scales.  An explicit MIDI pitch pool (a list of note numbers)
+		switches to absolute output (the sieve/atonal path).
 
 		Parameters:
 			rhythm: Onset beats (``[0, 1, 1.5, 1.75, 2.5]``) or a Motif
@@ -1189,13 +1210,16 @@ class Motif:
 			contour: Envelope shaping the line's height over its span -
 				``"arch"``, ``"valley"``, ``"ascending"``, ``"descending"``.
 			end_on: Degree the line must end on - sugar for ``pins={-1: ...}``.
-				Degree semantics: raises with an explicit MIDI pool (pin the
-				exact note instead).
+				A degree of the line's own scale, so with
+				``scale="minor_pentatonic"`` the fifth is 4.  Degree
+				semantics: raises with an explicit MIDI pool (pin the exact
+				note instead).
 			cadence: A cadence name (``"strong"``/``"soft"``/``"open"``/
 				``"fakeout"``) - the line closes on that cadence's melodic
-				degree (1 for the full closes and the fakeout, 5 for the
-				open half).  Sugar for ``end_on=``; conflicts with it, and
-				raises with an explicit MIDI pool like ``end_on=``.
+				note: the tonic for the full closes and the fakeout, the
+				fifth for the open half, whichever degree of the scale holds
+				it.  Sugar for ``end_on=``; conflicts with it, and raises
+				with an explicit MIDI pool like ``end_on=``.
 			pins: ``{position: degree}`` - 1-based note positions (``-1`` =
 				the last, the Python idiom); the engine fills between.  With
 				an explicit MIDI pool there are no degrees to read, so each
@@ -1231,10 +1255,13 @@ class Motif:
 
 		onsets = list(rhythm.onsets()) if hasattr(rhythm, "onsets") else [float(b) for b in rhythm]
 
+		cadence_close: typing.Optional[int] = None
+
 		if cadence is not None:
 			if end_on is not None:
 				raise ValueError("cadence= already names the close degree — it conflicts with end_on=")
-			end_on = subsequence.cadences.cadence_formula(cadence).close_degree
+			cadence_close = subsequence.cadences.cadence_formula(cadence).close_degree
+			end_on = cadence_close
 
 		if not onsets:
 			raise ValueError("generate() needs at least one onset — the rhythm comes first")
@@ -1282,14 +1309,27 @@ class Motif:
 				absolute_pool = sorted(values)		# an explicit MIDI pool: absolute output
 				intervals = []
 
-		# Best-fit reference scale for degree spelling: whichever of major/
-		# minor contains more of the pool (ties to major).  Bound under a
-		# matching composition scale, resolution is exact.
+		# The scale the degrees count in (#3460, Simon's calls on #3423).  A
+		# named scale is its own, so a line is exact in a composition using
+		# that scale and maps degree for degree under any other, as a typed
+		# motif does; spelled against major or minor instead, most modes played
+		# wrong notes under their own scale.  An interval list is a mask over
+		# whichever of major or minor holds more of it (ties to major), so
+		# [0, 4, 7] plays C E G in C major, unless it is exactly a built-in scale.
 		if absolute_pool is None:
 			ionian = set(subsequence.intervals.scale_pitch_classes(0, "ionian"))
 			aeolian = set(subsequence.intervals.scale_pitch_classes(0, "minor"))
-			reference_name = "minor" if sum(i in aeolian for i in intervals) > sum(i in ionian for i in intervals) else "ionian"
-			reference = list(subsequence.intervals.scale_pitch_classes(0, reference_name))
+			nearest_name = "minor" if sum(i in aeolian for i in intervals) > sum(i in ionian for i in intervals) else "ionian"
+			nearest = list(subsequence.intervals.scale_pitch_classes(0, nearest_name))
+			reference = list(intervals) if scale is None or isinstance(scale, str) or _is_a_named_scale(intervals) else nearest
+
+			# A cadence names a function, the tonic or the dominant, not a count
+			# of steps: it closes on the degree of this scale that holds that
+			# pitch, which in a pentatonic scale puts the fifth on step 4.  A
+			# scale without the pitch closes on the step's number.
+			if cadence_close is not None:
+				function_pc = nearest[(cadence_close - 1) % len(nearest)]
+				end_on = reference.index(function_pc) + 1 if function_pc in reference else cadence_close
 
 		# --- The walking state (copied, never mutated in place) ----------------
 		if state is not None:
