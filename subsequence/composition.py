@@ -3361,6 +3361,17 @@ class Composition:
 		if self._form_state is None:
 			raise ValueError("form_jump() requires a form to be configured via composition.form().")
 
+		# The name is checked here, so the caller hears a bad one at once; the
+		# jump itself is made on the clock's loop.  Made on another thread, it
+		# could land inside the form's own advance() and be lost (#3382).
+		self._form_state.check_navigable(section_name, "jump_to")
+		self._sequencer._on_the_clock(self._jump, section_name)
+
+	def _jump (self, section_name: str) -> None:
+
+		"""Make a jump: on the clock's loop, or before it runs."""
+
+		assert self._form_state is not None
 		self._form_state.jump_to(section_name)
 
 		# The harmony horizon planned against the old section — revoke it.
@@ -3368,24 +3379,12 @@ class Composition:
 
 		# A jump is a section change like any other (#2800): the approach mutes
 		# for the boundary it skipped are lifted, and on_section hears the
-		# section it landed on.  Both belong on the clock's loop, and a jump
-		# can come from the live-coding server's thread or an OSC handler.
-		# Before play() there is nothing to do: play() announces the section
-		# it starts in.
+		# section it landed on.  Before play() there is nothing to do: play()
+		# announces the section it starts in.
 		loop = self._sequencer._event_loop
 
-		if loop is None or not loop.is_running() or not self._sequencer.running:
-			return
-
-		try:
-			on_loop = asyncio.get_running_loop() is loop
-		except RuntimeError:
-			on_loop = False
-
-		if on_loop:
+		if loop is not None and loop.is_running() and self._sequencer.running:
 			self._announce_jump()
-		else:
-			loop.call_soon_threadsafe(self._announce_jump)
 
 	def _announce_jump (self) -> None:
 
@@ -3427,6 +3426,15 @@ class Composition:
 		if self._form_state is None:
 			raise ValueError("form_next() requires a form to be configured via composition.form().")
 
+		# Checked here, made on the clock's loop, as a jump is (#3382).
+		self._form_state.check_navigable(section_name, "queue_next")
+		self._sequencer._on_the_clock(self._queue_next_section, section_name)
+
+	def _queue_next_section (self, section_name: str) -> None:
+
+		"""Queue a section: on the clock's loop, or before it runs."""
+
+		assert self._form_state is not None
 		self._form_state.queue_next(section_name)
 
 		# The harmony horizon planned against the old continuation — revoke it.

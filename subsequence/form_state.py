@@ -369,6 +369,42 @@ class FormState:
 			f"Known sections: {known}"
 		)
 
+	def check_navigable (self, section_name: str, what: str) -> None:
+
+		"""Raise exactly what :meth:`jump_to` or :meth:`queue_next` would for this name, changing nothing.
+
+		A jump or a queue from another thread is made on the clock's own loop,
+		so that it cannot land inside :meth:`advance` (#3382), and the caller
+		has to hear a bad name at once rather than the loop hearing it later.
+		Nothing read here changes once the form is built, so any thread may
+		ask.  ``what`` names the method for the message: ``"jump_to"`` or
+		``"queue_next"``.
+		"""
+
+		if self._sequence is not None:
+
+			if not any(section.name == section_name for section in self._sequence):
+				known = ", ".join(sorted({section.name for section in self._sequence}))
+				raise ValueError(
+					f"{what}: section '{section_name}' not found in form. "
+					f"Known sections: {known}"
+				)
+
+			return
+
+		if self._section_bars is None:
+			raise ValueError(
+				f"{what}() needs a navigable form (a graph dict, a list, or a Form value) — "
+				"a generator form cannot be navigated"
+			)
+
+		if section_name not in self._section_bars:
+			known = ", ".join(sorted(self._section_bars))
+			raise ValueError(
+				f"Section '{section_name}' not found in form. "
+				f"Known sections: {known}"
+			)
+
 	def queue_next (self, section_name: str) -> None:
 
 		"""Queue a section to play after the current one ends.
@@ -391,24 +427,14 @@ class FormState:
 			ValueError: If the form is a generator, or the name is unknown.
 		"""
 
+		self.check_navigable(section_name, "queue_next")
+
 		if self._sequence is not None:
 			self._queued_position = self._find_occurrence(section_name, "queue_next")
 			self._next_section_name = section_name
 			logger.info(f"Form: next → {section_name}")
 			return
 
-		if self._section_bars is None:
-			raise ValueError(
-				"queue_next() needs a navigable form (a graph dict, a list, or a Form value) — "
-				"a generator form cannot be navigated"
-			)
-
-		if section_name not in self._section_bars:
-			known = ", ".join(sorted(self._section_bars))
-			raise ValueError(
-				f"Section '{section_name}' not found in form. "
-				f"Known sections: {known}"
-			)
 
 		self._next_section_name = section_name
 		logger.info(f"Form: next → {section_name}")
@@ -641,6 +667,8 @@ class FormState:
 			composition.form_jump("chorus")   # via Composition helper
 		"""
 
+		self.check_navigable(section_name, "jump_to")
+
 		if self._sequence is not None:
 			self._position = self._find_occurrence(section_name, "jump_to")
 			self._current = self._sequence[self._position]
@@ -652,19 +680,9 @@ class FormState:
 			logger.info(f"Form: jump → {section_name}")
 			return
 
-		if self._section_bars is None:
-			raise ValueError(
-				"jump_to() needs a navigable form (a graph dict, a list, or a Form value) — "
-				"a generator form cannot be navigated"
-			)
 
-		if section_name not in self._section_bars:
-			known = ", ".join(sorted(self._section_bars))
-			raise ValueError(
-				f"Section '{section_name}' not found in form. "
-				f"Known sections: {known}"
-			)
-
+		# check_navigable() has made sure this is a graph form that knows the name.
+		assert self._section_bars is not None
 		self._current = subsequence.forms.Section(name = section_name, bars = self._section_bars[section_name])
 		self._bar_in_section = 0
 		self._section_index += 1

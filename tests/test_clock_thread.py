@@ -14,6 +14,7 @@ import typing
 import pytest
 
 import subsequence
+import subsequence.form_state
 
 
 def _from_another_thread (fn: typing.Callable[[], typing.Any], after: float = 0.0) -> typing.Tuple[threading.Thread, typing.Dict[str, typing.Any]]:
@@ -140,3 +141,80 @@ async def test_on_the_clock_s_loop_a_tempo_change_is_made_at_once (composition: 
 	playing.set_bpm(130)
 
 	assert playing._sequencer.current_bpm == 130
+
+
+def _with_a_form (composition: subsequence.Composition) -> subsequence.Composition:
+
+	"""Five two-bar sections, looping, one bar in: the form's next advance() crosses A's boundary."""
+
+	composition.form([("A", 2), ("B", 2), ("C", 2), ("D", 2), ("E", 2)], loop=True)
+	assert composition._form_state is not None
+	composition._form_state.advance()
+
+	return composition
+
+
+@pytest.mark.asyncio
+async def test_a_jump_from_another_thread_is_not_lost_against_the_form_s_own_advance (composition: subsequence.Composition, monkeypatch: pytest.MonkeyPatch) -> None:
+
+	"""A jump made on another thread landed inside advance() and was overwritten: the form went on to E (#3382).
+
+	The form's step is slowed as the review slowed it, so the jump arrives mid-step every time.
+	Every order the two could have run in gives D.
+	"""
+
+	playing = _playing(_with_a_form(composition))
+	form = playing._form_state
+	assert form is not None
+	step = subsequence.form_state.FormState._sequence_next_position
+
+	def _slow_step (self: subsequence.form_state.FormState) -> typing.Optional[int]:
+		time.sleep(0.05)
+		return step(self)
+
+	monkeypatch.setattr(subsequence.form_state.FormState, "_sequence_next_position", _slow_step)
+	caller, box = _from_another_thread(lambda: playing.form_jump("D"), after=0.01)
+	form.advance()
+	caller.join()
+	await asyncio.sleep(0.05)
+
+	assert "error" not in box
+	info = form.get_section_info()
+	assert info is not None and info.name == "D"
+
+
+@pytest.mark.asyncio
+async def test_a_section_queued_from_another_thread_waits_for_the_loop (composition: subsequence.Composition) -> None:
+
+	"""form_next() is handed to the loop as a jump is: the queue changes only once the loop turns."""
+
+	playing = _playing(_with_a_form(composition))
+	form = playing._form_state
+	assert form is not None
+	before = form._next_section_name
+
+	caller, box = _from_another_thread(lambda: playing.form_next("D"))
+	caller.join()
+
+	assert "error" not in box
+	assert form._next_section_name == before != "D"
+
+	await asyncio.sleep(0)
+
+	assert form._next_section_name == "D"
+
+
+@pytest.mark.asyncio
+async def test_a_bad_section_from_another_thread_is_still_heard_by_the_caller (composition: subsequence.Composition) -> None:
+
+	"""The name is checked on the caller's thread, with the same message as ever; only the move waits."""
+
+	playing = _playing(_with_a_form(composition))
+	messages = []
+
+	for move in (lambda: playing.form_jump("nope"), lambda: playing.form_next("nope")):
+		caller, box = _from_another_thread(move)
+		caller.join()
+		messages.append(str(box.get("error")).split(":")[0])
+
+	assert messages == ["jump_to", "queue_next"]
