@@ -20,6 +20,8 @@ import typing
 import pytest
 
 import subsequence
+import subsequence.pattern
+import subsequence.pattern_builder
 import subsequence.sequence_utils
 
 
@@ -131,3 +133,40 @@ def test_the_walk_still_honours_its_range_and_length () -> None:
 	assert len(walk) == 32
 	assert all(48 <= value <= 55 for value in walk)
 	assert subsequence.sequence_utils.self_avoiding_walk(0, 0, 7, random.Random(1)) == []
+
+
+def _builder_walk (pitches: typing.List[int], seed: int) -> typing.List[int]:
+
+	"""One bar of sixteenths from ``p.self_avoiding_walk()``, as its pitches in order."""
+
+	pattern = subsequence.pattern.Pattern(channel=0, length=4)
+	builder = subsequence.pattern_builder.PatternBuilder(pattern=pattern, cycle=0, default_grid=16)
+	builder.self_avoiding_walk(pitches, spacing=0.25, seed=seed)
+
+	return [note.pitch for position in sorted(pattern.steps) for note in pattern.steps[position].notes]
+
+
+def test_the_builder_walks_as_its_docstring_says () -> None:
+
+	"""Each figure ``p.self_avoiding_walk()``'s docstring gives, measured through the builder (#3452).
+
+	The docstring went on describing the walk #3047 replaced - steps of one
+	only, and a visited set that reset - so this holds it to what it says now.
+	It passed before #3452 as well: the walk did not change, only its account.
+	"""
+
+	scale = subsequence.scale_notes("C", "ionian", low=60, high=72)
+	melodies = [_builder_walk(scale, seed) for seed in range(500)]
+	moves = [abs(scale.index(a) - scale.index(b)) for melody in melodies for a, b in zip(melody, melody[1:])]
+
+	assert all(len(melody) == 16 for melody in melodies)
+	assert len({tuple(melody) for melody in melodies}) == 188
+	assert {melody[0] for melody in melodies} == {65}		# the middle of the list
+	assert set(moves) == {1, 2}
+	assert round(moves.count(2) / len(moves), 2) == 0.27	# about a quarter skip a note
+
+	for melody in melodies:
+		for i, pitch in enumerate(melody):
+			assert pitch not in melody[i + 1:i + 3], f"{pitch} came back sooner than three notes later: {melody}"
+
+	assert _builder_walk([60, 67], seed=1) == [60, 67] * 8		# two pitches can only alternate
