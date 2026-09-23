@@ -32,11 +32,12 @@ import subsequence.midi_utils
 
 logger = logging.getLogger(__name__)
 
-# How far behind the Link session the loop may fall and still play through it,
-# pulse by pulse, the way the internal clock's inner loop does.  One beat: past
-# that, working through the backlog is a burst of noise rather than music, so
-# the position moves to where the session actually is (#2993).
-_LINK_CATCH_UP_PULSES = 24
+# How far behind the clock may fall and still play through what it missed,
+# pulse by pulse.  One beat: past that, working through the backlog is a burst
+# of noise rather than music - eight hats in 0.2 ms after a one-second stall at
+# 120 BPM.  So the internal clock carries on from where it stopped, just later
+# (#3374), and the Link clock moves to where the session actually is (#2993).
+_CATCH_UP_PULSES = 24
 
 # The device a recorded tempo or metre marking belongs to: none of them.  Those
 # describe the file, so they are saved on its first track whatever synths played
@@ -2487,6 +2488,21 @@ class Sequencer:
 			# the inner loop always fires exactly once without spin-waiting.
 			current_time = next_pulse_time if self.render_mode else time.perf_counter()
 
+			# Held for longer than a beat - by a slow build, a runaway line that was
+			# stopped, the machine itself - the loop would play every missed pulse
+			# in one burst.  Carry on from where it stopped instead, just later, as
+			# after a pause (#3374, Simon's decision).  A shorter stall plays
+			# through, as the Link clock's does.
+			behind = (current_time - next_pulse_time) / self.seconds_per_pulse
+
+			if behind > _CATCH_UP_PULSES:
+				logger.warning(
+					"The clock was held for %.2f s (%.1f beats); carrying on from where it stopped "
+					"instead of playing everything it missed at once.",
+					current_time - next_pulse_time, behind / self.pulses_per_beat,
+				)
+				next_pulse_time = current_time
+
 			while current_time >= next_pulse_time:
 				# Ordering within each pulse:
 				#   1. _check_bar/beat_change() — update counters and queue "bar"/"beat"
@@ -2705,7 +2721,7 @@ class Sequencer:
 			missed = int(round((beat - sounded_beat) * self.pulses_per_beat)) - 1
 			sounded_beat = beat
 
-			if missed > _LINK_CATCH_UP_PULSES:
+			if missed > _CATCH_UP_PULSES:
 				# Too far behind to play through.  Working the backlog off is a
 				# burst of noise and then a piece running at a fraction of the
 				# session's tempo, which is what a 42 ms stall used to cause —
