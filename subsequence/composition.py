@@ -185,6 +185,15 @@ def _fn_has_parameter (fn: typing.Callable, name: str) -> bool:
 	return name in inspect.signature(fn).parameters
 
 
+def _fn_requires_parameter (fn: typing.Callable, name: str) -> bool:
+
+	"""Check whether a callable takes a parameter with the given name and gives it no default."""
+
+	parameter = inspect.signature(fn).parameters.get(name)
+
+	return parameter is not None and parameter.default is inspect.Parameter.empty
+
+
 @dataclasses.dataclass
 class ScheduleContext:
 
@@ -6080,6 +6089,7 @@ class Composition:
 
 		running._builder_fn = pending.builder_fn
 		running._wants_chord = wants_chord
+		running._said_no_chord = False
 
 		# In the order that keeps the pair valid at every step, since a rebuild
 		# on the clock's thread may read them between the two.
@@ -7456,6 +7466,7 @@ class Composition:
 					pending.length / pending.default_grid if pending.default_grid > 0 else None
 				)
 				self._wants_chord = _fn_has_parameter(pending.builder_fn, "chord")
+				self._said_no_chord = False
 				self._cycle_count = 0
 				self._rng = pattern_rng
 				self._muted = False
@@ -7579,8 +7590,22 @@ class Composition:
 								beats_remaining = harmony_view.until_change if harmony_view is not None else None,
 							)
 							self._builder_fn(builder, injected)
-						else:
+						elif not _fn_requires_parameter(self._builder_fn, "chord"):
+							# chord=None, or any default: the builder decides.
 							self._builder_fn(builder)
+						elif not self._said_no_chord:
+							# Called with one argument, a builder that needs its
+							# chord raised TypeError on every cycle, with a
+							# traceback naming Python's argument count rather
+							# than the missing harmony (#3019).  Say it once, and
+							# stay silent until there is a chord.
+							self._said_no_chord = True
+							logger.warning(
+								"Pattern '%s' takes a chord, and there is none to give it, so it plays nothing until "
+								"there is: a pattern with a chord parameter needs composition.harmony(...), or a "
+								"progression from composition.section_chords(...).",
+								self._builder_fn.__name__,
+							)
 
 					else:
 						self._builder_fn(builder)
