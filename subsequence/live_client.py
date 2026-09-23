@@ -11,6 +11,10 @@ a block header, or a decorator, and the client waits for the rest; a blank line
 sends it.
 
 Press Ctrl+C to cancel the current input. Press Ctrl+D to quit.
+
+Press Ctrl+C while waiting for an answer to stop the code the composition is
+running - a runaway loop, a long sleep - and the music carries on, as Python's
+own REPL would stop it.  Press it again to stop waiting.
 """
 
 import argparse
@@ -22,6 +26,9 @@ import typing
 
 SENTINEL = b"\x04"
 
+# What asks the server to stop the code it is running: ETX, the byte Ctrl+C types.
+INTERRUPT = b"\x03"
+
 
 class LiveClient:
 
@@ -32,6 +39,10 @@ class LiveClient:
 		"""Initialise with no connection."""
 
 		self._sock: typing.Optional[socket.socket] = None
+
+		# What has arrived but not been answered yet.  Kept here rather than in
+		# a read, so a Ctrl+C in the middle of one loses nothing.
+		self._buffer = b""
 
 	def connect (self, host: str = "127.0.0.1", port: int = 5555) -> None:
 
@@ -49,22 +60,40 @@ class LiveClient:
 
 		self._sock.sendall(code.encode("utf-8") + SENTINEL)
 
-		chunks: typing.List[bytes] = []
+		return self.answer()
 
-		while True:
+	def answer (self) -> str:
+
+		"""Wait for the server's next answer, and return it."""
+
+		if self._sock is None:
+			raise ConnectionError("Not connected")
+
+		while SENTINEL not in self._buffer:
+
 			chunk = self._sock.recv(4096)
 
 			if not chunk:
 				raise ConnectionError("Server closed connection")
 
-			if SENTINEL in chunk:
-				before, _, _ = chunk.partition(SENTINEL)
-				chunks.append(before)
-				break
+			self._buffer += chunk
 
-			chunks.append(chunk)
+		message, _, self._buffer = self._buffer.partition(SENTINEL)
 
-		return b"".join(chunks).decode("utf-8")
+		return message.decode("utf-8")
+
+	def interrupt (self) -> None:
+
+		"""Ask the server to stop the code it is running for this client (#3371).
+
+		Its answer to that code then comes back as usual, reading
+		``KeyboardInterrupt``.  With nothing running, the server ignores it.
+		"""
+
+		if self._sock is None:
+			raise ConnectionError("Not connected")
+
+		self._sock.sendall(INTERRUPT)
 
 	def close (self) -> None:
 
@@ -168,8 +197,24 @@ def main () -> None:
 				continue
 
 			try:
-				response = client.send(code)
+
+				try:
+					response = client.send(code)
+
+				except KeyboardInterrupt:
+
+					# Stop what the composition is running for us; the music carries on.
+					client.interrupt()
+					print("\nInterrupting - press Ctrl+C again to stop waiting.")
+
+					try:
+						response = client.answer()
+					except KeyboardInterrupt:
+						print("\nStopped waiting.  The composition is still playing.")
+						break
+
 				print(response)
+
 			except ConnectionError:
 				print("Connection lost.")
 				break
