@@ -2,6 +2,7 @@ import functools
 import math
 import operator
 import random
+import typing
 
 import pytest
 
@@ -1451,11 +1452,16 @@ def test_lorenz_attractor_deterministic () -> None:
 
 def test_lorenz_attractor_sensitive_to_initial_conditions () -> None:
 
-	"""Different initial conditions eventually produce different output."""
+	"""Different initial conditions play different phrases, not merely different floats.
 
-	a = subsequence.sequence_utils.lorenz_attractor(100, x0=0.1)
-	b = subsequence.sequence_utils.lorenz_attractor(100, x0=0.2)
-	assert a != b
+	This asserted only ``a != b``, which floats a bar long satisfy by 2e-5 while the phrases they
+	play agree.  Now a millionth apart, the second bar's phrase already differs (#3472).
+	"""
+
+	def phrase (x0: float) -> typing.List[int]:
+		return [min(int(x * 8), 7) for x, _, _ in subsequence.sequence_utils.lorenz_attractor(16, x0=x0, start=16)]
+
+	assert phrase(0.1) != phrase(0.100001)
 
 
 # --- reaction_diffusion_1d ---

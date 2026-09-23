@@ -21,12 +21,12 @@ import subsequence.sequence_utils
 POOL = [60, 62, 64, 65, 67, 69, 71, 72]
 
 
-def _built (**kwargs: typing.Any) -> typing.List[int]:
+def _built (cycle: int = 0, **kwargs: typing.Any) -> typing.List[int]:
 
 	"""A four-beat bar of Lorenz sixteenths over POOL, as the pitches it plays, in order."""
 
 	pattern = subsequence.pattern.Pattern(channel=0, length=4.0)
-	builder = subsequence.pattern_builder.PatternBuilder(pattern=pattern, cycle=0)
+	builder = subsequence.pattern_builder.PatternBuilder(pattern=pattern, cycle=cycle)
 	builder.lorenz(POOL, **kwargs)
 	builder._finish_build()
 
@@ -55,30 +55,35 @@ def test_a_bar_with_a_long_dt_plays_across_its_pool () -> None:
 
 def test_up_to_one_step_the_trajectory_is_exactly_what_it_was () -> None:
 
-	"""Sub-stepping splits only a dt longer than 0.01, so the default sound of every piece stands."""
+	"""Sub-stepping splits only a dt longer than 0.01: up to that, the trajectory is plain Euler.
+
+	Read unscaled, exactly: since #3472 each axis is scaled against the trajectory's own range,
+	which is the scaling's business and not the integration's.
+	"""
 
 	x, y, z, sigma, rho, beta, dt = 0.1, 0.0, 0.0, 10.0, 28.0, 8.0 / 3.0, 0.01
 	raw = []
 
 	for _ in range(16):
 		x, y, z = x + sigma * (y - x) * dt, y + (x * (rho - z) - y) * dt, z + (x * y - beta * z) * dt
-		raw.append(x)
+		raw.append((x, y, z))
 
-	lo, hi = min(raw), max(raw)
-	expected = [(value - lo) / (hi - lo) for value in raw]
-
-	assert [point[0] for point in subsequence.sequence_utils.lorenz_attractor(16)] == pytest.approx(expected, abs=1e-12)
+	assert subsequence.sequence_utils._lorenz_states(16, 0, dt, sigma, rho, beta, 0.1, 0.0, 0.0) == raw
 
 
 def test_the_trajectory_s_highest_point_plays_the_highest_pitch () -> None:
 
-	"""x reaches exactly 1.0 once a phrase, and a modulo sent it round to the lowest pitch."""
+	"""x reaches exactly 1.0 at the trajectory's highest point, and a modulo sent it round to the lowest pitch.
 
-	points = subsequence.sequence_utils.lorenz_attractor(16)
-	top = max(range(16), key=lambda index: points[index][0])
-	assert points[top][0] == 1.0
+	Since #3472 that is the highest point of the first sixty time units rather than of each
+	phrase.  At a dt of 0.01 every Euler step is a note, so a note sits on it exactly.
+	"""
 
-	assert _built()[top] == POOL[-1]
+	states = subsequence.sequence_utils._lorenz_states(6000, 0, 0.01, 10.0, 28.0, 8.0 / 3.0, 0.1, 0.0, 0.0)
+	bar, step = divmod(max(range(6000), key=lambda index: states[index][0]), 16)
+
+	assert subsequence.sequence_utils.lorenz_attractor(16, dt=0.01, start=bar * 16)[step][0] == 1.0
+	assert _built(cycle=bar, dt=0.01)[step] == POOL[-1]
 
 
 def test_dt_is_held_to_its_span (caplog: pytest.LogCaptureFixture) -> None:

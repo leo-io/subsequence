@@ -571,7 +571,7 @@ Functions for generating and transforming sequences.
 | `generate_van_der_corput_sequence(n, base) -> List[float]` | Generate a sequence of n numbers using the van der Corput sequence. |
 | `golden_rhythm(count, length) -> List[float]` | Generate beat positions spaced by the golden ratio. |
 | `logistic_map(r, steps, x0) -> List[float]` | Generate a deterministic chaos sequence using the logistic map. |
-| `lorenz_attractor(steps, dt, sigma, rho, beta, x0, y0, z0) -> List[Tuple[float, float, float]]` | Integrate the Lorenz attractor and return normalised (x, y, z) tuples. |
+| `lorenz_attractor(steps, dt, sigma, rho, beta, x0, y0, z0, start) -> List[Tuple[float, float, float]]` | Integrate the Lorenz attractor and return normalised (x, y, z) tuples. |
 | `lsystem_expand(axiom, rules, generations, rng, max_length) -> str` | Expand an L-system string by applying production rules. |
 | `mask(sequence, against, steps, zero) -> List[~T]` | Keep the steps where a selector is active, zeroing the rest. |
 | `morse_code(text, dot, dash, symbol_gap, letter_gap, word_gap) -> List[float]` | Translate text into an International Morse Code rhythm. |

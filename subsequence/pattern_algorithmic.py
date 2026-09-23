@@ -1738,7 +1738,7 @@ class PatternAlgorithmicMixin:
 		spacing: subsequence.declarations.GridBeats = 0.25,
 		velocity: subsequence.declarations.VelocityValue = subsequence.constants.velocity.DEFAULT_GENERATIVE_VELOCITY,
 		duration: subsequence.declarations.GateBeats = 0.2,
-		dt: typing.Annotated[float, subsequence.declarations.Span(0.001, 0.5)] = 0.01,
+		dt: typing.Annotated[float, subsequence.declarations.Span(0.001, 0.5)] = 0.1,
 		sigma: float = 10.0,
 		rho: float = 28.0,
 		beta: float = 8.0 / 3.0,
@@ -1755,16 +1755,27 @@ class PatternAlgorithmicMixin:
 
 		"""Generate a note sequence driven by the Lorenz strange attractor.
 
-		Integrates the Lorenz system to produce a trajectory of (x, y, z) points,
-		each normalised to [0, 1].  The three axes provide correlated but
-		independent modulation sources: by default x drives pitch selection,
-		y drives velocity, and z drives duration.
+		Integrates the Lorenz system and walks one trajectory of (x, y, z)
+		points, carried on from bar to bar: each bar plays the stretch after the
+		last one's, so the line keeps moving instead of replaying one bar.  The
+		three axes provide correlated but independent modulation sources: by
+		default x drives pitch selection, y drives velocity, and z drives
+		duration.
 
-		The Lorenz attractor is deterministic but extremely sensitive to initial
-		conditions: changing ``x0`` by even 0.001 produces a divergent trajectory
-		over time.  This makes it ideal for cycle-by-cycle variation - pass
-		``x0=p.cycle * 0.001`` to generate a unique but slowly evolving phrase
-		each bar.
+		Each axis is measured against the range the trajectory covers over its
+		first sixty time units, the same for every bar, so a stretch that
+		circles one wing of the butterfly stays on a few pitches and a swing to
+		the other wing sweeps across the pool.  At the default ``dt`` about half the
+		notes repeat the one before and most of the rest move to a neighbouring
+		pitch; a bar spans a median of five steps of an eight-note pool.  A
+		smaller ``dt`` lingers - at 0.05, 70% of notes repeat - and a larger one
+		moves faster and leaps more.
+
+		The system is extremely sensitive to where it starts: two lines whose
+		``x0`` differ by a millionth part company by the second bar, so ``x0``
+		picks a different line.  Turn ``rho`` down to calm it: at about 15 or
+		below, the line spirals in and comes to rest on one pitch within 30
+		bars at the default ``dt``.
 
 		A custom ``mapping`` callable can override the default x/y/z → pitch/vel/dur
 		assignment, or return ``None`` for a rest.
@@ -1777,18 +1788,18 @@ class PatternAlgorithmicMixin:
 			    Overridden by ``mapping``.
 			dt: Time along the trajectory between one note and the next, 0.001 to 0.5.
 			    Longer steps move further round the attractor per note; any length is
-			    integrated in steps of at most 0.01, so it never runs off.  Default 0.01.
+			    integrated in steps of at most 0.01, so it never runs off.  Default 0.1.
 			sigma, rho, beta: Lorenz parameters.  Defaults produce the classic
 			    butterfly attractor (chaotic regime).
-			x0, y0, z0: Initial conditions.  Use ``x0=p.cycle * small_delta``
-			    for slowly evolving variation.
+			x0, y0, z0: Where the trajectory starts.  A different start plays a
+			    different line.
 			mapping: Optional callable ``(x, y, z) -> (pitch, velocity, duration)``
 			    or ``None`` for rest.
 
 		Example:
 			```python
 			scale = [60, 62, 64, 65, 67, 69, 71, 72]
-			p.lorenz(scale, spacing=0.25, velocity=(50, 110), x0=p.cycle * 0.002)
+			p.lorenz(scale, spacing=0.25, velocity=(50, 110))
 			```
 		"""
 
@@ -1798,9 +1809,11 @@ class PatternAlgorithmicMixin:
 		if spacing <= 0:
 			raise ValueError(f"lorenz() spacing is the time between notes in beats — it must be positive, got {spacing}")
 
+		# One trajectory, carried on bar by bar: this cycle plays the stretch after
+		# the last one's (#3472).
 		n_steps = int(self._pattern.length / spacing)
 		points = subsequence.sequence_utils.lorenz_attractor(
-			n_steps, dt=dt, sigma=sigma, rho=rho, beta=beta, x0=x0, y0=y0, z0=z0
+			n_steps, dt=dt, sigma=sigma, rho=rho, beta=beta, x0=x0, y0=y0, z0=z0, start=self.cycle * n_steps
 		)
 
 		beat = 0.0

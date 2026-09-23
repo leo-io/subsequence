@@ -6,6 +6,7 @@ generative helpers (random walk, weighted choice, shuffled choices, scale/clamp)
 """
 
 import collections
+import functools
 import itertools
 import math
 import random
@@ -2593,16 +2594,176 @@ def golden_rhythm (count: int, length: float = 4.0) -> typing.List[float]:
 # The longest single Euler step lorenz_attractor takes (M17 of the 2026-09-19 review).
 _LORENZ_STEP = 0.01
 
+# How much of the trajectory its range is measured over, in the system's own
+# time units from its start (#3472).  Each axis is scaled against that one
+# range, whichever stretch is played, so a quiet stretch of the attractor stays
+# quiet.  Stretched to fill each call instead, as it was, every bar swept the
+# whole pool, and a bar-long stretch from x0 was the same bar whatever x0 was.
+# The start's transient is measured on purpose: a system that settles to a point
+# (at a low rho) leaves only a dying spiral after any burn-in, and measuring
+# that alone would stretch it across the pool.  Sixty units at the
+# classic parameters reach within a few per cent of the attractor's full width,
+# and the rare excursion beyond it is clamped.
+_LORENZ_RANGE_TIME = 60.0
+
+# The finest step the range is measured at.  In the builder dt is bounded at
+# 0.001 and the range is measured at the trajectory's own step; only a direct
+# call can go finer, and sixty units at a step of 1e-6 would take minutes.
+_LORENZ_RANGE_STEP = 0.001
+
+# The latest (point, state) per trajectory, so each bar carries on from where
+# the last one stopped instead of integrating from the start again.
+_lorenz_cache: _EvolutionCache[typing.Tuple[float, float, float]] = _EvolutionCache()
+
+
+def _lorenz_step_size (dt: float) -> typing.Tuple[int, float]:
+
+	"""How many Euler steps each point takes, and how long each one is.
+
+	Euler is stable only for short steps: from about 0.025 the classic system
+	ran off to infinity and every rebuild raised, silencing the part.  So a
+	longer dt is taken as several steps of at most _LORENZ_STEP - dt stays the
+	time between points, and anything up to that integrates exactly as before.
+	"""
+
+	substeps = max(1, math.ceil(dt / _LORENZ_STEP))
+
+	return substeps, dt / substeps
+
+
+def _lorenz_ran_off (sigma: float, rho: float, beta: float) -> ValueError:
+
+	return ValueError(
+		f"the Lorenz system ran off to infinity with sigma={sigma:g}, rho={rho:g}, beta={beta:g} - "
+		"values nearer the classic 10, 28 and 8/3 stay on the attractor"
+	)
+
+
+def _lorenz_states (
+	steps: int,
+	start: int,
+	dt: float,
+	sigma: float,
+	rho: float,
+	beta: float,
+	x0: float,
+	y0: float,
+	z0: float,
+) -> typing.List[typing.Tuple[float, float, float]]:
+
+	"""Points ``start`` to ``start + steps - 1`` of the trajectory from (x0, y0, z0), unscaled.
+
+	Point i is the state after i + 1 steps of ``dt``.  The cache holds where the
+	last call stopped, so a call starting there or later carries on from it,
+	and an earlier start integrates from the beginning again.  Correct because
+	the system is deterministic: each point depends only on the one before.
+	"""
+
+	substeps, h = _lorenz_step_size(dt)
+	key = (dt, sigma, rho, beta, x0, y0, z0)
+	cached = _lorenz_cache.get(key)
+
+	if cached is not None and cached[0] <= start:
+		done, (x, y, z) = cached
+	else:
+		done, (x, y, z) = 0, (x0, y0, z0)
+
+	states: typing.List[typing.Tuple[float, float, float]] = []
+
+	while done < start + steps:
+
+		for _ in range(substeps):
+			dx = sigma * (y - x) * h
+			dy = (x * (rho - z) - y) * h
+			dz = (x * y - beta * z) * h
+			x += dx
+			y += dy
+			z += dz
+
+		if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+			raise _lorenz_ran_off(sigma, rho, beta)
+
+		if done >= start:
+			states.append((x, y, z))
+
+		done += 1
+
+	_lorenz_cache.put(key, (done, (x, y, z)))
+
+	return states
+
+
+@functools.lru_cache(maxsize = _CA_CACHE_ENTRIES)
+def _lorenz_range (
+	dt: float,
+	sigma: float,
+	rho: float,
+	beta: float,
+	x0: float,
+	y0: float,
+	z0: float,
+) -> typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float], typing.Tuple[float, float]]:
+
+	"""Each axis's (lowest, highest) over the trajectory's first _LORENZ_RANGE_TIME time units.
+
+	Measured at the trajectory's own step, so for the first sixty units every
+	point lies inside it exactly; it runs off to infinity here first if it runs
+	off at all, which is why the kernel asks for it before anything else.
+	"""
+
+	_, h = _lorenz_step_size(dt)
+	h = max(h, _LORENZ_RANGE_STEP)
+	x, y, z = x0, y0, z0
+	lo_x = lo_y = lo_z = math.inf
+	hi_x = hi_y = hi_z = -math.inf
+
+	for _ in range(math.ceil(_LORENZ_RANGE_TIME / h)):
+		dx = sigma * (y - x) * h
+		dy = (x * (rho - z) - y) * h
+		dz = (x * y - beta * z) * h
+		x += dx
+		y += dy
+		z += dz
+		if x < lo_x:
+			lo_x = x
+		if x > hi_x:
+			hi_x = x
+		if y < lo_y:
+			lo_y = y
+		if y > hi_y:
+			hi_y = y
+		if z < lo_z:
+			lo_z = z
+		if z > hi_z:
+			hi_z = z
+
+	# Checked once, at the end: a value that ran off stays infinite or NaN.
+	if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+		raise _lorenz_ran_off(sigma, rho, beta)
+
+	return (lo_x, hi_x), (lo_y, hi_y), (lo_z, hi_z)
+
+
+def _lorenz_scaled (value: float, lo: float, hi: float) -> float:
+
+	"""*value* as a share of [lo, hi], clamped to it - or the middle, when the range has no width."""
+
+	if hi - lo <= 1e-12 * max(1.0, abs(lo), abs(hi)):
+		return 0.5
+
+	return min(max((value - lo) / (hi - lo), 0.0), 1.0)
+
 
 def lorenz_attractor (
 	steps: int,
-	dt: float = 0.01,
+	dt: float = 0.1,
 	sigma: float = 10.0,
 	rho: float = 28.0,
 	beta: float = 8.0 / 3.0,
 	x0: float = 0.1,
 	y0: float = 0.0,
 	z0: float = 0.0,
+	start: int = 0,
 ) -> typing.List[typing.Tuple[float, float, float]]:
 
 	"""
@@ -2617,28 +2778,38 @@ def lorenz_attractor (
 
 	Integration uses the Euler method, in steps of at most 0.01: a longer
 	``dt`` is the time between points, taken as several short steps so the
-	trajectory never runs off to infinity.  Each axis is
-	independently min-max normalised to ``[0.0, 1.0]`` across the full
-	trajectory so that outputs span the full musical range regardless of
-	the chosen parameters.
+	trajectory never runs off to infinity.
+
+	One call is one stretch of one trajectory: ``start`` says how far along it
+	begins, so ``start=p.cycle * 16`` carries a 16-point bar on from the last
+	and the line keeps moving.  Each axis is scaled to ``[0.0, 1.0]``
+	against the range the trajectory covers over its first sixty time units -
+	the same for every stretch - so a quiet stretch stays quiet rather than
+	being stretched to fill the range, and the rare point beyond it is clamped.
 
 	Parameters:
 		steps: Number of points to generate.
-		dt: Integration time step.  Smaller values produce smoother
-		    trajectories.  Default 0.01.
+		dt: Time along the trajectory between one point and the next.
+		    Smaller values move more smoothly, and more slowly.  Default 0.1.
 		sigma: Lorenz σ parameter.  Default 10.0.
 		rho: Lorenz ρ parameter.  Default 28.0 (classic chaotic regime).
+		    Low values settle to a point.
 		beta: Lorenz β parameter.  Default 8/3.
 		x0: Initial x position.  Small changes diverge over time.
 		y0: Initial y position.
 		z0: Initial z position.
+		start: How many points into the trajectory to begin.  Default 0.
 
 	Returns:
 		List of ``(x, y, z)`` tuples, each component in ``[0.0, 1.0]``.
 
+	Raises:
+		ValueError: If ``start`` is negative, or the system runs off to
+		    infinity (with sigma, rho or beta far from the classic values).
+
 	Example:
 		```python
-		points = subsequence.sequence_utils.lorenz_attractor(16, x0=p.cycle * 0.001)
+		points = subsequence.sequence_utils.lorenz_attractor(16, start=p.cycle * 16)
 		pitches = [60, 62, 64, 65, 67, 69, 71, 72]
 		for i, (x, y, z) in enumerate(points):
 		    pitch = pitches[min(int(x * len(pitches)), len(pitches) - 1)]
@@ -2647,50 +2818,18 @@ def lorenz_attractor (
 		```
 	"""
 
+	if start < 0:
+		raise ValueError(f"lorenz_attractor start must be 0 or more, not {start}")
+
 	if steps <= 0:
 		return []
 
-	x, y, z = x0, y0, z0
-	xs: typing.List[float] = []
-	ys: typing.List[float] = []
-	zs: typing.List[float] = []
+	(lo_x, hi_x), (lo_y, hi_y), (lo_z, hi_z) = _lorenz_range(dt, sigma, rho, beta, x0, y0, z0)
 
-	# Euler is stable only for short steps: from about 0.025 the classic system
-	# ran off to infinity and every rebuild raised, silencing the part.  So a
-	# longer dt is taken as several steps of at most _LORENZ_STEP - dt stays the
-	# time between points, and anything up to that integrates exactly as before.
-	substeps = max(1, math.ceil(dt / _LORENZ_STEP))
-	h = dt / substeps
-
-	for _ in range(steps):
-
-		for _ in range(substeps):
-			dx = sigma * (y - x) * h
-			dy = (x * (rho - z) - y) * h
-			dz = (x * y - beta * z) * h
-			x += dx
-			y += dy
-			z += dz
-
-		if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
-			raise ValueError(
-				f"the Lorenz system ran off to infinity with sigma={sigma:g}, rho={rho:g}, beta={beta:g} - "
-				"values nearer the classic 10, 28 and 8/3 stay on the attractor"
-			)
-
-		xs.append(x)
-		ys.append(y)
-		zs.append(z)
-
-	def _normalise (values: typing.List[float]) -> typing.List[float]:
-		lo = min(values)
-		hi = max(values)
-		if hi == lo:
-			return [0.5] * len(values)
-		span = hi - lo
-		return [(v - lo) / span for v in values]
-
-	return list(zip(_normalise(xs), _normalise(ys), _normalise(zs)))
+	return [
+		(_lorenz_scaled(x, lo_x, hi_x), _lorenz_scaled(y, lo_y, hi_y), _lorenz_scaled(z, lo_z, hi_z))
+		for x, y, z in _lorenz_states(steps, start, dt, sigma, rho, beta, x0, y0, z0)
+	]
 
 
 # When a Gray-Scott field holds no pattern (#3464).  A field whose peak is under
