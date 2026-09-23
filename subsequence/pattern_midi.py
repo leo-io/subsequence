@@ -966,7 +966,9 @@ class PatternMidiMixin:
 			start: Fraction of the note's duration at which the ramp begins
 				(0.0 = note onset, default).
 			end: Fraction of the note's duration at which the ramp ends
-				(1.0 = note end, default).
+				(1.0 = note end, default).  A note that rings on past the next
+				one's onset counts only its time before it, since the next note
+				resets the pitch wheel they share.
 			shape: Easing curve - a name string (e.g. ``"ease_in"``) or any
 			       callable mapping [0, 1] → [0, 1].  Defaults to ``"linear"``.
 			resolution: Pulses between pitch bend messages.
@@ -1019,14 +1021,6 @@ class PatternMidiMixin:
 		step = self._pattern.steps[position]
 		note_duration = max(sounding.duration for sounding in step.notes)
 
-		# Clamp start/end fractions and compute pulse range for the ramp
-		start_clamped = max(0.0, min(1.0, start))
-		end_clamped = max(0.0, min(1.0, end))
-		bend_start_pulse = position + int(note_duration * start_clamped)
-		bend_end_pulse = position + int(note_duration * end_clamped)
-
-		self._generate_bend_events(0.0, amount, bend_start_pulse, bend_end_pulse, resolution, shape)
-
 		# Reset bend at the next note's onset.  For the last note that is the
 		# NEXT cycle's first onset (total + first), not pulse 0 - a bend tail
 		# spilling past the cycle end was cancelled mid-flight by a pulse-0
@@ -1036,6 +1030,20 @@ class PatternMidiMixin:
 		else:
 			total_pulses = subsequence.constants.pulses.beats_to_pulses(self._pattern.length)
 			reset_pulse = total_pulses + sorted_positions[0]
+
+		# The next note resets the pitch wheel the two share, so a note that
+		# rings on past it has only the time before it to bend in: the ramp is
+		# fitted there, still reaching its full amount.  Measured against the
+		# whole note, it ran on past the reset and bent the next note (#3477).
+		span = min(note_duration, reset_pulse - position)
+
+		# Clamp start/end fractions and compute pulse range for the ramp
+		start_clamped = max(0.0, min(1.0, start))
+		end_clamped = max(0.0, min(1.0, end))
+		bend_start_pulse = position + int(span * start_clamped)
+		bend_end_pulse = position + int(span * end_clamped)
+
+		self._generate_bend_events(0.0, amount, bend_start_pulse, bend_end_pulse, resolution, shape)
 
 		reset_midi = max(-8192, min(8191, int(round(0.0 * 8192))))
 		self._pattern.cc_events.append(
