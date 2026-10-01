@@ -55,7 +55,7 @@ The top-level controller for a musical piece.
 
 | Method | Description |
 |---|---|
-| `__init__(output_device, bpm, time_signature, key, scale, seed, record, record_filename, zero_indexed_channels, latency_ms) -> None` | Initialise a new composition. |
+| `__init__(output_device, bpm, time_signature, key, scale, seed, record, record_filename, zero_indexed_channels, latency_ms, mood) -> None` | Initialise a new composition. |
 | `bar_beats *(property)*` | How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.0 in 6/8. |
 | `builder_bar *(property)*` | Current bar index used by pattern builders. |
 | `cc_forward(cc, output, channel, output_channel, mode, input_device, output_device) -> None` | Forward an incoming MIDI CC to the MIDI output in real-time. |
@@ -88,13 +88,14 @@ The top-level controller for a musical piece.
 | `midi_input(device, clock_follow, name) -> None` | Configure a MIDI input device for external sync and MIDI messages. |
 | `midi_output(device, name, latency_ms) -> int` | Register an additional MIDI output device. |
 | `mirror(name, device, channel, drum_note_map) -> None` | Add a mirror destination to a running pattern. |
+| `mood(name) -> None` | Switch the composition's harmonic colour live. |
 | `mute(name) -> None` | Mute a running pattern by name. |
 | `note_input(channel, release_ms, latch, input_device) -> None` | Track notes held on a MIDI keyboard for live arpeggiation. |
 | `on_event(event_name, callback) -> None` | Register a callback for a sequencer event (e.g., "bar", "start", "stop"). |
 | `on_section(callback) -> None` | Register a callback fired on every section change. |
 | `osc(receive_port, send_port, send_host, receive_host) -> None` | Enable bi-directional Open Sound Control (OSC). |
 | `osc_map(address, handler) -> None` | Register a custom OSC handler. |
-| `pattern(channel, beats, bars, steps, step_duration, drum_note_map, cc_name_map, nrpn_name_map, reschedule_lookahead, voice_leading, device, mirrors, min_energy) -> Callable` | Register a function as a repeating MIDI pattern. |
+| `pattern(channel, beats, bars, steps, step_duration, drum_note_map, cc_name_map, nrpn_name_map, reschedule_lookahead, voice_leading, device, mirrors, min_energy, mood) -> Callable` | Register a function as a repeating MIDI pattern. |
 | `pause() -> None` | Hold playback where it is, keeping the composition's place. |
 | `phrase_part(channel, part, root, bars, beats, velocity, fit, device, mirrors) -> None` | Declare a part that plays each section's bound Motif/Phrase. |
 | `pin_chord(bar, chord) -> None` | Force the chord sounding at a bar - fiat over live generation. |
@@ -308,7 +309,7 @@ One section of a form - the payload home.
 
 | Method | Description |
 |---|---|
-| `__init__(name, bars, energy, key, scale) -> None` |  |
+| `__init__(name, bars, energy, key, scale, mood) -> None` |  |
 
 
 ## `Form`

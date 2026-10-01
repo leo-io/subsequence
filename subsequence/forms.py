@@ -47,6 +47,14 @@ class Section:
 			mode as well as the tonic, so a section can genuinely change
 			to the relative or parallel minor.  Falls back to the form's
 			scale, then the composition's.
+		mood: Optional conga-composer mood seed (e.g. ``"cool"``), or any
+			KB synonym of one (``"chill"``, ``"triste"``); stored as the
+			seed id.  Derives ``scale`` automatically when ``scale`` is not
+			given (``"cool"`` → ``scale="dorian"``).  Also controls the
+			harmony style while this section is playing - the composition
+			restores its previous style when the section ends.  Mood is
+			harmonic-only: no rhythm or expression changes.  See
+			``subsequence.mood.MOODS`` for the sixteen seeds.
 	"""
 
 	name: str
@@ -54,10 +62,11 @@ class Section:
 	energy: float = 0.5
 	key: typing.Optional[str] = None
 	scale: typing.Optional[str] = None
+	mood: typing.Optional[str] = None
 
 	def __post_init__ (self) -> None:
 
-		"""Validate the payload loudly."""
+		"""Validate the payload loudly, and derive scale from mood when needed."""
 
 		if not isinstance(self.name, str) or not self.name:
 			raise ValueError(f"a section needs a non-empty string name, got {self.name!r}")
@@ -75,6 +84,13 @@ class Section:
 
 		if self.scale is not None:
 			subsequence.intervals.scale_pitch_classes(0, self.scale)
+
+		if self.mood is not None:
+			from subsequence.mood import resolve_mood
+			spec = resolve_mood(self.mood)   # raises ValueError on unknown mood
+			object.__setattr__(self, "mood", spec.id)
+			if self.scale is None:
+				object.__setattr__(self, "scale", spec.scale)
 
 
 def _coerce_section (element: typing.Any) -> Section:

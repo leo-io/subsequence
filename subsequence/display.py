@@ -672,7 +672,10 @@ class Display:
 			section = self._cached_section
 
 			if section:
-				section_str = f"[{section.name} {section.bar + 1}/{section.bars}"
+				section_str = f"[{section.name}"
+				if section.mood:
+					section_str += f" \u00b7 {section.mood}"
+				section_str += f" {section.bar + 1}/{section.bars}"
 				if section.next_section:
 					section_str += f" \u2192 {section.next_section}"
 				section_str += "]"

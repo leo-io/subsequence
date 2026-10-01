@@ -86,6 +86,7 @@ class SectionInfo:
 	energy: float = 0.5
 	key: typing.Optional[str] = None
 	scale: typing.Optional[str] = None
+	mood: typing.Optional[str] = None
 
 	@property
 	def progress (self) -> float:
@@ -557,6 +558,7 @@ class FormState:
 			energy = self._current.energy,
 			key = self._current.key,
 			scale = self._current.scale,
+			mood = self._current.mood,
 		)
 
 	def next_section_info (self) -> typing.Optional[SectionInfo]:
@@ -662,6 +664,7 @@ class FormState:
 					energy = section.energy,
 					key = section.key,
 					scale = section.scale,
+					mood = section.mood,
 				)
 			cursor += section.bars
 

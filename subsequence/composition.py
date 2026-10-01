@@ -30,6 +30,7 @@ import subsequence.constants
 import subsequence.constants.durations
 import subsequence.constants.pulses
 import subsequence.constants.velocity
+import subsequence.declarations
 import subsequence.display
 import subsequence.harmonic_state
 import subsequence.held_notes
@@ -1574,6 +1575,7 @@ class _PendingPattern:
 		raw_device: subsequence.midi_utils.DeviceId = None,
 		mirrors: typing.Optional[typing.Iterable[subsequence.pattern.MirrorSpec]] = None,
 		min_energy: typing.Optional[float] = None,
+		mood: typing.Optional[str] = None,
 	) -> None:
 
 		"""
@@ -1603,6 +1605,7 @@ class _PendingPattern:
 		self.raw_device: subsequence.midi_utils.DeviceId = raw_device
 		self.mirrors: typing.List[subsequence.pattern.MirrorSpec] = list(mirrors) if mirrors else []
 		self.min_energy = min_energy
+		self.mood = mood
 
 
 class _PendingScheduled:
@@ -1667,7 +1670,8 @@ class Composition:
 		record: bool = False,
 		record_filename: typing.Optional[str] = None,
 		zero_indexed_channels: bool = False,
-		latency_ms: float = 0.0
+		latency_ms: float = 0.0,
+		mood: typing.Optional[str] = None,
 	) -> None:
 
 		"""
@@ -1741,6 +1745,10 @@ class Composition:
 				(e.g. a software sampler) so Subsequence delays faster
 				devices to line everything up. See ``midi_output()`` for
 				additional devices.
+			mood: Optional conga-composer mood seed (``"cool"``,
+				``"melancholic"``…) or KB synonym.  Sets ``scale`` when it is
+				not given and the default style of a later ``harmony()``
+				call.  See ``subsequence.mood.MOODS``.
 
 		Example:
 			```python
@@ -1810,6 +1818,10 @@ class Composition:
 		# harmony() call — reused by parameter-only re-calls.
 		self._last_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
 		self._harmony_reschedule_lookahead: float = 1
+		# Mood-level harmony state: the style to restore when leaving a
+		# section-mood sequence, and whether one is currently active.
+		self._base_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
+		self._section_mood_active: bool = False
 		# What the most recent harmony() call configured, so a later re-call
 		# naming one parameter keeps the rest instead of silently defaulting
 		# them (#3088).  The style has its own home in _last_harmony_style.
@@ -1904,6 +1916,24 @@ class Composition:
 		self._tuning_pool_named: typing.Set[str] = set()
 		self._tuning_reference_note: int = 60
 		self._tuning_exclude_drums: bool = True
+
+		# Apply composition-level mood: derive scale (when not explicit) and
+		# pre-seed the harmony default so a later harmony() call with no style=
+		# uses the mood's chord-graph style.
+		if mood is not None:
+			from subsequence.mood import resolve_mood as _resolve_mood
+			_spec = _resolve_mood(mood)
+			if scale is None:
+				self.scale = _spec.scale
+			# Pre-seed only if no style was already set (harmony() hasn't run).
+			if self._last_harmony_style is None:
+				self._last_harmony_style = _spec.harmony_style
+			# Persist as the base so section overrides can restore to it.
+			self._base_harmony_style = _spec.harmony_style
+
+		# Register the internal callback that switches harmony style when a
+		# section with a mood starts, and restores on exit.
+		self._sequencer.on_event("section", self._handle_section_mood)
 
 	def _resolve_device_id (self, device: subsequence.midi_utils.DeviceId) -> int:
 		"""Resolve an output device id (None/int/str) to an integer index.
@@ -2581,6 +2611,47 @@ class Composition:
 				loop.create_task(self._start_harmonic_clock())
 			else:
 				asyncio.run_coroutine_threadsafe(self._start_harmonic_clock(), loop)
+
+	def mood (self, name: str) -> None:
+
+		"""Switch the composition's harmonic colour live.
+
+		Equivalent to calling ``harmony(style=spec.harmony_style)`` and setting
+		``self.scale = spec.scale``.  Rhythm and expression are untouched.
+
+		Parameters:
+			name: A conga-composer mood seed (``"cool"``, ``"dreamy"``,
+				etc.) or any KB synonym of one (``"chill"``, ``"triste"``).
+				Raises ``ValueError`` on unknown names.
+		"""
+
+		from subsequence.mood import resolve_mood
+		spec = resolve_mood(name)
+		self.scale = spec.scale
+		self.harmony(style = spec.harmony_style)
+		self._base_harmony_style = spec.harmony_style
+
+	def _handle_section_mood (self, info: typing.Any) -> None:
+
+		"""Internal callback: switch/restore harmony style on section changes.
+
+		Fires on every ``"section"`` event.  When the incoming section carries a
+		mood, switch to that mood's harmony style.  When it doesn't, and a
+		section-mood WAS active, restore the composition's base style.
+		"""
+
+		section_mood: typing.Optional[str] = getattr(info, "mood", None)
+
+		if section_mood is not None:
+			from subsequence.mood import resolve_mood
+			spec = resolve_mood(section_mood)
+			self._section_mood_active = True
+			self.harmony(style = spec.harmony_style)
+		elif self._section_mood_active:
+			self._section_mood_active = False
+			restore = self._base_harmony_style or self._last_harmony_style
+			if restore is not None:
+				self.harmony(style = restore)
 
 	def _remember_harmony_rewind (self, rewind: typing.Callable[[], None]) -> None:
 
@@ -5952,6 +6023,7 @@ class Composition:
 		device: subsequence.midi_utils.DeviceId = None,
 		mirrors: typing.Optional[typing.Iterable[subsequence.pattern.MirrorSpec]] = None,
 		min_energy: typing.Optional[float] = None,
+		mood: typing.Optional[str] = None,
 	) -> typing.Callable:
 
 		"""
@@ -6002,6 +6074,9 @@ class Composition:
 				the current section's energy (``composition.energy()`` dict,
 				or the bound Section payload) is below this threshold.
 				Composes with ``mute()``: a performer mute always wins.
+			mood: Optional conga-composer mood seed or KB synonym.  Pitch
+				only: the builder gets the mood's scale before the body runs
+				and every note is snapped to it afterwards.
 
 		Example:
 			```python
@@ -6038,6 +6113,11 @@ class Composition:
 			primary = (resolved_device if resolved_device is not None else 0, channel)
 		resolved_mirrors = self._resolve_mirrors(mirrors, primary=primary)
 
+		# Validate mood early (at decoration time) so typos surface immediately.
+		if mood is not None:
+			from subsequence.mood import resolve_mood as _validate_mood
+			_validate_mood(mood)   # raises ValueError on unknown name
+
 		def decorator (fn: typing.Callable) -> typing.Callable:
 
 			"""
@@ -6065,6 +6145,7 @@ class Composition:
 				raw_device = resolved_device,
 				mirrors = resolved_mirrors,
 				min_energy = min_energy,
+				mood = mood,
 			)
 
 			# Live, with a pattern of this name running: this is a save.  Swap
@@ -6158,6 +6239,13 @@ class Composition:
 
 		if pending.voice_leading != before.voice_leading:
 			running._voice_leading_state = subsequence.voicings.VoiceLeadingState() if pending.voice_leading else None
+
+		if pending.mood != before.mood:
+			if pending.mood is not None:
+				from subsequence.mood import resolve_mood
+				running._mood_scale = resolve_mood(pending.mood).scale
+			else:
+				running._mood_scale = None
 
 		if pending.raw_device != before.raw_device:
 			logger.warning(
@@ -7511,6 +7599,14 @@ class Composition:
 				)
 				self._tweaks: typing.Dict[str, typing.Any] = {}
 
+				# Pattern-level mood: scale to pre-seed on p before the body runs
+				# and snap to after it runs.  None = no mood override.
+				if pending.mood is not None:
+					from subsequence.mood import resolve_mood as _rm
+					self._mood_scale: typing.Optional[str] = _rm(pending.mood).scale
+				else:
+					self._mood_scale = None
+
 				# Anchor of the cycle being built, on the absolute pulse axis.
 				# The sequencer updates this on every reschedule; the initial
 				# value is the pattern's first scheduled start.
@@ -7604,6 +7700,12 @@ class Composition:
 					zero_indexed_channels = composition_ref._zero_indexed_channels,
 				)
 
+				# Phase 1 (pre-body): give generative verbs the correct mode so
+				# NIR scoring, interval math, and scale-aware helpers use the
+				# pattern's mood scale rather than the section/composition scale.
+				if self._mood_scale is not None:
+					builder.scale = self._mood_scale
+
 				try:
 
 					if self._wants_chord:
@@ -7643,6 +7745,13 @@ class Composition:
 
 					else:
 						self._builder_fn(builder)
+
+					# Phase 2 (post-body): snap any absolute pitches that slipped
+					# outside the mood scale back into it.  This is the safety net
+					# for non-scale-aware verbs; generative verbs already used the
+					# correct scale from Phase 1 above.
+					if self._mood_scale is not None and builder.key:
+						builder.snap_to_scale(typing.cast(subsequence.declarations.KeyName, builder.key), self._mood_scale)
 
 					# Glides and tunings are laid against the notes' final places.
 					builder._finish_build()
