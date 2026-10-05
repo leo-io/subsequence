@@ -1818,10 +1818,13 @@ class Composition:
 		# harmony() call — reused by parameter-only re-calls.
 		self._last_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
 		self._harmony_reschedule_lookahead: float = 1
-		# Mood-level harmony state: the style to restore when leaving a
-		# section-mood sequence, and whether one is currently active.
+		# The style the author chose (harmony(style=), Composition(mood=),
+		# mood()), which a section without a mood returns to; the section the
+		# live chord graph is keyed to; and whether harmony() is being called
+		# by the section handler rather than by the author.
 		self._base_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
-		self._section_mood_active: bool = False
+		self._harmony_section: typing.Optional["subsequence.form_state.SectionInfo"] = None
+		self._section_harmony_call: bool = False
 		# What the most recent harmony() call configured, so a later re-call
 		# naming one parameter keeps the rest instead of silently defaulting
 		# them (#3088).  The style has its own home in _last_harmony_style.
@@ -1931,9 +1934,9 @@ class Composition:
 			# Persist as the base so section overrides can restore to it.
 			self._base_harmony_style = _spec.harmony_style
 
-		# Register the internal callback that switches harmony style when a
-		# section with a mood starts, and restores on exit.
-		self._sequencer.on_event("section", self._handle_section_mood)
+		# Register the internal callback that keeps the live chord graph on
+		# each section's mood and key, returning to the author's style after.
+		self._sequencer.on_event("section", self._handle_section_harmony)
 
 	def _resolve_device_id (self, device: subsequence.midi_utils.DeviceId) -> int:
 		"""Resolve an output device id (None/int/str) to an integer index.
@@ -2535,6 +2538,9 @@ class Composition:
 		if not 0.0 <= key_pull <= 1.0:
 			raise ValueError(f"harmony(key_pull={key_pull!r}) takes 0.0 to 1.0")
 
+		# The style the author named, before a parameter-only re-call fills it in.
+		named_style = style
+
 		if style is None and progression is KEEP:
 			# A parameter-only re-call (key_pull=, cycle_beats=, ...) keeps the
 			# configured style — defaulting unconditionally here would silently
@@ -2543,7 +2549,11 @@ class Composition:
 
 		if style is not None:
 
-			if self.key is None:
+			# The live chords sit in the key in force where the music is now:
+			# the current section's key, else the form's, else the composition's.
+			harmony_key, _ = self._effective_key_scale(self._harmony_section)
+
+			if harmony_key is None:
 				raise ValueError("Cannot configure harmony without a key - set key in the Composition constructor")
 
 			preserved_history: typing.List[subsequence.chords.Chord] = []
@@ -2560,7 +2570,7 @@ class Composition:
 			self._harmony_count += 1
 
 			self._harmonic_state = subsequence.harmonic_state.HarmonicState(
-				key_name = self.key,
+				key_name = harmony_key,
 				graph_style = style,
 				include_dominant_7th = dominant_7th,
 				# The engine still blends from the other end: 1.0 means
@@ -2579,6 +2589,11 @@ class Composition:
 
 			self._harmony_style = style if isinstance(style, str) else None
 			self._last_harmony_style = style
+
+			# A style the author names is the one a section without a mood
+			# returns to; a section mood's own switch is not.
+			if named_style is not None and not self._section_harmony_call:
+				self._base_harmony_style = named_style
 
 		if progression is not KEEP:
 			# An explicit None unbinds.  The clock reads the binding through a
@@ -2629,29 +2644,43 @@ class Composition:
 		spec = resolve_mood(name)
 		self.scale = spec.scale
 		self.harmony(style = spec.harmony_style)
-		self._base_harmony_style = spec.harmony_style
 
-	def _handle_section_mood (self, info: typing.Any) -> None:
+	def _handle_section_harmony (self, info: typing.Optional["subsequence.form_state.SectionInfo"]) -> None:
 
-		"""Internal callback: switch/restore harmony style on section changes.
+		"""Internal callback: keep the live chord graph on the section's mood and key.
 
-		Fires on every ``"section"`` event.  When the incoming section carries a
-		mood, switch to that mood's harmony style.  When it doesn't, and a
-		section-mood WAS active, restore the composition's base style.
+		Fires on every ``"section"`` event.  A section with a mood plays that
+		mood's harmony style; a section without one plays the style the author
+		chose (``harmony(style=)``, ``Composition(mood=)`` or ``mood()``, else
+		the ``"functional_major"`` default).  Either way the graph is keyed to
+		the section's effective key, so ``Section(key="Ab")`` moves the chords
+		as well as the key-relative parts.  The graph is rebuilt only when the
+		style or the key changes.
 		"""
 
+		self._harmony_section = info
 		section_mood: typing.Optional[str] = getattr(info, "mood", None)
 
 		if section_mood is not None:
 			from subsequence.mood import resolve_mood
-			spec = resolve_mood(section_mood)
-			self._section_mood_active = True
-			self.harmony(style = spec.harmony_style)
-		elif self._section_mood_active:
-			self._section_mood_active = False
-			restore = self._base_harmony_style or self._last_harmony_style
-			if restore is not None:
-				self.harmony(style = restore)
+			style: typing.Union[str, subsequence.chord_graphs.ChordGraph] = resolve_mood(section_mood).harmony_style
+		elif self._harmonic_state is None:
+			# No live harmony, and nothing here asks for it.
+			return
+		else:
+			style = self._base_harmony_style if self._base_harmony_style is not None else "functional_major"
+
+		key, _ = self._effective_key_scale(info)
+		state = self._harmonic_state
+
+		if state is not None and style == self._last_harmony_style and key == state.key_name:
+			return
+
+		self._section_harmony_call = True
+		try:
+			self.harmony(style = style)
+		finally:
+			self._section_harmony_call = False
 
 	def _remember_harmony_rewind (self, rewind: typing.Callable[[], None]) -> None:
 

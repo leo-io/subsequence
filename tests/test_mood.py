@@ -153,3 +153,98 @@ def test_pattern_mood_snaps_every_note_into_the_mood_scale (patch_midi: None, tm
 
 	assert played
 	assert played <= set(subsequence.intervals.scale_pitch_classes(0, "phrygian"))
+
+
+def _render_chords (composition: subsequence.Composition, bars: int, tmp_path: pathlib.Path) -> list:
+
+	"""Render *bars* and return (section name, chord, harmony key, style) for every cycle of a probe pattern."""
+
+	seen = []
+
+	@composition.pattern(channel=1, beats=4)
+	def probe (p, chord):
+
+		"""Record what the live harmony gives each section."""
+
+		name = p.section.name if p.section else None
+		seen.append((name, chord, composition._harmonic_state.key_name, composition._last_harmony_style))
+		p.note(60, beat=0)
+
+	composition.render(bars=bars, filename=str(tmp_path / "chords.mid"))
+
+	return seen
+
+
+def test_section_key_moves_the_live_chords (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Section(key="Ab", mood="uplifting") plays Ab major chords in an F minor song, then F minor again after."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="F", scale="aeolian", seed=1)
+	composition.harmony(style="aeolian_minor")
+	composition.form([
+		subsequence.Section("verse", 2),
+		subsequence.Section("chorus", 4, key="Ab", mood="uplifting"),
+		subsequence.Section("outro", 2),
+	], loop=False)
+
+	seen = _render_chords(composition, 8, tmp_path)
+	ab_major = set(subsequence.intervals.scale_pitch_classes(8, "ionian"))
+	chorus = [row for row in seen if row[0] == "chorus"]
+
+	assert chorus
+	for _, chord, key, style in chorus:
+		assert (key, style) == ("Ab", "functional_major")
+		assert {tone % 12 for tone in chord.tones(60)} <= ab_major
+
+	assert {(key, style) for name, _, key, style in seen if name in ("verse", "outro")} == {("F", "aeolian_minor")}
+
+
+def test_leaving_a_mood_section_returns_to_the_authors_style (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""A section without a mood plays harmony(style=) again, not the mood section's style."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C", seed=1)
+	composition.harmony(style="dorian_minor")
+	composition.form([
+		subsequence.Section("a", 2),
+		subsequence.Section("b", 2, mood="dark"),
+		subsequence.Section("c", 2),
+	], loop=False)
+
+	styles = {name: style for name, _, _, style in _render_chords(composition, 6, tmp_path) if name}
+
+	assert styles == {"a": "dorian_minor", "b": "phrygian_minor", "c": "dorian_minor"}
+
+
+def test_a_style_named_after_composition_mood_is_the_one_returned_to (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""harmony(style=) after Composition(mood=) replaces the mood's style as the one a moodless section plays."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C", mood="cool", seed=1)
+	composition.harmony(style="mixolydian")
+	composition.form([
+		subsequence.Section("a", 2, mood="dreamy"),
+		subsequence.Section("b", 2),
+	], loop=False)
+
+	styles = {name: style for name, _, _, style in _render_chords(composition, 4, tmp_path) if name}
+
+	assert styles == {"a": "lydian_major", "b": "mixolydian"}
+
+
+def test_sections_sharing_a_mood_and_key_keep_one_chord_graph (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Consecutive sections with the same mood and key do not rebuild the harmony."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C", seed=1)
+	composition.harmony()
+	composition.form([
+		subsequence.Section("a", 2, mood="cool"),
+		subsequence.Section("b", 2, mood="chill"),
+		subsequence.Section("c", 2, mood="cool"),
+	], loop=True)
+
+	_render_chords(composition, 6, tmp_path)
+
+	# One build from harmony(), one when "a" switches to dorian_minor; "b" and "c" reuse it.
+	assert composition._harmony_count == 2
