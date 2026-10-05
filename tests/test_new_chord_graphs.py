@@ -1,6 +1,7 @@
 """Tests for chord graph styles."""
 
 import random
+import typing
 
 import pytest
 
@@ -14,6 +15,8 @@ import subsequence.chord_graphs.suspended
 import subsequence.chord_graphs.whole_tone
 import subsequence.chords
 import subsequence.harmonic_state
+import subsequence.intervals
+import subsequence.weighted_graph
 
 
 # ---- Helpers ----
@@ -732,3 +735,93 @@ class TestDiminished:
 		"""Stepping 100 times should not raise any errors."""
 
 		_assert_stepping_stable("diminished", steps=100)
+
+
+# ===========================================================================
+# Phrygian, Phrygian power, Harmonic minor, Heroic - the mood seeds' graphs
+# ===========================================================================
+
+def _graph (style: str, key: str = "C") -> typing.Tuple[subsequence.weighted_graph.WeightedGraph, subsequence.chords.Chord]:
+
+	"""Build *style*'s graph in *key* and return it with its tonic."""
+
+	return subsequence.harmonic_state._resolve_graph_style(style, True, 0.5).build(key)
+
+
+def _heaviest_move (graph: subsequence.weighted_graph.WeightedGraph, source: subsequence.chords.Chord) -> subsequence.chords.Chord:
+
+	"""The target *source* most often moves to."""
+
+	return max(graph.get_transitions(source), key=lambda move: move[1])[0]
+
+
+def _outside (style: str, scale: str) -> typing.Set[str]:
+
+	"""Names of the chords in *style*'s C graph with a tone outside C *scale*."""
+
+	graph, _ = _graph(style)
+	pcs = set(subsequence.intervals.scale_pitch_classes(0, scale))
+
+	return {chord.name() for chord in graph.nodes() if {tone % 12 for tone in chord.tones(60)} - pcs}
+
+
+@pytest.mark.parametrize("style", ["phrygian", "phrygian_power", "harmonic_minor", "heroic"])
+def test_the_mood_graphs_step_and_every_chord_moves_on (style: str) -> None:
+
+	"""Each new graph steps stably, and no chord in it is a dead end."""
+
+	_assert_stepping_stable(style, steps=200)
+	graph, _ = _graph(style)
+
+	for chord in graph.nodes():
+		assert graph.get_transitions(chord), chord.name()
+
+
+def test_phrygian_vamps_between_the_tonic_and_a_major_flat_two () -> None:
+
+	"""C phrygian: Cm, with Db major as its heaviest move and back, every chord inside the mode."""
+
+	graph, tonic = _graph("phrygian")
+	flat_two = subsequence.chords.Chord(root_pc=1, quality="major")
+
+	assert tonic == subsequence.chords.Chord(root_pc=0, quality="minor")
+	assert _heaviest_move(graph, tonic) == flat_two
+	assert _heaviest_move(graph, flat_two) == tonic
+	assert _outside("phrygian", "phrygian") == set()
+
+
+def test_phrygian_power_has_no_thirds () -> None:
+
+	"""Every chord of phrygian_power is a root and a fifth, on the same roots as phrygian."""
+
+	power, _ = _graph("phrygian_power")
+	plain, _ = _graph("phrygian")
+
+	assert {chord.quality for chord in power.nodes()} == {"power_chord"}
+	assert {chord.root_pc for chord in power.nodes()} == {chord.root_pc for chord in plain.nodes()}
+
+
+def test_harmonic_minor_slides_the_tonic_to_its_minor_major_seventh () -> None:
+
+	"""C harmonic minor: Cm's heaviest move is CmMaj7, Bdim7 and G7 resolve to it, all inside the scale."""
+
+	graph, tonic = _graph("harmonic_minor")
+
+	assert _heaviest_move(graph, tonic) == subsequence.chords.Chord(root_pc=0, quality="minor_major_7th")
+	assert _heaviest_move(graph, subsequence.chords.Chord(root_pc=11, quality="diminished_7th")) == tonic
+	assert _heaviest_move(graph, subsequence.chords.Chord(root_pc=7, quality="dominant_7th")) == tonic
+	assert _outside("harmonic_minor", "harmonic_minor") == set()
+
+
+def test_heroic_walks_the_hero_cadence () -> None:
+
+	"""C heroic: Ab → Bb → C are each chord's heaviest move, and only Ab and Cm leave C mixolydian."""
+
+	graph, tonic = _graph("heroic")
+	flat_six = subsequence.chords.Chord(root_pc=8, quality="major")
+	flat_seven = subsequence.chords.Chord(root_pc=10, quality="major")
+
+	assert tonic == subsequence.chords.Chord(root_pc=0, quality="major")
+	assert _heaviest_move(graph, flat_six) == flat_seven
+	assert _heaviest_move(graph, flat_seven) == tonic
+	assert _outside("heroic", "mixolydian") == {"G#", "Cm"}

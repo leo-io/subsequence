@@ -2476,7 +2476,11 @@ class Composition:
 				no thirds; ``"mixolydian"``, major with a flat seventh, open and
 				unresolved; ``"whole_tone"``, augmented chords in symmetrical,
 				dreamlike drift; ``"diminished"``, minor-third symmetry, angular
-				and disorienting.
+				and disorienting; ``"phrygian"``, the diatonic mode on an
+				i – ♭II vamp, and ``"phrygian_power"``, the same with no-third
+				power chords; ``"harmonic_minor"``, a minor tonic sliding to
+				i(maj7) under V7 and vii°7 pressure, for suspense; ``"heroic"``,
+				the ♭VI – ♭VII – I hero cadence.
 			cycle_beats: How many beats each live chord lasts.  Defaults to
 				one bar (``composition.bar_beats``): 4 in 4/4, 3 in 3/4.
 				Bound progressions carry their own harmonic rhythm in their

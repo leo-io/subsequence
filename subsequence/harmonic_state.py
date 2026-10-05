@@ -6,9 +6,12 @@ import subsequence.chord_graphs.chromatic_mediant
 import subsequence.chord_graphs.diminished
 import subsequence.chord_graphs.dorian_minor
 import subsequence.chord_graphs.functional_major
+import subsequence.chord_graphs.harmonic_minor
+import subsequence.chord_graphs.heroic
 import subsequence.chord_graphs.hooktheory_major
 import subsequence.chord_graphs.lydian_major
 import subsequence.chord_graphs.mixolydian
+import subsequence.chord_graphs.phrygian
 import subsequence.chord_graphs.phrygian_minor
 import subsequence.chord_graphs.suspended
 import subsequence.chord_graphs.turnaround_global
@@ -97,6 +100,10 @@ def _resolve_graph_style (
 		"mixolydian":        subsequence.chord_graphs.mixolydian.Mixolydian,
 		"whole_tone":        subsequence.chord_graphs.whole_tone.WholeTone,
 		"diminished":        subsequence.chord_graphs.diminished.Diminished,
+		"phrygian":          subsequence.chord_graphs.phrygian.Phrygian,
+		"phrygian_power":    lambda: subsequence.chord_graphs.phrygian.Phrygian(power_chords = True),
+		"harmonic_minor":    subsequence.chord_graphs.harmonic_minor.HarmonicMinor,
+		"heroic":            subsequence.chord_graphs.heroic.Heroic,
 	}
 	if style in _SIMPLE_STYLES:
 		return _SIMPLE_STYLES[style]()

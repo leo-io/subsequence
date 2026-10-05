@@ -125,7 +125,7 @@ def test_composition_mood_sets_scale_and_default_style (patch_midi: None) -> Non
 	composition.mood("tense")
 
 	assert composition.scale == "harmonic_minor"
-	assert composition._last_harmony_style == "diminished"
+	assert composition._last_harmony_style == "harmonic_minor"
 
 
 def test_pattern_mood_snaps_every_note_into_the_mood_scale (patch_midi: None, tmp_path: pathlib.Path) -> None:
@@ -213,7 +213,7 @@ def test_leaving_a_mood_section_returns_to_the_authors_style (patch_midi: None, 
 
 	styles = {name: style for name, _, _, style in _render_chords(composition, 6, tmp_path) if name}
 
-	assert styles == {"a": "dorian_minor", "b": "phrygian_minor", "c": "dorian_minor"}
+	assert styles == {"a": "dorian_minor", "b": "phrygian", "c": "dorian_minor"}
 
 
 def test_a_style_named_after_composition_mood_is_the_one_returned_to (patch_midi: None, tmp_path: pathlib.Path) -> None:
@@ -337,3 +337,40 @@ def test_a_mood_section_with_no_key_warns_once_instead_of_raising (patch_midi: N
 	assert len(warned) == 1
 	assert "'a'" in warned[0].getMessage()
 	assert not [record for record in caplog.records if record.levelname == "ERROR"]
+
+
+# The chords (in C) each seed's KB signature moves between, which its chord
+# graph must contain.  Bittersweet, nostalgic and spiritual are absent: their
+# signatures turn on chords (major tonic in melodic minor; borrowed iv6) no
+# built-in graph has yet.
+SIGNATURE_CHORDS = {
+	"uplifting":     ["F", "G", "Em", "Am"],         # IVmaj9 – V9sus4 – iii7 – vi9
+	"joyful":        ["C", "F", "G7"],               # I – IV – I/5 – V7
+	"hopeful":       ["Am", "F", "C", "G"],          # vi9 – IVmaj9 – Iadd9 – V9sus4
+	"sensual":       ["Dm", "G", "C"],               # ii9 – V13sus4 – Imaj9
+	"cool":          ["Cm", "F"],                    # i9 – IV13
+	"introspective": ["Cm", "Ab"],                   # i9 – bVImaj9
+	"melancholic":   ["Cm", "Ab", "Eb", "Bb"],       # i – bVI – bIII – bVII
+	"dark":          ["Cm", "Db"],                   # i – bII
+	"tense":         ["Cm", "Cm(maj7)", "Bdim7"],    # i – i(maj7), °7
+	"aggressive":    ["C5", "Db5"],                  # no-3rd riffs, bII stabs
+	"mysterious":    ["C", "D"],                     # Imaj7#11 – II7
+	"dreamy":        ["C", "D"],                     # Imaj9#11 – II/I
+	"triumphant":    ["Ab", "Bb", "C", "Cm"],        # bVI – bVII – I; i – bVI – bVII – I
+}
+
+
+@pytest.mark.parametrize("seed_id", sorted(SIGNATURE_CHORDS))
+def test_each_seeds_graph_can_play_its_signature (seed_id: str) -> None:
+
+	"""The seed's chord graph, built in C, holds every chord of its KB signature's root motion."""
+
+	import subsequence.chords
+
+	spec = subsequence.mood.MOODS[seed_id]
+	graph, _ = subsequence.harmonic_state._resolve_graph_style(spec.harmony_style, True, 0.5).build("C")
+	nodes = set(graph.nodes())
+
+	missing = [name for name in SIGNATURE_CHORDS[seed_id] if subsequence.chords.parse_chord(name) not in nodes]
+
+	assert not missing, f"{seed_id} ({spec.harmony_style}) cannot play {missing}"
