@@ -20,7 +20,8 @@ Usage::
 	# Or call it live to shift the whole piece
 	composition.mood("tense")
 
-	# Section level - scale override + harmony style for the section's duration
+	# Section level - scale override, plus the harmony style for the section's
+	# duration when composition.harmony() is on (a mood never turns it on)
 	S = subsequence.Section
 	composition.form([
 	    S("intro",  8, mood="introspective"),

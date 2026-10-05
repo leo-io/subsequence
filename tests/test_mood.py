@@ -277,3 +277,63 @@ def test_pattern_mood_leaves_drum_notes_alone (patch_midi: None, tmp_path: pathl
 	}
 
 	assert played == {gm_drums.GM_DRUM_MAP[name] for name in ("kick_1", "snare_1", "hi_hat_closed")}
+
+
+def test_a_section_mood_does_not_turn_live_harmony_on (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""Without harmony(), a mood section sets its scale and leaves live harmony off."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	composition.form([subsequence.Section("a", 1), subsequence.Section("b", 1, mood="dreamy")], loop=False)
+	scales = {}
+
+	@composition.pattern(channel=1, beats=4)
+	def probe (p):
+
+		"""Record the scale each section gives the builder."""
+
+		scales[p.section.name if p.section else None] = p.scale
+		p.note(60, beat=0)
+
+	composition.render(bars=2, filename=str(tmp_path / "off.mid"))
+
+	assert scales["b"] == "lydian"
+	assert composition._harmonic_state is None
+
+
+def test_harmony_turned_on_inside_a_mood_section_starts_on_its_style (patch_midi: None) -> None:
+
+	"""A first harmony() with no style, inside a mood section, uses the section's mood."""
+
+	import types
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	composition._handle_section_harmony(types.SimpleNamespace(name="b", mood="dreamy", key=None, scale="lydian"))
+	composition.harmony()
+
+	assert composition._last_harmony_style == "lydian_major"
+	assert composition._base_harmony_style is None
+
+
+def test_a_mood_section_with_no_key_warns_once_instead_of_raising (patch_midi: None, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture) -> None:
+
+	"""A mood with no key anywhere is named once in a warning; no listener error is logged."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120)
+	composition.form([subsequence.Section("a", 1, mood="dark"), subsequence.Section("b", 1)], loop=True)
+
+	@composition.pattern(channel=1, beats=4)
+	def probe (p):
+
+		"""One note, so the render has something to play."""
+
+		p.note(60, beat=0)
+
+	with caplog.at_level("WARNING"):
+		composition.render(bars=4, filename=str(tmp_path / "keyless.mid"))
+
+	warned = [record for record in caplog.records if "no key resolves" in record.getMessage()]
+
+	assert len(warned) == 1
+	assert "'a'" in warned[0].getMessage()
+	assert not [record for record in caplog.records if record.levelname == "ERROR"]

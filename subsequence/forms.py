@@ -50,9 +50,11 @@ class Section:
 		mood: Optional conga-composer mood seed (e.g. ``"cool"``), or any
 			KB synonym of one (``"chill"``, ``"triste"``); stored as the
 			seed id.  Derives ``scale`` automatically when ``scale`` is not
-			given (``"cool"`` → ``scale="dorian"``).  Also controls the
-			harmony style while this section is playing - the composition
-			restores its previous style when the section ends.  Mood is
+			given (``"cool"`` → ``scale="dorian"``).  When live harmony is
+			on (``composition.harmony()``), also sets its style while this
+			section is playing, keyed to the section's key - the composition
+			returns to its own style when the section ends.  A mood never
+			turns live harmony on by itself.  Mood is
 			harmonic-only: no rhythm or expression changes.  See
 			``subsequence.mood.MOODS`` for the sixteen seeds.
 	"""

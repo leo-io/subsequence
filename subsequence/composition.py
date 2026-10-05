@@ -1825,6 +1825,8 @@ class Composition:
 		self._base_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
 		self._harmony_section: typing.Optional["subsequence.form_state.SectionInfo"] = None
 		self._section_harmony_call: bool = False
+		# Sections already warned that their mood has no key to apply to.
+		self._keyless_mood_sections: typing.Set[str] = set()
 		# What the most recent harmony() call configured, so a later re-call
 		# naming one parameter keeps the rest instead of silently defaulting
 		# them (#3088).  The style has its own home in _last_harmony_style.
@@ -2545,7 +2547,14 @@ class Composition:
 			# A parameter-only re-call (key_pull=, cycle_beats=, ...) keeps the
 			# configured style — defaulting unconditionally here would silently
 			# replace e.g. aeolian_minor with functional_major.
-			style = self._last_harmony_style if self._last_harmony_style is not None else "functional_major"
+			section_mood = getattr(self._harmony_section, "mood", None)
+
+			if self._harmonic_state is None and section_mood is not None:
+				# Turned on inside a mood section: start on that mood's style.
+				from subsequence.mood import resolve_mood
+				style = resolve_mood(section_mood).harmony_style
+			else:
+				style = self._last_harmony_style if self._last_harmony_style is not None else "functional_major"
 
 		if style is not None:
 
@@ -2656,24 +2665,38 @@ class Composition:
 		the section's effective key, so ``Section(key="Ab")`` moves the chords
 		as well as the key-relative parts.  The graph is rebuilt only when the
 		style or the key changes.
+
+		A mood never turns live harmony on: without a ``harmony()`` call it
+		sets the section's scale only, which is all a piece built from
+		``section_chords()`` needs from it.
 		"""
 
 		self._harmony_section = info
 		section_mood: typing.Optional[str] = getattr(info, "mood", None)
+		key, _ = self._effective_key_scale(info)
+
+		if section_mood is not None and key is None and info is not None and info.name not in self._keyless_mood_sections:
+			# Its scale has no tonic to sit on and its style no key to build on.
+			self._keyless_mood_sections.add(info.name)
+			logger.warning(
+				"Section %r has mood=%r but no key resolves for it, so the mood does nothing - "
+				"set key= on the Composition, the form, or the Section",
+				info.name, section_mood,
+			)
+
+		state = self._harmonic_state
+
+		if state is None or key is None:
+			# No live harmony to steer (or nothing to key it to).
+			return
 
 		if section_mood is not None:
 			from subsequence.mood import resolve_mood
 			style: typing.Union[str, subsequence.chord_graphs.ChordGraph] = resolve_mood(section_mood).harmony_style
-		elif self._harmonic_state is None:
-			# No live harmony, and nothing here asks for it.
-			return
 		else:
 			style = self._base_harmony_style if self._base_harmony_style is not None else "functional_major"
 
-		key, _ = self._effective_key_scale(info)
-		state = self._harmonic_state
-
-		if state is not None and style == self._last_harmony_style and key == state.key_name:
+		if style == self._last_harmony_style and key == state.key_name:
 			return
 
 		self._section_harmony_call = True
