@@ -248,3 +248,32 @@ def test_sections_sharing_a_mood_and_key_keep_one_chord_graph (patch_midi: None,
 
 	# One build from harmony(), one when "a" switches to dorian_minor; "b" and "c" reuse it.
 	assert composition._harmony_count == 2
+
+
+def test_pattern_mood_leaves_drum_notes_alone (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""A drum pattern with mood="dark" keeps its kit pieces: snare 38 and closed hat 42 are not snapped to C Phrygian."""
+
+	import subsequence.constants.instruments.gm_drums as gm_drums
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+
+	@composition.pattern(channel=10, beats=4, drum_note_map=gm_drums.GM_DRUM_MAP, mood="dark")
+	def drums (p):
+
+		"""Kick, snare and closed hat - two of them outside C Phrygian as pitches."""
+
+		p.hit_steps("kick_1", [0, 8])
+		p.hit_steps("snare_1", [4, 12])
+		p.hit_steps("hi_hat_closed", [2, 6])
+
+	filename = tmp_path / "drums.mid"
+	composition.render(bars=1, filename=str(filename))
+
+	played = {
+		message.note
+		for message in mido.MidiFile(str(filename))
+		if message.type == "note_on" and message.velocity > 0
+	}
+
+	assert played == {gm_drums.GM_DRUM_MAP[name] for name in ("kick_1", "snare_1", "hi_hat_closed")}

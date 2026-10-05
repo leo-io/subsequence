@@ -6105,7 +6105,8 @@ class Composition:
 				Composes with ``mute()``: a performer mute always wins.
 			mood: Optional conga-composer mood seed or KB synonym.  Pitch
 				only: the builder gets the mood's scale before the body runs
-				and every note is snapped to it afterwards.
+				and every note is snapped to it afterwards - except on a
+				pattern with a ``drum_note_map``, whose notes are kit pieces.
 
 		Example:
 			```python
@@ -7778,8 +7779,9 @@ class Composition:
 					# Phase 2 (post-body): snap any absolute pitches that slipped
 					# outside the mood scale back into it.  This is the safety net
 					# for non-scale-aware verbs; generative verbs already used the
-					# correct scale from Phase 1 above.
-					if self._mood_scale is not None and builder.key:
+					# correct scale from Phase 1 above.  A drum pattern's note
+					# numbers name kit pieces, not pitches, so it is left alone.
+					if self._mood_scale is not None and builder.key and not self._drum_note_map:
 						builder.snap_to_scale(typing.cast(subsequence.declarations.KeyName, builder.key), self._mood_scale)
 
 					# Glides and tunings are laid against the notes' final places.
