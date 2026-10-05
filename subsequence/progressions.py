@@ -499,6 +499,7 @@ _ROMAN_QUALITY_TEXT: typing.Dict[str, typing.Tuple[bool, str]] = {
 	"augmented": (False, "+"),
 	"minor_major_7th": (True, "(maj7)"),
 	"power_chord": (False, "5"),
+	"minor_6th": (True, "6"),
 }
 
 

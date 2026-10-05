@@ -1,10 +1,25 @@
-"""Mood - the sixteen conga-composer mood seeds as (scale, harmony_style) pairs.
+"""Mood - the sixteen conga-composer mood seeds as harmonic presets.
 
-The names, modes and V/E/T targets follow the conga-composer knowledge base
-(§M.2 seed library, §M.3 synonym map).  A mood translates to a mode (for
-pitch resolution and snap_to_scale) and a harmony style (for the chord
-engine).  Nothing else changes - tempo, rhythm and expression are untouched;
-the valence / energy / tension targets are carried as data for the caller.
+The names, modes, harmonic rhythms and V/E/T targets follow the
+conga-composer knowledge base (§M.2 seed library, §M.3 synonym map).  A
+mood is harmonic only - it never touches tempo, rhythm, dynamics or
+voicing - and translates to:
+
+- a **scale** (for pitch resolution, key-relative content and snap_to_scale);
+- a **harmony style** (the live chord graph);
+- a **harmonic rhythm** (how many bars each live chord lasts, from the KB's
+  "1 per bar", "1 per 2 bars", "slow", "static" column);
+- **sevenths** or triads (whether the live chords carry their diatonic
+  sevenths, as the seed's signature chords do);
+- a **key pull** from its tension: a settled seed is drawn to the key's
+  centres, an unresolved one walks freely.
+
+Valence is carried by the scale and the style; energy is the section's own
+``energy=`` (a mood never changes it).  The V/E/T numbers stay on each seed
+as data, for the caller to compare against.
+
+A mood is one seed.  The KB's compound moods ("uplifting but sad") and
+arcs ("builds to euphoric") are written as sections, each with its seed.
 
 Each seed is named by its KB id (``"uplifting"``, ``"melancholic"``,
 ``"dark"``…).  Any word from the KB synonym map, English or Portuguese, and
@@ -13,15 +28,16 @@ the seed's full label (``"Dark / hypnotic"``) resolve to the same seed, so
 
 Usage::
 
-	# Song level - sets scale and pre-seeds the harmony default
+	# Song level - sets scale and pre-seeds the harmony defaults
 	composition = subsequence.Composition(bpm=120, key="F", mood="cool")
-	composition.harmony(cycle_beats=4)   # uses dorian_minor automatically
+	composition.harmony()   # dorian_minor, sevenths, a chord every 2 bars
 
 	# Or call it live to shift the whole piece
 	composition.mood("tense")
 
-	# Section level - scale override, plus the harmony style for the section's
-	# duration when composition.harmony() is on (a mood never turns it on)
+	# Section level - scale override, plus the live harmony settings for the
+	# section's duration when composition.harmony() is on (a mood never
+	# turns it on)
 	S = subsequence.Section
 	composition.form([
 	    S("intro",  8, mood="introspective"),
@@ -29,7 +45,8 @@ Usage::
 	    S("break",  4, mood="melancholic"),
 	])
 
-	# Pattern level - pitch only (auto snap_to_scale after each rebuild)
+	# Pattern level - pitch only: the mood's scale, with the sounding
+	# chord's own tones kept (auto snap after each rebuild)
 	@composition.pattern(channel=3, beats=4, mood="dreamy")
 	def lead (p, chord):
 	    p.arpeggio(chord, root=72, count=4, spacing=0.25)
@@ -46,7 +63,7 @@ import unicodedata
 @dataclasses.dataclass(frozen=True)
 class MoodSpec:
 
-	"""One KB mood seed and the harmonic axes it controls.
+	"""One KB mood seed and the harmonic settings it stands for.
 
 	Attributes:
 		id: The KB seed id (e.g. ``"introspective"``).
@@ -55,6 +72,12 @@ class MoodSpec:
 			(e.g. ``"dorian"``) - the KB mode that holds the signature's chords.
 		harmony_style: Chord-graph style name for
 			``composition.harmony(style=...)`` (e.g. ``"dorian_minor"``).
+		modes: Every mode the KB lists for the seed, ``scale`` among them.
+			An explicit ``scale=`` outside these is a different mood.
+		bars_per_chord: The KB harmonic rhythm - bars each live chord
+			lasts (``0.5`` = two chords a bar).
+		sevenths: Whether the live chords carry their diatonic sevenths
+			(``composition.harmony(sevenths=)``).
 		valence: KB valence target, −3 (dark) to +3 (bright).
 		energy: KB energy target, 0 (calm) to 4 (intense).
 		tension: KB tension target, 0 (settled) to 5 (unresolved).
@@ -64,34 +87,52 @@ class MoodSpec:
 	label: str
 	scale: str
 	harmony_style: str
+	modes: typing.Tuple[str, ...]
+	bars_per_chord: float
+	sevenths: bool
 	valence: int
 	energy: int
 	tension: int
+
+	@property
+	def key_pull (self) -> float:
+
+		"""The ``harmony(key_pull=)`` the seed's tension asks for.
+
+		Settled seeds (tension 0-2) are drawn to the key's centres, 0.6 down
+		to 0.2; unresolved ones (3 and up) walk freely at 0.0.
+		"""
+
+		return round(max(0, 3 - self.tension) * 0.2, 1)
 
 
 # KB §M.2 seed library: id → spec.  The comment is the KB signature harmony.
 # The scale is the KB mode that holds the signature's chords (the first one
 # listed, unless the signature needs another: sensual's major tonic, the
 # bVI of introspective, the bVII of triumphant), and the harmony style is a
-# chord graph that can play the signature's root motion.
+# chord graph that can play the signature's root motion.  Bars per chord
+# read the KB rhythm column: "1 per bar" → 1, "1 per 2 bars" / "slow" → 2,
+# "1 per 2-4 bars" / "static" → 4, "2-4 per bar" / "1-2 per bar" → 0.5,
+# and 1 where it names no rate.  Sevenths follow the signature's chord
+# qualities (maj9, m9, m11 → on; triads, power chords → off).
 MOODS: typing.Dict[str, MoodSpec] = {spec.id: spec for spec in (
-	#        id               label                     scale             harmony_style        V   E  T
-	MoodSpec("uplifting",     "Uplifting",              "ionian",         "functional_major",   2, 3, 2),  # IVmaj9 – V9sus4 – iii7 – vi9
-	MoodSpec("joyful",        "Joyful",                 "ionian",         "functional_major",   2, 4, 1),  # I – IV – I/5 – V7 shout vamp, 6/9 tonic
-	MoodSpec("hopeful",       "Hopeful",                "ionian",         "functional_major",   1, 2, 2),  # vi9 – IVmaj9 – Iadd9 – V9sus4
-	MoodSpec("nostalgic",     "Nostalgic / warm",       "ionian",         "functional_major",   1, 1, 1),  # Imaj9 – IVmaj7 – iv6 – Imaj9
-	MoodSpec("sensual",       "Sensual / romantic",     "ionian",         "functional_major",   0, 1, 2),  # ii9 – V13sus4 – Imaj9, m11 pendulums
-	MoodSpec("cool",          "Cool / laid-back",       "dorian",         "dorian_minor",       0, 2, 1),  # i9 – IV13 sway
-	MoodSpec("bittersweet",   "Bittersweet / longing",  "melodic_minor",  "aeolian_minor",      0, 1, 2),  # IVmaj7 – iv6 – Imaj7; i(maj7) – i6
-	MoodSpec("introspective", "Introspective / deep",   "aeolian",        "aeolian_minor",     -1, 1, 1),  # i9 – bVImaj9, quartal stacks
-	MoodSpec("melancholic",   "Melancholic / sad",      "aeolian",        "aeolian_minor",     -2, 1, 1),  # i – bVI – bIII – bVII, line cliché
-	MoodSpec("dark",          "Dark / hypnotic",        "phrygian",       "phrygian",          -2, 3, 3),  # i – bII vamp, static ostinato
-	MoodSpec("tense",         "Tense / suspenseful",    "harmonic_minor", "harmonic_minor",    -1, 2, 4),  # i – i(maj7) over a dominant pedal, °7 chains
-	MoodSpec("aggressive",    "Aggressive / driving",   "phrygian",       "phrygian_power",    -2, 4, 3),  # no-3rd riffs, bII stabs
-	MoodSpec("mysterious",    "Mysterious / mystical",  "lydian",         "lydian_major",       0, 1, 3),  # Imaj7#11 – II7, PL cycle (§15)
-	MoodSpec("dreamy",        "Dreamy / floating",      "lydian",         "lydian_major",       2, 1, 1),  # Imaj9#11 – II/I over a tonic pedal
-	MoodSpec("spiritual",     "Spiritual / devotional", "ionian",         "functional_major",   1, 2, 1),  # IV – iv6 – I, walk-ups, 6/9
-	MoodSpec("triumphant",    "Triumphant / epic",      "mixolydian",     "heroic",             2, 4, 2),  # bVI – bVII – I hero cadence
+	#        id               label                     scale             harmony_style        modes                                    bars  7ths    V   E  T
+	MoodSpec("uplifting",     "Uplifting",              "ionian",         "functional_major",  ("ionian", "mixolydian"),                1,    True,   2, 3, 2),  # IVmaj9 – V9sus4 – iii7 – vi9
+	MoodSpec("joyful",        "Joyful",                 "ionian",         "functional_major",  ("ionian",),                             0.5,  False,  2, 4, 1),  # I – IV – I/5 – V7 shout vamp, 6/9 tonic
+	MoodSpec("hopeful",       "Hopeful",                "ionian",         "functional_major",  ("ionian", "mixolydian"),                1,    True,   1, 2, 2),  # vi9 – IVmaj9 – Iadd9 – V9sus4
+	MoodSpec("nostalgic",     "Nostalgic / warm",       "ionian",         "minor_plagal",      ("ionian",),                             1,    True,   1, 1, 1),  # Imaj9 – IVmaj7 – iv6 – Imaj9
+	MoodSpec("sensual",       "Sensual / romantic",     "ionian",         "functional_major",  ("dorian", "ionian"),                    2,    True,   0, 1, 2),  # ii9 – V13sus4 – Imaj9, m11 pendulums
+	MoodSpec("cool",          "Cool / laid-back",       "dorian",         "dorian_minor",      ("dorian",),                             2,    True,   0, 2, 1),  # i9 – IV13 sway
+	MoodSpec("bittersweet",   "Bittersweet / longing",  "melodic_minor",  "melodic_minor",     ("melodic_minor", "ionian"),             1,    False,  0, 1, 2),  # IVmaj7 – iv6 – Imaj7; i(maj7) – i6
+	MoodSpec("introspective", "Introspective / deep",   "aeolian",        "aeolian_minor",     ("dorian", "aeolian"),                   4,    True,  -1, 1, 1),  # i9 – bVImaj9, quartal stacks
+	MoodSpec("melancholic",   "Melancholic / sad",      "aeolian",        "aeolian_minor",     ("aeolian",),                            2,    False, -2, 1, 1),  # i – bVI – bIII – bVII, line cliché
+	MoodSpec("dark",          "Dark / hypnotic",        "phrygian",       "phrygian",          ("phrygian", "aeolian"),                 4,    False, -2, 3, 3),  # i – bII vamp, static ostinato
+	MoodSpec("tense",         "Tense / suspenseful",    "harmonic_minor", "harmonic_minor",    ("harmonic_minor",),                     1,    False, -1, 2, 4),  # i – i(maj7) over a dominant pedal, °7 chains
+	MoodSpec("aggressive",    "Aggressive / driving",   "phrygian",       "phrygian_power",    ("phrygian",),                           1,    False, -2, 4, 3),  # no-3rd riffs, bII stabs
+	MoodSpec("mysterious",    "Mysterious / mystical",  "lydian",         "lydian_major",      ("lydian", "augmented", "whole_tone"),   2,    True,   0, 1, 3),  # Imaj7#11 – II7, PL cycle (§15)
+	MoodSpec("dreamy",        "Dreamy / floating",      "lydian",         "lydian_major",      ("lydian",),                             2,    True,   2, 1, 1),  # Imaj9#11 – II/I over a tonic pedal
+	MoodSpec("spiritual",     "Spiritual / devotional", "ionian",         "minor_plagal",      ("ionian",),                             0.5,  False,  1, 2, 1),  # IV – iv6 – I, walk-ups, 6/9
+	MoodSpec("triumphant",    "Triumphant / epic",      "mixolydian",     "heroic",            ("ionian", "mixolydian"),                1,    False,  2, 4, 2),  # bVI – bVII – I hero cadence
 )}
 
 # KB §M.3 synonym map: seed id → English and Portuguese words.
@@ -137,6 +178,17 @@ def _build_index () -> typing.Dict[str, str]:
 
 
 _INDEX: typing.Dict[str, str] = _build_index()
+
+
+def fits_mood (spec: MoodSpec, scale: str) -> bool:
+
+	"""Whether *scale* is one of the modes the KB lists for *spec* (by pitch content, so aliases match)."""
+
+	import subsequence.intervals
+
+	pcs = set(subsequence.intervals.scale_pitch_classes(0, scale))
+
+	return any(pcs == set(subsequence.intervals.scale_pitch_classes(0, mode)) for mode in spec.modes)
 
 
 def resolve_mood (name: str) -> MoodSpec:

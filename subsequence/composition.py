@@ -25,6 +25,7 @@ import typing
 import zlib
 import subsequence.cadences
 import subsequence.chord_graphs
+import subsequence.chord_graphs.sevenths
 import subsequence.chords
 import subsequence.constants
 import subsequence.constants.durations
@@ -34,6 +35,7 @@ import subsequence.declarations
 import subsequence.display
 import subsequence.harmonic_state
 import subsequence.held_notes
+import subsequence.intervals
 import subsequence.keystroke
 import subsequence.live_reloader
 import subsequence.live_server
@@ -534,6 +536,32 @@ class _HarmonyHorizon:
 		"""The most recently committed chord (compatibility accessor)."""
 
 		return self._spans[-1][2] if self._spans else None
+
+
+def _snap_to_mood (
+	builder: subsequence.pattern_builder.PatternBuilder,
+	key: str,
+	scale: str,
+	harmony_view: typing.Optional["HarmonyView"],
+) -> None:
+
+	"""Snap a mood pattern's notes into *scale*, keeping the tones of the chord sounding under each.
+
+	A pattern mood colours the line, not the harmony: a note that belongs to
+	the chord at its beat stays where it is even when the mood's scale lacks
+	it (a dreamy line over an F minor chord keeps its A flat), and only notes
+	in neither move to the nearest one that is.  Without live harmony it is
+	a plain snap to the scale.
+	"""
+
+	scale_pcs = set(subsequence.intervals.scale_pitch_classes(subsequence.chords.key_name_to_pc(key), scale))
+
+	for pulse, step in builder._pattern.steps.items():
+		chord = harmony_view.chord_at(pulse / subsequence.constants.pulses.MIDI_QUARTER_NOTE) if harmony_view is not None else None
+		allowed = scale_pcs | ({tone % 12 for tone in chord.tones(60)} if chord is not None else set())
+
+		for note in step.notes:
+			note.pitch = subsequence.intervals.quantize_pitch(note.pitch, sorted(allowed))
 
 
 class HarmonyView:
@@ -1818,11 +1846,13 @@ class Composition:
 		# harmony() call — reused by parameter-only re-calls.
 		self._last_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
 		self._harmony_reschedule_lookahead: float = 1
-		# The style the author chose (harmony(style=), Composition(mood=),
-		# mood()), which a section without a mood returns to; the section the
-		# live chord graph is keyed to; and whether harmony() is being called
-		# by the section handler rather than by the author.
-		self._base_harmony_style: typing.Optional[typing.Union[str, subsequence.chord_graphs.ChordGraph]] = None
+		# The live-harmony settings the author chose (harmony(), Composition(mood=),
+		# mood()) - style, cycle_beats, key_pull, sevenths - which a section
+		# without a mood returns to; the scale the graph was built in; the
+		# section the live chord graph is keyed to; and whether harmony() is
+		# being called by the section handler rather than by the author.
+		self._author_harmony: typing.Dict[str, typing.Any] = {}
+		self._harmony_built_scale: typing.Optional[str] = None
 		self._harmony_section: typing.Optional["subsequence.form_state.SectionInfo"] = None
 		self._section_harmony_call: bool = False
 		# Sections already warned that their mood has no key to apply to.
@@ -1838,6 +1868,7 @@ class Composition:
 			"minor_turnaround_weight": 0.0,
 			"root_diversity": subsequence.harmonic_state.DEFAULT_ROOT_DIVERSITY,
 			"reschedule_lookahead": 1.0,
+			"sevenths": False,
 		}
 		self._section_progressions: typing.Dict[str, Progression] = {}
 		self._bound_progression: typing.Optional[Progression] = None
@@ -1923,18 +1954,19 @@ class Composition:
 		self._tuning_exclude_drums: bool = True
 
 		# Apply composition-level mood: derive scale (when not explicit) and
-		# pre-seed the harmony default so a later harmony() call with no style=
-		# uses the mood's chord-graph style.
+		# pre-seed the live-harmony defaults, so a later harmony() call uses the
+		# mood's style, harmonic rhythm, key pull and sevenths for whatever it
+		# does not name - and a section without a mood returns to them.
 		if mood is not None:
 			from subsequence.mood import resolve_mood as _resolve_mood
 			_spec = _resolve_mood(mood)
 			if scale is None:
 				self.scale = _spec.scale
-			# Pre-seed only if no style was already set (harmony() hasn't run).
-			if self._last_harmony_style is None:
-				self._last_harmony_style = _spec.harmony_style
-			# Persist as the base so section overrides can restore to it.
-			self._base_harmony_style = _spec.harmony_style
+			_settings = self._mood_harmony(_spec.id)
+			self._last_harmony_style = _settings["style"]
+			for _name in ("cycle_beats", "key_pull", "sevenths"):
+				self._harmony_settings[_name] = _settings[_name]
+			self._author_harmony.update(_settings)
 
 		# Register the internal callback that keeps the live chord graph on
 		# each section's mood and key, returning to the author's style after.
@@ -2437,6 +2469,7 @@ class Composition:
 		root_diversity: float = KEEP,
 		reschedule_lookahead: float = KEEP,
 		progression: typing.Optional[typing.Any] = KEEP,
+		sevenths: bool = KEEP,
 		**retired: typing.Any,
 	) -> None:
 
@@ -2480,7 +2513,10 @@ class Composition:
 				i – ♭II vamp, and ``"phrygian_power"``, the same with no-third
 				power chords; ``"harmonic_minor"``, a minor tonic sliding to
 				i(maj7) under V7 and vii°7 pressure, for suspense; ``"heroic"``,
-				the ♭VI – ♭VII – I hero cadence.
+				the ♭VI – ♭VII – I hero cadence; ``"minor_plagal"``, a major key
+				coming home through the borrowed iv6 (IV – iv6 – I);
+				``"melodic_minor"``, a minor tonic climbing i – i(maj7) – i6,
+				bittersweet.
 			cycle_beats: How many beats each live chord lasts.  Defaults to
 				one bar (``composition.bar_beats``): 4 in 4/4, 3 in 3/4.
 				Bound progressions carry their own harmonic rhythm in their
@@ -2507,6 +2543,12 @@ class Composition:
 				and scale (binding freezes one realisation).  ``None``
 				unbinds whatever is bound, handing the harmony back to the
 				live engine at the next chord boundary.
+			sevenths: Stack each live chord's diatonic seventh on it
+				(default False): C major's I, V and vi become Cmaj7, G7 and
+				Am7.  The seventh comes from the scale in force (section,
+				form, composition; else the style's own), and a borrowed
+				triad with no seventh in it stays a triad.  Applies to the live graph only, not to a bound
+				progression.
 
 		Example:
 			```python
@@ -2533,6 +2575,24 @@ class Composition:
 			self._harmony_settings[name] = given
 			return given
 
+		named = {"style": style, "cycle_beats": cycle_beats, "key_pull": key_pull, "sevenths": sevenths}
+
+		if not self._section_harmony_call:
+			# What the author names is what a section without a mood returns to;
+			# a section mood's own settings never are.
+			self._author_harmony.update({name: value for name, value in named.items() if value is not KEEP and value is not None})
+
+			section_mood = getattr(self._harmony_section, "mood", None)
+
+			if self._harmonic_state is None and section_mood is not None:
+				# Turned on inside a mood section: whatever is not named starts
+				# on that mood's settings.
+				mood_settings = self._mood_harmony(section_mood)
+				style = style if style is not None else mood_settings["style"]
+				cycle_beats = cycle_beats if cycle_beats is not KEEP else mood_settings["cycle_beats"]
+				key_pull = key_pull if key_pull is not KEEP else mood_settings["key_pull"]
+				sevenths = sevenths if sevenths is not KEEP else mood_settings["sevenths"]
+
 		cycle_beats = _resolve("cycle_beats", cycle_beats)
 		dominant_7th = _resolve("dominant_7th", dominant_7th)
 		key_pull = _resolve("key_pull", key_pull)
@@ -2540,31 +2600,22 @@ class Composition:
 		minor_turnaround_weight = _resolve("minor_turnaround_weight", minor_turnaround_weight)
 		root_diversity = _resolve("root_diversity", root_diversity)
 		reschedule_lookahead = _resolve("reschedule_lookahead", reschedule_lookahead)
+		sevenths = _resolve("sevenths", sevenths)
 
 		if not 0.0 <= key_pull <= 1.0:
 			raise ValueError(f"harmony(key_pull={key_pull!r}) takes 0.0 to 1.0")
-
-		# The style the author named, before a parameter-only re-call fills it in.
-		named_style = style
 
 		if style is None and progression is KEEP:
 			# A parameter-only re-call (key_pull=, cycle_beats=, ...) keeps the
 			# configured style — defaulting unconditionally here would silently
 			# replace e.g. aeolian_minor with functional_major.
-			section_mood = getattr(self._harmony_section, "mood", None)
-
-			if self._harmonic_state is None and section_mood is not None:
-				# Turned on inside a mood section: start on that mood's style.
-				from subsequence.mood import resolve_mood
-				style = resolve_mood(section_mood).harmony_style
-			else:
-				style = self._last_harmony_style if self._last_harmony_style is not None else "functional_major"
+			style = self._last_harmony_style if self._last_harmony_style is not None else "functional_major"
 
 		if style is not None:
 
 			# The live chords sit in the key in force where the music is now:
 			# the current section's key, else the form's, else the composition's.
-			harmony_key, _ = self._effective_key_scale(self._harmony_section)
+			harmony_key, harmony_scale = self._effective_key_scale(self._harmony_section)
 
 			if harmony_key is None:
 				raise ValueError("Cannot configure harmony without a key - set key in the Composition constructor")
@@ -2582,9 +2633,17 @@ class Composition:
 			# consumer's stream.
 			self._harmony_count += 1
 
+			graph_style: typing.Union[str, subsequence.chord_graphs.ChordGraph] = style
+
+			if sevenths:
+				inner = style if not isinstance(style, str) else subsequence.harmonic_state._resolve_graph_style(
+					style, dominant_7th, minor_turnaround_weight
+				)
+				graph_style = subsequence.chord_graphs.sevenths.Sevenths(inner, harmony_scale)
+
 			self._harmonic_state = subsequence.harmonic_state.HarmonicState(
 				key_name = harmony_key,
-				graph_style = style,
+				graph_style = graph_style,
 				include_dominant_7th = dominant_7th,
 				# The engine still blends from the other end: 1.0 means
 				# "every diatonic chord equally", which is no pull at all.
@@ -2602,11 +2661,7 @@ class Composition:
 
 			self._harmony_style = style if isinstance(style, str) else None
 			self._last_harmony_style = style
-
-			# A style the author names is the one a section without a mood
-			# returns to; a section mood's own switch is not.
-			if named_style is not None and not self._section_harmony_call:
-				self._base_harmony_style = named_style
+			self._harmony_built_scale = harmony_scale
 
 		if progression is not KEEP:
 			# An explicit None unbinds.  The clock reads the binding through a
@@ -2644,8 +2699,10 @@ class Composition:
 
 		"""Switch the composition's harmonic colour live.
 
-		Equivalent to calling ``harmony(style=spec.harmony_style)`` and setting
-		``self.scale = spec.scale``.  Rhythm and expression are untouched.
+		Sets ``self.scale`` to the mood's scale and calls ``harmony()`` with its
+		style, harmonic rhythm, key pull and sevenths, which become the
+		settings a section without a mood returns to.  Rhythm and expression
+		are untouched.
 
 		Parameters:
 			name: A conga-composer mood seed (``"cool"``, ``"dreamy"``,
@@ -2656,19 +2713,34 @@ class Composition:
 		from subsequence.mood import resolve_mood
 		spec = resolve_mood(name)
 		self.scale = spec.scale
-		self.harmony(style = spec.harmony_style)
+		self.harmony(**self._mood_harmony(spec.id))
+
+	def _mood_harmony (self, name: str) -> typing.Dict[str, typing.Any]:
+
+		"""The live-harmony settings mood *name* stands for, as ``harmony()`` arguments."""
+
+		from subsequence.mood import resolve_mood
+		spec = resolve_mood(name)
+
+		return {
+			"style": spec.harmony_style,
+			"cycle_beats": spec.bars_per_chord * self.bar_beats,
+			"key_pull": spec.key_pull,
+			"sevenths": spec.sevenths,
+		}
 
 	def _handle_section_harmony (self, info: typing.Optional["subsequence.form_state.SectionInfo"]) -> None:
 
 		"""Internal callback: keep the live chord graph on the section's mood and key.
 
 		Fires on every ``"section"`` event.  A section with a mood plays that
-		mood's harmony style; a section without one plays the style the author
-		chose (``harmony(style=)``, ``Composition(mood=)`` or ``mood()``, else
-		the ``"functional_major"`` default).  Either way the graph is keyed to
-		the section's effective key, so ``Section(key="Ab")`` moves the chords
-		as well as the key-relative parts.  The graph is rebuilt only when the
-		style or the key changes.
+		mood's style, harmonic rhythm, key pull and sevenths; a section without
+		one plays the settings the author chose (``harmony()``,
+		``Composition(mood=)`` or ``mood()``, else the library defaults).
+		Either way the graph is keyed to the section's effective key and
+		scale, so ``Section(key="Ab")`` moves the chords as well as the
+		key-relative parts.  The graph is rebuilt only when one of those
+		changes.
 
 		A mood never turns live harmony on: without a ``harmony()`` call it
 		sets the section's scale only, which is all a piece built from
@@ -2695,17 +2767,25 @@ class Composition:
 			return
 
 		if section_mood is not None:
-			from subsequence.mood import resolve_mood
-			style: typing.Union[str, subsequence.chord_graphs.ChordGraph] = resolve_mood(section_mood).harmony_style
+			target = self._mood_harmony(section_mood)
 		else:
-			style = self._base_harmony_style if self._base_harmony_style is not None else "functional_major"
+			target = {"style": "functional_major", "cycle_beats": None, "key_pull": 0.0, "sevenths": False}
+			target.update(self._author_harmony)
 
-		if style == self._last_harmony_style and key == state.key_name:
+		current = {
+			"style": self._last_harmony_style,
+			"cycle_beats": self._harmony_settings["cycle_beats"],
+			"key_pull": self._harmony_settings["key_pull"],
+			"sevenths": self._harmony_settings["sevenths"],
+		}
+		_, scale = self._effective_key_scale(info)
+
+		if target == current and key == state.key_name and (not target["sevenths"] or scale == self._harmony_built_scale):
 			return
 
 		self._section_harmony_call = True
 		try:
-			self.harmony(style = style)
+			self.harmony(**target)
 		finally:
 			self._section_harmony_call = False
 
@@ -3122,11 +3202,9 @@ class Composition:
 		On exhaustion mid-section the progression loops when no graph style
 		is configured (and always when it contains a ``PitchSet``); with a
 		live engine, exhaustion **falls through to live stepping in the
-		COMPOSITION key** - the live graph engine does not transpose for a
-		section (a stateful walk does not modulate mid-stream), so a
-		re-keyed section that runs out of written chords hands off to
-		composition-key harmony.  Bind a full-length progression (or set
-		``at_end``/loop intent) if you need the whole section in its key.
+		section's key** - the live graph engine is re-keyed at each
+		section's first bar, so a re-keyed section that runs out of written
+		chords carries on in its own key.
 
 		Parameters:
 			section_name: Name of the section as defined in :meth:`form`.
@@ -6132,8 +6210,9 @@ class Composition:
 				Composes with ``mute()``: a performer mute always wins.
 			mood: Optional conga-composer mood seed or KB synonym.  Pitch
 				only: the builder gets the mood's scale before the body runs
-				and every note is snapped to it afterwards - except on a
-				pattern with a ``drum_note_map``, whose notes are kit pieces.
+				and every note is snapped to it afterwards, a note of the
+				chord sounding under it excepted - and nothing is snapped on
+				a pattern with a ``drum_note_map``, whose notes are kit pieces.
 
 		Example:
 			```python
@@ -7809,7 +7888,7 @@ class Composition:
 					# correct scale from Phase 1 above.  A drum pattern's note
 					# numbers name kit pieces, not pitches, so it is left alone.
 					if self._mood_scale is not None and builder.key and not self._drum_note_map:
-						builder.snap_to_scale(typing.cast(subsequence.declarations.KeyName, builder.key), self._mood_scale)
+						_snap_to_mood(builder, builder.key, self._mood_scale, harmony_view)
 
 					# Glides and tunings are laid against the notes' final places.
 					builder._finish_build()

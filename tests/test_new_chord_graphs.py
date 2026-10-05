@@ -765,7 +765,7 @@ def _outside (style: str, scale: str) -> typing.Set[str]:
 	return {chord.name() for chord in graph.nodes() if {tone % 12 for tone in chord.tones(60)} - pcs}
 
 
-@pytest.mark.parametrize("style", ["phrygian", "phrygian_power", "harmonic_minor", "heroic"])
+@pytest.mark.parametrize("style", ["phrygian", "phrygian_power", "harmonic_minor", "heroic", "minor_plagal", "melodic_minor"])
 def test_the_mood_graphs_step_and_every_chord_moves_on (style: str) -> None:
 
 	"""Each new graph steps stably, and no chord in it is a dead end."""
@@ -825,3 +825,44 @@ def test_heroic_walks_the_hero_cadence () -> None:
 	assert _heaviest_move(graph, flat_six) == flat_seven
 	assert _heaviest_move(graph, flat_seven) == tonic
 	assert _outside("heroic", "mixolydian") == {"G#", "Cm"}
+
+
+def test_minor_plagal_comes_home_through_the_borrowed_iv6 () -> None:
+
+	"""C minor_plagal: F's heaviest move is Fm6, and Fm6's is C; only Fm6 leaves C ionian."""
+
+	graph, tonic = _graph("minor_plagal")
+	iv6 = subsequence.chords.Chord(root_pc=5, quality="minor_6th")
+
+	assert _heaviest_move(graph, subsequence.chords.Chord(root_pc=5, quality="major")) == iv6
+	assert _heaviest_move(graph, iv6) == tonic
+	assert _outside("minor_plagal", "ionian") == {"Fm6"}
+
+
+def test_melodic_minor_climbs_the_tonic_and_stays_in_the_scale () -> None:
+
+	"""C melodic_minor: Cm → CmMaj7 → Cm6 are each chord's heaviest move, every chord inside the scale."""
+
+	graph, tonic = _graph("melodic_minor")
+	minor_major = subsequence.chords.Chord(root_pc=0, quality="minor_major_7th")
+
+	assert _heaviest_move(graph, tonic) == minor_major
+	assert _heaviest_move(graph, minor_major) == subsequence.chords.Chord(root_pc=0, quality="minor_6th")
+	assert _outside("melodic_minor", "melodic_minor") == set()
+
+
+@pytest.mark.parametrize("style", ["functional_major", "aeolian_minor", "dorian_minor", "lydian_major", "minor_plagal", "heroic"])
+def test_sevenths_keeps_every_chord_moving (style: str) -> None:
+
+	"""Colouring a graph with sevenths leaves no dead-end chord and no self-loop."""
+
+	import subsequence.chord_graphs.sevenths
+
+	graph, _ = subsequence.chord_graphs.sevenths.Sevenths(
+		subsequence.harmonic_state._resolve_graph_style(style, True, 0.5), "ionian"
+	).build("C")
+
+	for chord in graph.nodes():
+		targets = [target for target, _ in graph.get_transitions(chord)]
+		assert targets, chord.name()
+		assert chord not in targets, chord.name()

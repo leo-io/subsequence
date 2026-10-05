@@ -303,7 +303,7 @@ def test_a_section_mood_does_not_turn_live_harmony_on (patch_midi: None, tmp_pat
 
 def test_harmony_turned_on_inside_a_mood_section_starts_on_its_style (patch_midi: None) -> None:
 
-	"""A first harmony() with no style, inside a mood section, uses the section's mood."""
+	"""A first harmony() naming nothing, inside a mood section, starts on that mood's whole preset."""
 
 	import types
 
@@ -312,7 +312,9 @@ def test_harmony_turned_on_inside_a_mood_section_starts_on_its_style (patch_midi
 	composition.harmony()
 
 	assert composition._last_harmony_style == "lydian_major"
-	assert composition._base_harmony_style is None
+	assert composition._harmony_settings["cycle_beats"] == 8
+	assert composition._harmony_settings["sevenths"] is True
+	assert composition._author_harmony == {}
 
 
 def test_a_mood_section_with_no_key_warns_once_instead_of_raising (patch_midi: None, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -340,13 +342,14 @@ def test_a_mood_section_with_no_key_warns_once_instead_of_raising (patch_midi: N
 
 
 # The chords (in C) each seed's KB signature moves between, which its chord
-# graph must contain.  Bittersweet, nostalgic and spiritual are absent: their
-# signatures turn on chords (major tonic in melodic minor; borrowed iv6) no
-# built-in graph has yet.
+# graph must contain.
 SIGNATURE_CHORDS = {
 	"uplifting":     ["F", "G", "Em", "Am"],         # IVmaj9 – V9sus4 – iii7 – vi9
 	"joyful":        ["C", "F", "G7"],               # I – IV – I/5 – V7
 	"hopeful":       ["Am", "F", "C", "G"],          # vi9 – IVmaj9 – Iadd9 – V9sus4
+	"nostalgic":     ["C", "F", "Fm6"],              # Imaj9 – IVmaj7 – iv6 – Imaj9
+	"bittersweet":   ["Cm(maj7)", "Cm6"],            # i(maj7) – i6
+	"spiritual":     ["F", "Fm6", "C"],              # IV – iv6 – I
 	"sensual":       ["Dm", "G", "C"],               # ii9 – V13sus4 – Imaj9
 	"cool":          ["Cm", "F"],                    # i9 – IV13
 	"introspective": ["Cm", "Ab"],                   # i9 – bVImaj9
@@ -374,3 +377,145 @@ def test_each_seeds_graph_can_play_its_signature (seed_id: str) -> None:
 	missing = [name for name in SIGNATURE_CHORDS[seed_id] if subsequence.chords.parse_chord(name) not in nodes]
 
 	assert not missing, f"{seed_id} ({spec.harmony_style}) cannot play {missing}"
+
+
+def test_every_seeds_scale_is_one_of_its_kb_modes () -> None:
+
+	"""The scale a seed derives is always among the modes it lists, and every rhythm is positive."""
+
+	for spec in subsequence.mood.MOODS.values():
+		assert subsequence.mood.fits_mood(spec, spec.scale), spec.id
+		assert spec.bars_per_chord > 0
+
+
+def test_only_uplifting_and_hopeful_share_a_preset () -> None:
+
+	"""Fifteen distinct harmonic presets: the KB gives uplifting and hopeful the same chords, modes, tension and rhythm."""
+
+	presets: dict = {}
+
+	for spec in subsequence.mood.MOODS.values():
+		presets.setdefault((spec.scale, spec.harmony_style, spec.bars_per_chord, spec.sevenths, spec.key_pull), []).append(spec.id)
+
+	assert [ids for ids in presets.values() if len(ids) > 1] == [["uplifting", "hopeful"]]
+
+
+def test_key_pull_follows_tension () -> None:
+
+	"""Settled seeds pull towards the key's centres, unresolved ones walk freely."""
+
+	assert subsequence.mood.MOODS["nostalgic"].key_pull == 0.4    # T1
+	assert subsequence.mood.MOODS["uplifting"].key_pull == 0.2    # T2
+	assert subsequence.mood.MOODS["dark"].key_pull == 0.0         # T3
+	assert subsequence.mood.MOODS["tense"].key_pull == 0.0        # T4
+
+
+def test_composition_mood_pre_seeds_the_whole_preset (patch_midi: None) -> None:
+
+	"""Composition(mood="cool") then harmony(): dorian_minor, a chord every 2 bars, sevenths, key pull 0.4."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="D", mood="cool")
+	composition.harmony()
+
+	assert composition._last_harmony_style == "dorian_minor"
+	assert composition._harmony_settings["cycle_beats"] == 8
+	assert composition._harmony_settings["key_pull"] == 0.4
+	assert composition._harmonic_state.current_chord.name() == "Dm7"
+
+
+def test_a_mood_section_applies_its_preset_and_the_authors_settings_come_back (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""harmony(cycle_beats=4) is replaced by dark's 4-bar static chords for the section, and restored after."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C", seed=1)
+	composition.harmony(style="aeolian_minor", cycle_beats=4, key_pull=0.5)
+	composition.form([
+		subsequence.Section("a", 1),
+		subsequence.Section("b", 4, mood="dreamy"),
+		subsequence.Section("c", 1),
+	], loop=False)
+	settings = {}
+
+	@composition.pattern(channel=1, beats=4)
+	def probe (p):
+
+		"""Record the live-harmony settings each section plays with."""
+
+		name = p.section.name if p.section else None
+		settings.setdefault(name, (composition._last_harmony_style, dict(composition._harmony_settings), composition._harmonic_state.current_chord))
+		p.note(60, beat=0)
+
+	composition.render(bars=6, filename=str(tmp_path / "preset.mid"))
+
+	style, values, chord = settings["b"]
+	assert (style, values["cycle_beats"], values["key_pull"], values["sevenths"]) == ("lydian_major", 8, 0.4, True)
+	assert chord.quality in ("major_7th", "minor_7th", "dominant_7th", "half_diminished_7th")
+
+	style, values, _ = settings["c"]
+	assert (style, values["cycle_beats"], values["key_pull"], values["sevenths"]) == ("aeolian_minor", 4, 0.5, False)
+
+
+def test_harmony_sevenths_stacks_the_scales_own_seventh (patch_midi: None) -> None:
+
+	"""C ionian gives Cmaj7; the same functional graph's V is G7 and its vi Am7."""
+
+	import subsequence.chord_graphs.sevenths
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	composition.harmony(sevenths=True)
+
+	nodes = {chord.name() for chord in composition._harmonic_state.graph.nodes()}
+
+	assert composition._harmonic_state.current_chord.name() == "Cmaj7"
+	assert {"Cmaj7", "G7", "Am7", "Dm7", "Fmaj7"} <= nodes
+
+	graph, tonic = subsequence.chord_graphs.sevenths.Sevenths(
+		subsequence.harmonic_state._resolve_graph_style("mixolydian", True, 0.5), "mixolydian"
+	).build("C")
+
+	assert tonic.name() == "C7"
+
+
+def test_a_section_scale_outside_its_moods_modes_warns (caplog: pytest.LogCaptureFixture) -> None:
+
+	"""scale="lydian" with mood="dark" warns; aeolian (a KB mode of dark) and its alias "minor" do not."""
+
+	with caplog.at_level("WARNING"):
+		subsequence.Section("a", 4, mood="dark", scale="aeolian")
+		subsequence.Section("b", 4, mood="dark", scale="minor")
+
+	assert not caplog.records
+
+	with caplog.at_level("WARNING"):
+		subsequence.Section("c", 4, mood="dark", scale="lydian")
+
+	assert len(caplog.records) == 1
+	assert "not a mode of mood='dark'" in caplog.records[0].getMessage()
+
+
+def test_pattern_mood_keeps_the_tones_of_the_sounding_chord (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""A dreamy (C lydian) line over F minor keeps the chord's A flat, while a C sharp, in neither, still moves."""
+
+	composition = subsequence.Composition(output_device="Dummy MIDI", bpm=120, key="C")
+	composition.harmony(progression=["Fm"])
+
+	@composition.pattern(channel=1, beats=4, mood="dreamy")
+	def line (p):
+
+		"""A flat (a chord tone, outside lydian) and C sharp (in neither)."""
+
+		p.note(68, beat=0, duration=0.5)
+		p.note(61, beat=1, duration=0.5)
+
+	filename = tmp_path / "keep.mid"
+	composition.render(bars=1, filename=str(filename))
+
+	played = {
+		message.note
+		for message in mido.MidiFile(str(filename))
+		if message.type == "note_on" and message.velocity > 0
+	}
+
+	assert 68 in played
+	assert 61 not in played

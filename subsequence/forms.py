@@ -15,10 +15,14 @@ leaf, not an operator algebra.
 """
 
 import dataclasses
+import logging
 import typing
 
 import subsequence.chords
 import subsequence.intervals
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,9 +44,9 @@ class Section:
 			chords) is never moved, and *chord-relative* content
 			(``ChordTone``, ``Approach``) tracks the sounding chord rather
 			than the key - see the three-intent model in the docs.  The
-			live graph engine (``harmony(style=...)``) stays in the
-			composition key by design (a stateful walk does not transpose
-			mid-stream).
+			live graph engine (``harmony(style=...)``) moves too: it is
+			re-keyed to this key at the section's first bar (never
+			mid-section), carrying its chord history across.
 		scale: Optional scale/mode override (e.g. ``"minor"``) - moves the
 			mode as well as the tonic, so a section can genuinely change
 			to the relative or parallel minor.  Falls back to the form's
@@ -93,6 +97,16 @@ class Section:
 			object.__setattr__(self, "mood", spec.id)
 			if self.scale is None:
 				object.__setattr__(self, "scale", spec.scale)
+			else:
+				from subsequence.mood import fits_mood
+				if not fits_mood(spec, self.scale):
+					# Allowed (the scale wins for pitch), but the chords will be
+					# the mood's and the notes another mode's.
+					logger.warning(
+						"Section %r: scale=%r is not a mode of mood=%r (the KB lists %s) - "
+						"the live chords follow the mood, the key-relative notes the scale",
+						self.name, self.scale, spec.id, ", ".join(spec.modes),
+					)
 
 
 def _coerce_section (element: typing.Any) -> Section:
