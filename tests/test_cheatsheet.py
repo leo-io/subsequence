@@ -116,7 +116,7 @@ def test_the_sheet_on_disk_is_what_the_generator_produces () -> None:
 
 	path = pathlib.Path(__file__).resolve().parent.parent / "api-cheatsheet.md"
 
-	assert path.read_text() == GENERATOR.generate_markdown(), (
+	assert path.read_text(encoding='utf-8') == GENERATOR.generate_markdown(), (
 		"api-cheatsheet.md is out of date — run: python scripts/generate_cheatsheet.py"
 	)
 

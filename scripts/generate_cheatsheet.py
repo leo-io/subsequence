@@ -395,7 +395,7 @@ def check (path: str, expected: str) -> int:
 		print(f"{path} does not exist — run: python scripts/generate_cheatsheet.py")
 		return 1
 
-	with open(path) as handle:
+	with open(path, encoding='utf-8') as handle:
 		current = handle.read()
 
 	if current == expected:
@@ -428,7 +428,7 @@ if __name__ == "__main__":
 	if "--check" in sys.argv[1:]:
 		sys.exit(check(output_path, md_content))
 
-	with open(output_path, 'w') as f:
+	with open(output_path, 'w', encoding='utf-8') as f:
 		f.write(md_content)
 
 	print(f"Generated cheatsheet at {output_path}")
