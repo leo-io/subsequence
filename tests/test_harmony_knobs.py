@@ -35,8 +35,6 @@ STYLES = [
 	"functional_major", "aeolian_minor", "lydian_major", "dorian_minor",
 	"hooktheory_major", "pop_major", "phrygian_minor", "chromatic_mediant",
 	"suspended", "mixolydian", "whole_tone", "diminished",
-	"phrygian", "phrygian_power", "harmonic_minor", "heroic",
-	"minor_plagal", "melodic_minor",
 ]
 
 

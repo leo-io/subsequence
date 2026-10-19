@@ -15,14 +15,10 @@ leaf, not an operator algebra.
 """
 
 import dataclasses
-import logging
 import typing
 
 import subsequence.chords
 import subsequence.intervals
-
-
-logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,23 +40,13 @@ class Section:
 			chords) is never moved, and *chord-relative* content
 			(``ChordTone``, ``Approach``) tracks the sounding chord rather
 			than the key - see the three-intent model in the docs.  The
-			live graph engine (``harmony(style=...)``) moves too: it is
-			re-keyed to this key at the section's first bar (never
-			mid-section), carrying its chord history across.
+			live graph engine (``harmony(style=...)``) stays in the
+			composition key by design (a stateful walk does not transpose
+			mid-stream).
 		scale: Optional scale/mode override (e.g. ``"minor"``) - moves the
 			mode as well as the tonic, so a section can genuinely change
 			to the relative or parallel minor.  Falls back to the form's
 			scale, then the composition's.
-		mood: Optional conga-composer mood seed (e.g. ``"cool"``), or any
-			KB synonym of one (``"chill"``, ``"triste"``); stored as the
-			seed id.  Derives ``scale`` automatically when ``scale`` is not
-			given (``"cool"`` → ``scale="dorian"``).  When live harmony is
-			on (``composition.harmony()``), also sets its style while this
-			section is playing, keyed to the section's key - the composition
-			returns to its own style when the section ends.  A mood never
-			turns live harmony on by itself.  Mood is
-			harmonic-only: no rhythm or expression changes.  See
-			``subsequence.mood.MOODS`` for the sixteen seeds.
 	"""
 
 	name: str
@@ -68,11 +54,10 @@ class Section:
 	energy: float = 0.5
 	key: typing.Optional[str] = None
 	scale: typing.Optional[str] = None
-	mood: typing.Optional[str] = None
 
 	def __post_init__ (self) -> None:
 
-		"""Validate the payload loudly, and derive scale from mood when needed."""
+		"""Validate the payload loudly."""
 
 		if not isinstance(self.name, str) or not self.name:
 			raise ValueError(f"a section needs a non-empty string name, got {self.name!r}")
@@ -90,23 +75,6 @@ class Section:
 
 		if self.scale is not None:
 			subsequence.intervals.scale_pitch_classes(0, self.scale)
-
-		if self.mood is not None:
-			from subsequence.mood import resolve_mood
-			spec = resolve_mood(self.mood)   # raises ValueError on unknown mood
-			object.__setattr__(self, "mood", spec.id)
-			if self.scale is None:
-				object.__setattr__(self, "scale", spec.scale)
-			else:
-				from subsequence.mood import fits_mood
-				if not fits_mood(spec, self.scale):
-					# Allowed (the scale wins for pitch), but the chords will be
-					# the mood's and the notes another mode's.
-					logger.warning(
-						"Section %r: scale=%r is not a mode of mood=%r (the KB lists %s) - "
-						"the live chords follow the mood, the key-relative notes the scale",
-						self.name, self.scale, spec.id, ", ".join(spec.modes),
-					)
 
 
 def _coerce_section (element: typing.Any) -> Section:

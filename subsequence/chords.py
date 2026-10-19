@@ -122,9 +122,6 @@ CHORD_INTERVALS: typing.Dict[str, typing.List[int]] = {
 	"diminished_7th": [0, 3, 6, 9],
 	"sus2": [0, 2, 7],
 	"sus4": [0, 5, 7],
-	"minor_major_7th": [0, 3, 7, 11],
-	"power_chord": [0, 7],
-	"minor_6th": [0, 3, 7, 9],
 }
 
 CHORD_SUFFIX: typing.Dict[str, str] = {
@@ -139,9 +136,6 @@ CHORD_SUFFIX: typing.Dict[str, str] = {
 	"diminished_7th": "dim7",
 	"sus2": "sus2",
 	"sus4": "sus4",
-	"minor_major_7th": "mMaj7",
-	"power_chord": "5",
-	"minor_6th": "m6",
 }
 
 
@@ -341,11 +335,6 @@ _SUFFIX_TO_QUALITY: typing.Dict[str, str] = {
 	"sus2": "sus2",
 	"sus4": "sus4",
 	"sus": "sus4",
-	"mMaj7": "minor_major_7th",
-	"m(maj7)": "minor_major_7th",
-	"mM7": "minor_major_7th",
-	"5": "power_chord",
-	"m6": "minor_6th",
 }
 
 # Snapshots of the shipped tables, taken before any register_chord_quality()
