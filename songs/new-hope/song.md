@@ -1,0 +1,10 @@
+## Initial User Request
+
+Define in two paragraphs a harmony definition of a 6-minute house track at 118 BPM in F minor key. Define only the melody, bass, hook, and pad parts.
+---
+
+## Harmony Definition
+
+Structured as an extended, multi-block house arrangement at a steady dance tempo, the track's harmonic foundation is established within a minor-mode tonality through a hypnotically cycling four-bar loop that rotates through structural tonic, subdominant, and dominant functional roles. The **Pad** part provides the harmonic bedrock, sustaining rich, four-note extended voicings across the mid frequency spectrum that utilize strict voice leading via close inversions and common-tone retention to glide smoothly between chord transitions, accentuating the linear tendency of unstable scale degrees—such as the flat-sixth degree resolving downward to the fifth—to drive emotional movement. Beneath this bed, the **Bass** part anchors the low-frequency foundation while strictly observing low-interval limits to prevent clarity loss, locking into the four-on-the-floor pulse with syncopated offbeat octave bounces and chromatic approach notes that articulate root motion and generate kinetic propulsion.
+
+Over this driving bed, thematic material unfolds through the contrapuntal interaction between the hook and the lead melody. The **Hook** functions as the central memorable signature motif, structured as a balanced two-phrase classical period where the antecedent phrase cadences open on an unstable scale degree—such as scale degree 2 or 5—to heighten harmonic expectation, followed by a consequent phrase that closes onto the tonic scale degree for tonal release. Elevating this motif, the **Melody** part operates as an expressive top-line contour in the high register, relying on conjunct stepwise motion where occasional ascending leaps are counterbalanced by immediate downward stepwise motion, while landing accented non-chord tones—such as appoggiaturas or suspensions—on primary downbeats before resolving into adjacent chord tones to maintain vocal-like storytelling and dynamic tension across the track's duration.
