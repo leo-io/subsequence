@@ -296,6 +296,7 @@ _NEEDS_MORE_THAN_A_NAMESPACE = {
 	"form_state.py::jump_to::literal[0]": "jumps a form that it does not declare",
 	"composition.py::form_freeze::literal[0]": "{...} stands for a form, and is not one",
 	"constants/instruments/gm_cc.py::<module>::literal[0]": "... stands for a value, and is not one",
+	"plugins/sequencers/__init__.py::<module>::literal[2]": "tweaks a pattern named lead that it does not declare",
 }
 
 

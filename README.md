@@ -125,6 +125,7 @@ The `examples/` directory holds self-documenting compositions. Because Subsequen
 |---|---|
 | `demo.py` / `demo_advanced.py` | Drums, bass, and an arpeggio over evolving E-aeolian harmony - the Composition API vs the Direct Pattern API, side by side. Start here. |
 | `labyrinth.py` / `subharmonicon.py` | Fully documented recreations of two Moog semi-modular sequencers, every panel control exposed as a named variable. Exercise most of the API. |
+| `analogue_sequencers.py` | The sequencers plugin: a Moog 960 through a 962 for a 24-step bass, and an ARP 1601 lead whose reset on bus 3 makes a twelve-step line drift across the bar. |
 | `arpeggiator.py` | Form sections, four patterns, cycle-dependent variation, Phrygian harmony, and section-aware muting. |
 | `bresenham_poly.py` | Dense generative drums on a weighted-graph form (pulse → emerge → peak → dissolve); ghost fills, cellular automata, interlocking hats. |
 | `emergence.py` | A six-section drum piece that breathes, builds, and breaks - Perlin fields, rare "fracture" eruptions, the full rhythm toolkit. |
