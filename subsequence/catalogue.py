@@ -508,6 +508,11 @@ def _literal_options (annotation: typing.Any) -> typing.Optional[typing.List[str
 	if typing.get_origin(annotation) is typing.Literal:
 		return [str(a) for a in typing.get_args(annotation)]
 
+	# Only a Union has arms.  A List's element is not one, so a list of
+	# choices was described as a single choice with a list for its default.
+	if typing.get_origin(annotation) is not typing.Union:
+		return None
+
 	for arm in typing.get_args(annotation):
 
 		if typing.get_origin(arm) is typing.Literal:

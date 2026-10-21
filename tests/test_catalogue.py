@@ -784,6 +784,32 @@ def test_a_position_that_also_declares_a_span_is_still_a_position () -> None:
 	assert "max" not in described, "a position published a bound the composition owns"
 	assert "multiple" not in described
 
+
+def test_a_list_of_choices_is_dropped_as_every_list_is () -> None:
+
+	"""A list of choices is no single choice (#5203), while a choice in a Union is still found.
+
+	It was described as one choice whose default was the whole list, because the
+	search for a Literal "one level into a Union" read a List's element as an arm.
+	"""
+
+	def part (
+		modes: typing.List[typing.Literal["normal", "skip"]] = ["normal", "skip"],
+		mode: typing.Union[typing.Literal["normal", "skip"], int] = "normal",
+	) -> None:
+		pass
+
+	signature = inspect.signature(part)
+	hints = typing.get_type_hints(part, include_extras=True)
+
+	assert subsequence.catalogue.describe_parameter("modes", signature.parameters["modes"], hints["modes"]) is None
+
+	described = subsequence.catalogue.describe_parameter("mode", signature.parameters["mode"], hints["mode"])
+
+	assert described is not None and described["kind"] == "choice"
+	assert [o["value"] for o in described["options"]] == ["normal", "skip"]
+
+
 def test_a_pool_sharing_a_union_with_a_chord_is_still_a_pool () -> None:
 
 	"""``arpeggio`` takes a chord OR a pool, and the pool is the offerable half."""
