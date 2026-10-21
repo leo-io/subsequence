@@ -5312,7 +5312,9 @@ class Composition:
 		if name not in self._running_patterns:
 			raise ValueError(f"Pattern '{name}' not found. Available: {list(self._running_patterns.keys())}")
 
-		self._running_patterns[name]._tweaks.update(kwargs)
+		# Handed to the clock, as set_bpm() is: a build reads its tweaks while it
+		# runs, so a change made on another thread could land partway through one.
+		self._sequencer._on_the_clock(self._running_patterns[name]._tweaks.update, kwargs)
 		logger.info(f"Tweaked pattern '{name}': {list(kwargs.keys())}")
 
 	def clear_tweak (self, name: str, *param_names: str) -> None:
@@ -5332,12 +5334,20 @@ class Composition:
 		if name not in self._running_patterns:
 			raise ValueError(f"Pattern '{name}' not found. Available: {list(self._running_patterns.keys())}")
 
+		tweaks = self._running_patterns[name]._tweaks
+
+		def remove () -> None:
+			if not param_names:
+				tweaks.clear()
+			for param_name in param_names:
+				tweaks.pop(param_name, None)
+
+		# On the clock, as tweak() is.
+		self._sequencer._on_the_clock(remove)
+
 		if not param_names:
-			self._running_patterns[name]._tweaks.clear()
 			logger.info(f"Cleared all tweaks for pattern '{name}'")
 		else:
-			for param_name in param_names:
-				self._running_patterns[name]._tweaks.pop(param_name, None)
 			logger.info(f"Cleared tweaks for pattern '{name}': {list(param_names)}")
 
 	def get_tweaks (self, name: str) -> typing.Dict[str, typing.Any]:

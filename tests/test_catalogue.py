@@ -771,7 +771,7 @@ def test_a_position_that_also_declares_a_span_is_still_a_position () -> None:
 		subsequence.declarations.PositionParameter("steps"),
 	]
 
-	described = subsequence.catalogue._describe_parameter(
+	described = subsequence.catalogue.describe_parameter(
 		"where",
 		inspect.Parameter("where", inspect.Parameter.POSITIONAL_OR_KEYWORD),
 		annotation,

@@ -294,6 +294,11 @@ class Pattern:
 		# oldest first.  The next bar goes on from there (#3500).
 		self._walk_states: typing.Dict[int, typing.Tuple[typing.Tuple[typing.Any, ...], typing.Tuple[int, ...]]] = {}
 
+		# What a part keeps from one cycle to the next (p.memory), for the
+		# musician's own use and a plugin's.  It lives on the running pattern,
+		# and a live save swaps only the builder function, so a save keeps it.
+		self.memory: typing.Dict[str, typing.Any] = {}
+
 
 	def _finish_builds (self) -> None:
 

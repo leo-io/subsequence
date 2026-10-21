@@ -566,17 +566,41 @@ def _finished (
 	return entry
 
 
-def _describe_parameter (
+def describe_parameter (
 	name: str,
 	parameter: inspect.Parameter,
 	annotation: typing.Any,
 	siblings: typing.Iterable[str] = (),
 ) -> typing.Optional[typing.Dict[str, typing.Any]]:
 
-	"""One parameter as a control, or None when its type maps to no shape.
+	"""Describe one parameter as a control, exactly as the catalogue describes a generator's.
 
-	``siblings`` are the other parameter names on the same method, needed only
-	by the chord form, which has to say which of them it requires.
+	For a plugin whose own functions take controls: a control described here
+	reads the same as every generator's, with the same kinds, units, bounds and
+	defaults, so a surface that draws the catalogue draws it too.  Returns None
+	when the parameter's type maps to no control.
+
+	Parameters:
+		name: The parameter's name.
+		parameter: The parameter, from ``inspect.signature()``.
+		annotation: Its type, resolved (``typing.get_type_hints()`` gives it with
+			its declarations kept, given ``include_extras=True``).
+		siblings: The other parameter names on the same function, needed only by
+			the chord form, which says which of them it requires.
+
+	Example::
+
+		import inspect
+		import typing
+		import subsequence.catalogue
+		import subsequence.declarations
+
+		def lfo (rate: typing.Annotated[float, subsequence.declarations.Span(0.1, 10.0)] = 1.0) -> None:
+			pass
+
+		parameter = inspect.signature(lfo).parameters["rate"]
+		hints = typing.get_type_hints(lfo, include_extras=True)
+		control = subsequence.catalogue.describe_parameter("rate", parameter, hints["rate"])
 	"""
 
 	label = name.replace("_", " ")
@@ -726,7 +750,7 @@ def _describe (name: str) -> typing.Dict[str, typing.Any]:
 			continue
 
 		annotation = hints.get(parameter_name, parameter.annotation)
-		described = _describe_parameter(parameter_name, parameter, annotation, signature.parameters)
+		described = describe_parameter(parameter_name, parameter, annotation, signature.parameters)
 
 		if described is None:
 			# Name it either way.  A required one also sets partial, because a

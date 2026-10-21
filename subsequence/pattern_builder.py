@@ -227,7 +227,10 @@ class PatternBuilder(
 		self.section = section
 		self.bar = bar
 		self.rng: random.Random = rng or random.Random()
-		self._tweaks: typing.Dict[str, typing.Any] = tweaks or {}
+		# The pattern's own tweaks, never a copy: an empty dict is falsy, and
+		# "tweaks or {}" handed a pattern with no tweaks yet a dict of its own,
+		# so a p.tweak() from it would have gone nowhere.
+		self._tweaks: typing.Dict[str, typing.Any] = tweaks if tweaks is not None else {}
 		self._default_grid: int = default_grid
 		# One step's size in beats, which set_length(steps=) counts in.  A
 		# composition pattern carries it from its declaration; anything else
@@ -265,6 +268,9 @@ class PatternBuilder(
 		# against every attack the build placed, before or after them (#3463).
 		self._pending_legatos: typing.List[typing.Callable[[], None]] = []
 		self._legato_groups: int = 0
+		# after_build() and tweak() run last of all, once everything above is
+		# laid, and only when the build succeeds.
+		self._pending_after: typing.List[typing.Callable[[], object]] = []
 		# This pattern's derived stream seed, so scratch() can take a child
 		# stream of it rather than drawing from self.rng — see scratch().
 		# None when the composition is unseeded.
@@ -339,6 +345,79 @@ class PatternBuilder(
 		return subsequence.metre.bar_beats(self.time_signature)
 
 	@property
+	def step_beats (self) -> float:
+
+		"""How many beats one step of this pattern lasts: its length over its steps.
+
+		A sixteen-step bar of 4/4 gives 0.25.  It follows ``set_length()``, so
+		stretching sixteen steps over three beats makes each step 0.1875.  Use it
+		to size a note in steps rather than in beats.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def bass (p):
+				p.note(36, beat=0, duration=p.step_beats * 3)
+		"""
+
+		return self._pattern.length / self._default_grid if self._default_grid > 0 else self._pattern.length
+
+	@property
+	def start_beat (self) -> float:
+
+		"""The beat this cycle starts on, counted from the start of the composition.
+
+		A one-bar pattern in 4/4 builds cycles starting on beats 0, 4, 8 and so
+		on.  Inside the pattern, beats count from the cycle's own start; this says
+		where that start falls in the whole piece.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def bell (p):
+				if p.start_beat >= 128:
+					p.note(84, beat=0, duration=1)
+		"""
+
+		return self._pattern._cycle_start_pulse / subsequence.constants.MIDI_QUARTER_NOTE
+
+	@property
+	def memory (self) -> typing.Dict[str, typing.Any]:
+
+		"""A dict this pattern keeps from one cycle to the next.
+
+		Whatever a cycle puts here is there in the next one, and a live save
+		keeps it, because it belongs to the running pattern rather than to the
+		function.  It goes when the pattern is removed.  A one-shot pattern, and
+		a ``scratch()``, start with an empty one each time.
+
+		A build that raises keeps whatever it had already written here.  To keep
+		something only when the cycle plays, write it in ``after_build()``.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def lead (p):
+				p.memory["plays"] = p.memory.get("plays", 0) + 1
+				if p.memory["plays"] % 4 == 0:
+					p.note(72, beat=0, duration=1)
+		"""
+
+		return self._pattern.memory
+
+	@property
+	def stream_seed (self) -> typing.Optional[int]:
+
+		"""The seed this pattern's random stream comes from, or None when the composition is unseeded.
+
+		It is the same on every cycle, so a part that wants a random stream of its
+		own that carries on from cycle to cycle can derive one from it once and
+		keep it in ``p.memory``.  Mixing in a name keeps two such streams apart.
+		"""
+
+		return self._stream_seed
+
+	@property
 	def c (self) -> typing.Optional[subsequence.conductor.Conductor]:
 
 		"""Alias for self.conductor."""
@@ -401,6 +480,83 @@ class PatternBuilder(
 		"""
 
 		return self._tweaks.get(name, default)
+
+	def tweak (self, **values: typing.Any) -> "PatternBuilder":
+
+		"""Change this pattern's own tweaks, from the next cycle on.
+
+		The same change ``composition.tweak()`` makes from outside, made by the
+		pattern itself.  It lands when this build succeeds, so ``p.param()``
+		still reads the old value for the rest of this cycle, and a build that
+		raises changes nothing.
+
+		Parameters:
+			``**values``: Parameter names and their new values.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def lead (p):
+				density = p.param("density", 0.8)
+				p.euclidean(60, pulses=int(16 * density))
+				p.tweak(density=max(0.25, density - 0.05))
+		"""
+
+		def apply () -> None:
+			self._tweaks.update(values)
+
+		self._defer(self._pending_after, apply)
+
+		return self
+
+	def clear_tweak (self, *names: str) -> "PatternBuilder":
+
+		"""Remove this pattern's own tweaks, from the next cycle on.
+
+		With no names, every tweak goes and each ``p.param()`` returns to its
+		default.  Like ``tweak()``, it lands when this build succeeds.
+
+		Parameters:
+			*names: The parameter names to remove.  If omitted, all of them.
+		"""
+
+		def apply () -> None:
+			if not names:
+				self._tweaks.clear()
+			for name in names:
+				self._tweaks.pop(name, None)
+
+		self._defer(self._pending_after, apply)
+
+		return self
+
+	def after_build (self, fn: typing.Callable[[], typing.Any]) -> "PatternBuilder":
+
+		"""Run ``fn`` once this cycle's build has succeeded.
+
+		It runs last, after the notes are in their final places (glides and
+		tunings included), and never when the build raises, so it is the place
+		to keep what only a build that played should keep.  Several run in the
+		order they were given.  If ``fn`` raises, the build fails as if the
+		pattern had raised, and the cycle is silent.
+
+		Parameters:
+			fn: A function taking no arguments.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def lead (p):
+				p.note(60, beat=0, duration=1)
+				p.after_build(lambda: p.memory.update(built=p.start_beat))
+		"""
+
+		if not callable(fn):
+			raise TypeError(f"after_build() takes a function, not {fn!r}")
+
+		self._defer(self._pending_after, fn)
+
+		return self
 
 	def set_length (self, length: typing.Optional[subsequence.declarations.Beats] = None, *, steps: typing.Optional[subsequence.declarations.StepCount] = None) -> "PatternBuilder":
 
@@ -3090,6 +3246,11 @@ class PatternBuilder(
 
 		self._keep_parameter_selections_honest()
 
+		# Last, once every note sits where it will play: after_build() and the
+		# pattern's own tweak() and clear_tweak(), in the order they were given.
+		for done in list(self._pending_after):
+			done()
+
 		self._abandon_build()
 
 	def _keep_parameter_selections_honest (self) -> None:
@@ -3266,6 +3427,7 @@ class PatternBuilder(
 		self._pending_legatos.clear()
 		self._pending_glides.clear()
 		self._pending_tunings.clear()
+		self._pending_after.clear()
 
 		if self._finish_build in self._pattern._unfinished_builds:
 			self._pattern._unfinished_builds.remove(self._finish_build)
