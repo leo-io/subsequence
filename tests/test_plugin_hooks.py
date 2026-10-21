@@ -2,7 +2,7 @@
 
 The sequencers plugin reaches the core only through public names (#5192).  Each test here
 pins one of them: ``p.step_beats``, ``p.start_beat``, ``p.memory``, ``p.tweak()`` and
-``p.clear_tweak()``, ``p.after_build()``, ``p.stream_seed`` and
+``p.clear_tweak()``, ``p.after_build()``, ``p.stream_seed``, ``p.name`` (#5202) and
 ``subsequence.catalogue.describe_parameter()``; and ``composition.tweak()`` handing its change
 to the clock, so a tweak never lands partway through a build.
 """
@@ -340,6 +340,39 @@ def test_a_pattern_s_stream_seed_is_steady_its_own_and_none_unseeded (patch_midi
 	_render(plain, tmp_path, bars=1)
 
 	assert unseeded and set(unseeded) == {None}
+
+
+# p.name
+
+def test_a_build_knows_its_pattern_s_name_from_the_first_cycle (patch_midi: None, tmp_path: pathlib.Path) -> None:
+
+	"""The name running_patterns and tweak() know, there in the first build before the pattern has joined running_patterns, and carried by a scratch (#5202)."""
+
+	seen: typing.List[typing.Tuple[typing.Optional[str], bool, typing.Optional[str]]] = []
+	composition = _composition()
+
+	def lead (p: typing.Any) -> None:
+		seen.append((p.name, p.name in composition.running_patterns, p.scratch("layer").name))
+
+	def bass (p: typing.Any) -> None:
+		seen.append((p.name, p.name in composition.running_patterns, None))
+
+	composition.pattern(channel=1, beats=4)(lead)
+	composition.pattern(channel=2, beats=4)(bass)
+	_render(composition, tmp_path, bars=3)
+
+	firsts = [entry for entry in seen if not entry[1]]
+	assert firsts == [("lead", False, "lead"), ("bass", False, None)]
+	assert len(seen) >= 6 and {entry[0] for entry in seen} == {"lead", "bass"}
+	assert all(entry[2] == "lead" for entry in seen if entry[0] == "lead")
+	assert set(composition.running_patterns) == {"lead", "bass"}
+
+
+def test_a_hand_made_builder_has_no_name (patch_midi: None) -> None:
+
+	pattern = subsequence.pattern.Pattern(channel=0, length=4)
+
+	assert subsequence.pattern_builder.PatternBuilder(pattern, cycle=0).name is None
 
 
 # subsequence.catalogue.describe_parameter()

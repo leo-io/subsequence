@@ -178,6 +178,7 @@ The musician's 'palette' for creating musical content.
 | `melody(state, spacing, velocity, duration, chord_tones, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melodic line by querying a persistent `MelodicState`. |
 | `memory *(property)*` | A dict this pattern keeps from one cycle to the next. |
 | `motif(m, beat, span, root, velocity, fit, fit_weights, resolution) -> PatternBuilder` | Place an immutable `Motif` onto the pattern. |
+| `name *(property)*` | This pattern's name, as ``composition.running_patterns``, ``composition.tweak()`` and ``composition.mute()`` know it. |
 | `note(pitch, beat, velocity, duration) -> PatternBuilder` | Place a single MIDI note at a specific beat position. |
 | `note_off(pitch, beat) -> PatternBuilder` | Place an explicit Note Off event to silence a drone. |
 | `note_on(pitch, beat, velocity) -> PatternBuilder` | Place an explicit Note On event without a duration. Useful for drones or infinite sustains. Must be paired with a ``note_off()`` later to silence the note. |

@@ -418,6 +418,27 @@ class PatternBuilder(
 		return self._stream_seed
 
 	@property
+	def name (self) -> typing.Optional[str]:
+
+		"""This pattern's name, as ``composition.running_patterns``, ``composition.tweak()`` and ``composition.mute()`` know it.
+
+		It is the name of the pattern's function, and it is there from the first
+		cycle, before the pattern has joined ``running_patterns``.  A pattern made
+		with the Direct Pattern API has none, and gives None.
+
+		Example::
+
+			@composition.pattern(channel=1, beats=4)
+			def lead (p):
+				p.data[f"{p.name}_cycle"] = p.cycle
+				p.note(60, beat=0, duration=1)
+		"""
+
+		builder_fn = getattr(self._pattern, "_builder_fn", None)
+
+		return getattr(builder_fn, "__name__", None)
+
+	@property
 	def c (self) -> typing.Optional[subsequence.conductor.Conductor]:
 
 		"""Alias for self.conductor."""
