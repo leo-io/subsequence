@@ -132,6 +132,7 @@ The musician's 'palette' for creating musical content.
 | Method | Description |
 |---|---|
 | `__init__(pattern, cycle, conductor, drum_note_map, cc_name_map, nrpn_name_map, section, bar, rng, tweaks, default_grid, data, key, scale, time_signature, held_notes, harmony, section_motifs, energy, stream_seed, repeating, zero_indexed_channels) -> None` | Initialise the builder with pattern context, cycle count, and optional section info. |
+| `after_build(fn) -> PatternBuilder` | Run ``fn`` once this cycle's build has succeeded. |
 | `apply_tuning(tuning, bend_range, channels, reference_note) -> PatternBuilder` | Apply a microtonal tuning to this pattern via pitch bend injection. |
 | `arpeggio(notes, root, velocity, count, inversion, beat, span, spacing, duration, direction, seed, rng) -> PatternBuilder` | Arpeggiate a chord (or a list of pitches) - cycle the notes one at a time at regular beat intervals. |
 | `bar_beats *(property)*` | How many beats (quarter notes) one bar lasts: ``beats × 4 / unit``, so 3.5 in 7/8. |
@@ -150,6 +151,7 @@ The musician's 'palette' for creating musical content.
 | `cellular_1d(pitch, rule, generation, velocity, duration, no_overlap, probability, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate an evolving rhythm using a 1D cellular automaton. |
 | `cellular_2d(pitches, rule, generation, velocity, velocities, duration, no_overlap, probability, initial_state, density, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate polyphonic patterns using a 2D Life-like cellular automaton. |
 | `chord(chord_obj, root, velocity, sustain, duration, inversion, count, legato, detached, beat) -> PatternBuilder` | Place a chord at ``beat`` (the start of the pattern by default). |
+| `clear_tweak(*names) -> PatternBuilder` | Remove this pattern's own tweaks, from the next cycle on. |
 | `de_bruijn(pitches, window, spacing, velocity, duration, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melody that exhaustively traverses all pitch subsequences. |
 | `detached(beats) -> PatternBuilder` | Shorten note durations so a guaranteed silence precedes the next onset. |
 | `drone(pitch, beat, velocity) -> PatternBuilder` | A musical alias for ``note_on``. Places a raw Note On event without a duration, typically used for sustained notes that span multiple cycles. Must be silenced later using ``drone_off()``. |
@@ -174,7 +176,9 @@ The musician's 'palette' for creating musical content.
 | `lsystem(pitch_map, axiom, rules, generations, spacing, velocity, duration, offset, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a note sequence using L-system string rewriting. |
 | `markov(transitions, pitch_map, velocity, duration, spacing, start, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a sequence by walking a first-order Markov chain. |
 | `melody(state, spacing, velocity, duration, chord_tones, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Generate a melodic line by querying a persistent `MelodicState`. |
+| `memory *(property)*` | A dict this pattern keeps from one cycle to the next. |
 | `motif(m, beat, span, root, velocity, fit, fit_weights, resolution) -> PatternBuilder` | Place an immutable `Motif` onto the pattern. |
+| `name *(property)*` | This pattern's name, as ``composition.running_patterns``, ``composition.tweak()`` and ``composition.mute()`` know it. |
 | `note(pitch, beat, velocity, duration) -> PatternBuilder` | Place a single MIDI note at a specific beat position. |
 | `note_off(pitch, beat) -> PatternBuilder` | Place an explicit Note Off event to silence a drone. |
 | `note_on(pitch, beat, velocity) -> PatternBuilder` | Place an explicit Note On event without a duration. Useful for drones or infinite sustains. Must be paired with a ``note_off()`` later to silence the note. |
@@ -210,6 +214,9 @@ The musician's 'palette' for creating musical content.
 | `silence(beat) -> PatternBuilder` | Sends an 'All Notes Off' (CC 123) and 'All Sound Off' (CC 120) message on the pattern's MIDI channel to immediately silence any ringing notes or drones. |
 | `slide(notes, steps, time, shape, resolution, bend_range, wrap, extend) -> subsequence.pattern_builder.PatternBuilder` | TB-303-style selective slide into specific notes. |
 | `snap_to_scale(key, mode, strength, seed, rng) -> PatternBuilder` | Snap all notes in the pattern to the nearest pitch in a scale. |
+| `start_beat *(property)*` | The beat this cycle starts on, counted from the start of the composition. |
+| `step_beats *(property)*` | How many beats one step of this pattern lasts: its length over its steps. |
+| `stream_seed *(property)*` | The seed this pattern's random stream comes from, or None when the composition is unseeded. |
 | `stretch(factor) -> PatternBuilder` | Stretch the pattern in time, scaling note positions and durations. |
 | `strum(chord_obj, root, velocity, sustain, duration, inversion, count, spacing, direction, legato, detached, beat) -> PatternBuilder` | Play a chord with a small time offset between each note (strum effect). |
 | `swing(percent, grid, strength) -> PatternBuilder` | Apply swing feel to all notes in the pattern, in steps of a whole pulse (a 24th of a beat). |
@@ -217,6 +224,7 @@ The musician's 'palette' for creating musical content.
 | `thin(pitch, strategy, amount, grid, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Remove notes from the pattern based on their rhythmic position. |
 | `thue_morse(pitch, velocity, duration, pitch_b, velocity_b, no_overlap, probability, offset, seed, rng) -> subsequence.pattern_builder.PatternBuilder` | Place notes using the Thue-Morse aperiodic binary sequence. |
 | `transpose(semitones, within) -> PatternBuilder` | Shift all note pitches up or down. |
+| `tweak(**values) -> PatternBuilder` | Change this pattern's own tweaks, from the next cycle on. |
 | `velocity_shape(low, high) -> PatternBuilder` | Apply organic velocity variation to all notes in the pattern. |
 
 

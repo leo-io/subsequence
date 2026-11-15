@@ -138,13 +138,17 @@ def _examples () -> typing.List[Example]:
 				continue
 
 			owner = getattr(node, "name", "<module>")
+			# By its path in the package, not its file's name alone: several
+			# packages have an __init__.py, and an excuse below for one of them
+			# would otherwise excuse the same example in all of them.
+			where = path.relative_to(package).as_posix()
 
 			for index, body in enumerate(_python_fences(docstring)):
 				suffix = f"[{index}]" if index else ""
-				found.append(Example(f"{path.name}::{owner}{suffix}", textwrap.dedent(body)))
+				found.append(Example(f"{where}::{owner}{suffix}", textwrap.dedent(body)))
 
 			for index, body in enumerate(_literal_blocks(docstring)):
-				found.append(Example(f"{path.name}::{owner}::literal[{index}]", body))
+				found.append(Example(f"{where}::{owner}::literal[{index}]", body))
 
 	return found
 
@@ -291,7 +295,8 @@ _NEEDS_MORE_THAN_A_NAMESPACE = {
 	"composition.py::tweak::literal[0]": "tweaks a pattern named bass that it does not declare",
 	"form_state.py::jump_to::literal[0]": "jumps a form that it does not declare",
 	"composition.py::form_freeze::literal[0]": "{...} stands for a form, and is not one",
-	"gm_cc.py::<module>::literal[0]": "... stands for a value, and is not one",
+	"constants/instruments/gm_cc.py::<module>::literal[0]": "... stands for a value, and is not one",
+	"plugins/sequencers/__init__.py::<module>::literal[2]": "tweaks a pattern named lead that it does not declare",
 }
 
 
