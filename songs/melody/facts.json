@@ -1,0 +1,291 @@
+{
+  "file": "songs\\melody\\melody.mid",
+  "bpm": 118.0,
+  "time_signature": "4/4",
+  "bars": 16.0,
+  "seconds": 32.5,
+  "channels": {
+    "2": {
+      "notes": 160,
+      "range": "C1-Bb2",
+      "role": "bass"
+    },
+    "3": {
+      "notes": 52,
+      "range": "F3-C#5",
+      "role": "harmony"
+    },
+    "4": {
+      "notes": 24,
+      "range": "F4-Ab5",
+      "role": "melody"
+    },
+    "5": {
+      "notes": 72,
+      "range": "C3-C5",
+      "role": "harmony"
+    },
+    "6": {
+      "notes": 96,
+      "range": "C3-Bb4",
+      "role": "harmony"
+    },
+    "10": {
+      "notes": 233,
+      "range": "C2-D3",
+      "role": "drums"
+    }
+  },
+  "key": {
+    "used": "F minor",
+    "source": "given",
+    "detected_top3": [
+      "F minor (0.90)",
+      "C# major (0.58)",
+      "Bb minor (0.57)"
+    ],
+    "pitch_weight_by_degree_pct": {
+      "5": 15,
+      "b6": 15,
+      "b7": 0,
+      "7": 8,
+      "1": 24,
+      "2": 7,
+      "b3": 16,
+      "4": 15
+    }
+  },
+  "chords": [
+    {
+      "bar": 1.0,
+      "beats": 4.0,
+      "chord": "Fm",
+      "number": "6m"
+    },
+    {
+      "bar": 2.0,
+      "beats": 4.0,
+      "chord": "C#",
+      "number": "4"
+    },
+    {
+      "bar": 3.0,
+      "beats": 4.0,
+      "chord": "C7",
+      "number": "3(7)"
+    },
+    {
+      "bar": 4.0,
+      "beats": 8.0,
+      "chord": "Fm",
+      "number": "6m"
+    },
+    {
+      "bar": 6.0,
+      "beats": 4.0,
+      "chord": "Bbm",
+      "number": "2m"
+    },
+    {
+      "bar": 7.0,
+      "beats": 2.0,
+      "chord": "C#maj7",
+      "number": "4(maj7)"
+    },
+    {
+      "bar": 7.5,
+      "beats": 2.0,
+      "chord": "C#",
+      "number": "4"
+    },
+    {
+      "bar": 8.0,
+      "beats": 4.0,
+      "chord": "C7",
+      "number": "3(7)"
+    },
+    {
+      "bar": 9.0,
+      "beats": 4.0,
+      "chord": "Fm",
+      "number": "6m"
+    },
+    {
+      "bar": 10.0,
+      "beats": 4.0,
+      "chord": "C#",
+      "number": "4"
+    },
+    {
+      "bar": 11.0,
+      "beats": 4.0,
+      "chord": "Bbm7",
+      "number": "2(m7)"
+    },
+    {
+      "bar": 12.0,
+      "beats": 4.0,
+      "chord": "C7",
+      "number": "3(7)"
+    },
+    {
+      "bar": 13.0,
+      "beats": 2.0,
+      "chord": "C#maj7",
+      "number": "4(maj7)"
+    },
+    {
+      "bar": 13.5,
+      "beats": 2.0,
+      "chord": "C#",
+      "number": "4"
+    },
+    {
+      "bar": 14.0,
+      "beats": 4.0,
+      "chord": "Bbm",
+      "number": "2m"
+    },
+    {
+      "bar": 15.0,
+      "beats": 4.0,
+      "chord": "C7",
+      "number": "3(7)"
+    },
+    {
+      "bar": 16.0,
+      "beats": 4.0,
+      "chord": "Fm",
+      "number": "6m"
+    }
+  ],
+  "root_motion": {
+    "mediant (by 3rds)": 5,
+    "linear (stepwise)": 5,
+    "circular (clockwise: down a 5th / up a 4th)": 4,
+    "same root": 2
+  },
+  "cadences": [
+    {
+      "section": "intro",
+      "close": "authentic (5 -> 1: strong close)",
+      "last_chords": "4 3(7) 6m"
+    },
+    {
+      "section": "build",
+      "close": "half (ends on 5: open, a question)",
+      "last_chords": "4(maj7) 4 3(7)"
+    },
+    {
+      "section": "main",
+      "close": "half (ends on 5: open, a question)",
+      "last_chords": "4 2(m7) 3(7)"
+    },
+    {
+      "section": "outro",
+      "close": "authentic (5 -> 1: strong close)",
+      "last_chords": "2m 3(7) 6m"
+    }
+  ],
+  "melody": {
+    "notes": 24,
+    "range": "F4-Ab5",
+    "phrases": 4,
+    "notes_per_phrase": {
+      "min": 6,
+      "median": 6.0,
+      "max": 6
+    },
+    "phrases_with_5_to_10_notes_pct": 100,
+    "phrases_over_12_notes": 0,
+    "gap_seconds": {
+      "min": 2.2,
+      "median": 2.58,
+      "max": 2.58
+    },
+    "gaps_1_5_to_4_s_pct": 100,
+    "leaps_ge_4th": 2,
+    "leaps_recovered_by_opposite_step_pct": 100,
+    "offbeat_onsets_pct": 67,
+    "climax_by_section": [
+      {
+        "section": "build",
+        "pitch": "F5",
+        "at_percent": 67
+      },
+      {
+        "section": "main",
+        "pitch": "Ab5",
+        "at_percent": 67
+      }
+    ]
+  },
+  "melody_strong_beats": {
+    "strong_beat_notes": 2,
+    "non_chord_tone_on_strong_beat": 2
+  },
+  "low_register_close_intervals": [],
+  "sections": [
+    {
+      "section": "intro",
+      "bars": 4.0,
+      "notes_per_bar": 22.8,
+      "mean_velocity_pitched": 76,
+      "active_channels": [
+        3,
+        5,
+        10
+      ],
+      "melody_mean_pitch": "-"
+    },
+    {
+      "section": "build",
+      "bars": 4.0,
+      "notes_per_bar": 45.8,
+      "mean_velocity_pitched": 86,
+      "active_channels": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        10
+      ],
+      "melody_mean_pitch": "Bb4"
+    },
+    {
+      "section": "main",
+      "bars": 4.0,
+      "notes_per_bar": 44.0,
+      "mean_velocity_pitched": 88,
+      "active_channels": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        10
+      ],
+      "melody_mean_pitch": "C#5"
+    },
+    {
+      "section": "outro",
+      "bars": 4.0,
+      "notes_per_bar": 46.8,
+      "mean_velocity_pitched": 83,
+      "active_channels": [
+        2,
+        3,
+        5,
+        6,
+        10
+      ],
+      "melody_mean_pitch": "-"
+    }
+  ],
+  "drums": {
+    "hits": 233,
+    "snare_hits": 41,
+    "snare_on_2_and_4_pct": 73
+  }
+}

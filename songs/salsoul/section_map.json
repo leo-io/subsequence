@@ -1,0 +1,23 @@
+{
+  "_status": "Unverified. Transcribed from a pasted chord-chart note. The saved set saulsoul Project/saulsoul.als (Live 12.4.6, 117 BPM, 8 scenes, 64 bars, C major) has no Chords track and no arrangement clips, and the live session shows no locators. Confirm these bars against the chord clips before relying on them.",
+  "tempo": 117,
+  "time_signature": "4/4",
+  "key": "G minor",
+  "source_track": "Chords",
+  "units": "bars (1-based, inclusive)",
+  "sections": [
+    { "id": 1, "name": "Intro vamp", "bars": [1, 13], "harmony": "Gm7-C", "role": "Gm7 pedal with C and passing Gdim/C# - chromatic sneaking, no settled groove" },
+    { "id": 2, "name": "Bright lift", "bars": [14, 21], "harmony": "Bb-C", "role": "Jumps to Bb/Bb maj7 with C and Cm7 - first lift, away from tonic" },
+    { "id": 3, "name": "Groove vamp", "bars": [22, 36], "harmony": "Gm-C-F", "role": "The i-IV-VII loop lands; main body" },
+    { "id": 4, "name": "Pre-tension", "bars": [37, 44], "harmony": "F pedal", "role": "F/F7 against Gm - IV leaning, no resolution" },
+    { "id": 5, "name": "Minor vamp", "bars": [45, 60], "harmony": "Gm-Dm", "role": "Gm with Dm and a C# slide, dark minor, no IV" },
+    { "id": 6, "name": "Turnaround", "bars": [61, 68], "harmony": "Bb-Dm-C", "role": "Bb-Dm-Bb-C-Gm, classic 8-bar turnaround" },
+    { "id": 7, "name": "Groove vamp 2", "bars": [69, 83], "harmony": "Gm-C-F", "role": "Same i-IV-VII loop, one D#maj7 for colour" },
+    { "id": 8, "name": "Pre-tension 2", "bars": [84, 91], "harmony": "F pedal", "role": "F7 pedal with a D# detour" },
+    { "id": 9, "name": "Minor vamp 2", "bars": [92, 104], "harmony": "Gm-Dm", "role": "Gm-Dm again, tighter" },
+    { "id": 10, "name": "Lift back", "bars": [105, 111], "harmony": "Dm-C", "role": "Short build that hands back to the vamp" },
+    { "id": 11, "name": "Main vamp", "bars": [112, 155], "harmony": "Gm-C-F", "role": "44 bars of the core loop, Cm7 substitutions - the peak" },
+    { "id": 12, "name": "Drone plateau", "bars": [156, 193], "harmony": "G", "role": "Held G with a major-third moment - the breakdown" },
+    { "id": 13, "name": "Outro vamp", "bars": [194, 263], "harmony": "Gm-C-F-G", "role": "Fuller Gm-C-F-G rotation for the ride-out" }
+  ]
+}

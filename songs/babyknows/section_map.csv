@@ -1,0 +1,12 @@
+section,start_bar,end_bar,length_bars,start_ppqn
+Intro,1,8,8,0
+Verse 1,8,32,24,26880
+Chorus 1,32,56,24,119040
+Verse 2,56,72,16,211200
+Chorus 2,72,80,8,272640
+Instrumental,80,100,20,303360
+Verse 3,100,108,8,380160
+Chorus 3,108,116,8,410880
+Verse 4,116,124,8,441600
+Chorus 4,124,156,32,472320
+Outro,156,164,8,595200
