@@ -466,7 +466,13 @@ class Display:
 		```
 	"""
 
-	def __init__ (self, composition: "Composition", grid: bool = False, grid_scale: float = 1.0) -> None:
+	def __init__ (
+		self,
+		composition: "Composition",
+		grid: bool = False,
+		grid_scale: float = 1.0,
+		nesting: typing.Optional[typing.Dict[str, int]] = None,
+	) -> None:
 
 		"""Store composition reference for reading playback state.
 
@@ -477,9 +483,12 @@ class Display:
 			grid_scale: Horizontal zoom factor for the grid (default
 				``1.0``).  Snapped internally to the nearest integer
 				``cols_per_step`` for uniform marker spacing.
+			nesting: Named bar-cycle lengths shown on the status line as
+				each cycle's place, e.g. ``{"cell": 2}`` gives ``cell 1/2``.
 		"""
 
 		self._composition = composition
+		self._nesting: typing.Dict[str, int] = dict(nesting or {})
 		self._active: bool = False
 		self._handler: typing.Optional[DisplayLogHandler] = None
 		self._saved_handlers: typing.List[logging.Handler] = []
@@ -679,6 +688,13 @@ class Display:
 				parts.append(section_str)
 			else:
 				parts.append("[form finished]")
+
+		# Place in each nested bar cycle (cell, phrase, block ...), counted
+		# from bar 1 so it matches ``p.bar_cycle(length)`` in the patterns.
+		if self._nesting:
+			bar_index = max(0, comp.sequencer.current_bar)
+			for name, length in self._nesting.items():
+				parts.append(f"{name} {bar_index % length + 1}/{length}")
 
 		# Current chord (only when harmony is configured).  Reads the harmony
 		# window at the playhead, so it tracks sub-bar harmonic rhythm and

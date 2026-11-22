@@ -1140,3 +1140,27 @@ def test_composition_display_grid_scale (patch_midi: None) -> None:
 	assert comp._display is not None
 	assert comp._display._grid is not None
 	assert comp._display._grid._scale == 2.0
+
+
+def test_format_status_shows_nested_bar_cycles (patch_midi: None) -> None:
+
+	"""Each nesting entry shows the playing bar's place in its cycle, counted from 1."""
+
+	comp = _make_composition(patch_midi)
+	display = subsequence.display.Display(comp, nesting={"cell": 2, "phrase": 4})
+
+	comp.sequencer.current_bar = 5
+	status = display._format_status()
+
+	assert "cell 2/2" in status
+	assert "phrase 2/4" in status
+
+
+def test_format_status_without_nesting_shows_no_cycles (patch_midi: None) -> None:
+
+	"""Without ``nesting`` the status line carries no cycle parts."""
+
+	comp = _make_composition(patch_midi)
+	display = subsequence.display.Display(comp)
+
+	assert "cell" not in display._format_status()

@@ -8,6 +8,7 @@ or from an Ableton ``.agr`` file, then apply it with ``p.groove(template)``.
 from __future__ import annotations
 
 import dataclasses
+import gzip
 import typing
 import xml.etree.ElementTree
 
@@ -97,7 +98,9 @@ class Groove:
 		Import timing and velocity data from an Ableton .agr groove file.
 
 		An ``.agr`` file is an XML document containing a MIDI clip whose
-		note positions encode the groove's rhythmic feel. This method reads
+		note positions encode the groove's rhythmic feel. Live writes some
+		of them gzip-compressed (a groove extracted from a clip, for one);
+		both forms are read. This method reads
 		those note start times and velocities and converts them into the
 		``Groove`` dataclass format (per-step offsets and velocity scales).
 
@@ -138,8 +141,14 @@ class Groove:
 				infers it from the clip, assuming one note per cell.
 		"""
 
-		tree = xml.etree.ElementTree.parse(path)
-		root = tree.getroot()
+		with open(path, "rb") as f:
+			data = f.read()
+
+		# Live gzips the .agr files it saves itself
+		if data[:2] == b"\x1f\x8b":
+			data = gzip.decompress(data)
+
+		root = xml.etree.ElementTree.fromstring(data)
 
 		# Find the MIDI clip
 		clip = root.find(".//MidiClip")

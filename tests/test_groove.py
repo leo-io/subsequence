@@ -1,3 +1,4 @@
+import gzip
 import os
 import pathlib
 import re
@@ -370,6 +371,22 @@ def test_from_agr_timing_amount_scales_offsets () -> None:
 				f"Slot {i}: expected half offset, got {g_half.offsets[i]} vs full {g_full.offsets[i]}"
 	finally:
 		os.unlink(tmp_path)
+
+
+def test_from_agr_reads_gzipped_file (tmp_path: pathlib.Path) -> None:
+
+	"""A gzip-compressed .agr (as Live saves an extracted groove) parses like the plain XML one."""
+
+	plain = tmp_path / "plain.agr"
+	_write_agr(str(plain))
+
+	gzipped = tmp_path / "gzipped.agr"
+	gzipped.write_bytes(gzip.compress(plain.read_bytes()))
+
+	expected = subsequence.groove.Groove.from_agr(str(plain))
+	actual = subsequence.groove.Groove.from_agr(str(gzipped))
+
+	assert actual == expected
 
 
 def test_from_agr_velocity_amount_zero_gives_no_velocity () -> None:

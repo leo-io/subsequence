@@ -3985,7 +3985,13 @@ class Composition:
 				f"plays its overlapping notes through, so the pool's pitch bends retune it. Move it to a channel outside the pool."
 			)
 
-	def display (self, enabled: bool = True, grid: bool = False, grid_scale: float = 1.0) -> None:
+	def display (
+		self,
+		enabled: bool = True,
+		grid: bool = False,
+		grid_scale: float = 1.0,
+		nesting: typing.Optional[typing.Dict[str, int]] = None,
+	) -> None:
 
 		"""
 		Enable or disable the live terminal dashboard.
@@ -4005,10 +4011,14 @@ class Composition:
 				grid steps, revealing micro-timing from swing and groove.
 				Snapped to the nearest integer internally for uniform
 				marker spacing.
+			nesting: Named bar-cycle lengths to show on the status line,
+				outermost last, e.g. ``{"cell": 2, "phrase": 4}``.  Each
+				shows the playing bar's place in its cycle, so the line reads
+				``[cell 1/2 phrase 3/4]``.  ``None`` shows nothing extra.
 		"""
 
 		if enabled:
-			self._display = subsequence.display.Display(self, grid=grid, grid_scale=grid_scale)
+			self._display = subsequence.display.Display(self, grid=grid, grid_scale=grid_scale, nesting=nesting)
 		else:
 			self._display = None
 
